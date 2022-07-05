@@ -1,6 +1,8 @@
-#!/bin/bash 
+#!/bin/bash
 
-set -e -u
+set -e
 
-python3  ./test.py ./precice-config.xml > log.adapter  2>&1 &
-python3  ./pythonFluidSolver/FluidSolver.py ./precice-config.xml > log.solver 2>&1 &
+rm -f ./fluid-python/log.solver
+rm -f ./log.dummyTraining
+
+python3 -u ./dummyTraining.py ./precice-config.xml > log.dummyTraining  2>&1

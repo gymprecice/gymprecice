@@ -2,7 +2,7 @@ import gym
 import gymPreciceAdapter
 
 # shell command to run the solver
-cmd_solver = "python3 -u ./fluid-python/FluidSolver.py ./precice-config.xml > ./fluid-python/log.solver 2>&1 "
+cmd_solver = "python3 -u ./fluid-python/FluidSolver.py ./precice-config.xml >> ./fluid-python/log.solver 2>&1 "
 options={"cmd_solver":cmd_solver}
 
 # create the environment
