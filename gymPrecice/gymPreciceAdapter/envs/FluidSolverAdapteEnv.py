@@ -56,6 +56,9 @@ class FluidSolverAdapterEnv(gym.Env):
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
 
+        # initiate precice interface
+        self._init_precice()
+        
         # launch the solver
         cmd_solver = options["cmd_solver"]
 
@@ -66,7 +69,6 @@ class FluidSolverAdapterEnv(gym.Env):
             self.__solver_process = subprocess.Popen(cmd_solver, shell=True)
 
         # establish connection with the solver
-        self._init_precice()
         self.__precice_dt = self.__interface.initialize()
 
         if self.__interface.is_action_required(action_write_initial_data()):
