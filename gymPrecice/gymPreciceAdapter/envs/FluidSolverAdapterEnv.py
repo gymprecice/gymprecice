@@ -47,6 +47,7 @@ class FluidSolverAdapterEnv(gym.Env):
 
         # delete precice object upon done (a workaround to get precice reset)
         if done:
+            self.__interface.finalize()
             del self.__interface
             self.__interface = None
             print("preCICE finalised...\n")

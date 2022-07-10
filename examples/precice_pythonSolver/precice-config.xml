@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <precice-configuration>
-  <log enabled="0">
-    <sink filter="%Severity% > warning" />
+  <log enabled="1">
+    <sink filter="%Severity% > debug" />
   </log>
 
   <solver-interface dimensions="2">

@@ -1,1 +1,2 @@
-from gymPreciceAdapter.envs.FluidSolverAdapteEnv import FluidSolverAdapterEnv
+from gymPreciceAdapter.envs.FluidSolverAdapterEnv import FluidSolverAdapterEnv
+from gymPreciceAdapter.envs.FoamAdapterEnv import FoamAdapterEnv

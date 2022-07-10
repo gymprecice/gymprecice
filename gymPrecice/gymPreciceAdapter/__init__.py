@@ -10,3 +10,11 @@ register(
     reward_threshold=1.0,
     nondeterministic = True,
 )
+
+register(
+    id='FoamAdapterEnv-v0',
+    entry_point='gymPreciceAdapter.envs:FoamAdapterEnv',
+
+    reward_threshold=1.0,
+    nondeterministic = True,
+)
