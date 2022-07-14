@@ -105,7 +105,6 @@ class FoamAdapterEnv(gym.Env):
             self._write()
             self.__interface.mark_action_fulfilled(action_write_initial_data())
 
-        self._subprocess_checkpoint(self.__solver_run)
         self.__interface.initialize_data()
 
         if self.__interface.is_read_data_available():
@@ -131,7 +130,6 @@ class FoamAdapterEnv(gym.Env):
         # dummy random values to be sent to the solver
         self.__heat_flux = self._calc_heat_flux(action)
 
-        self._subprocess_checkpoint(self.__solver_run)
         self._advance()
 
         reward = self._calc_reward()
@@ -271,17 +269,12 @@ class FoamAdapterEnv(gym.Env):
         # check if the spawning process is sucessful
         if not psutil.pid_exists(subproc.pid):
             raise Exception('Error: subprocess failed to be launched: ' + cmd)
-
-        # check the status of subprocess before return
-        return self._subprocess_checkpoint(subproc)
-
-    def _subprocess_checkpoint(self, subproc):
+        
         # finalize the subprocess if it is terminated (normally/abnormally)
         if psutil.Process(subproc.pid).status() == psutil.STATUS_ZOMBIE:
             return self._finalize_subprocess(subproc)
         return subproc
-
-
+        
     def _finalize_subprocess(self, subproc):
         if subproc and psutil.pid_exists(subproc.pid):
             if psutil.Process(subproc.pid).status() != psutil.STATUS_ZOMBIE:
