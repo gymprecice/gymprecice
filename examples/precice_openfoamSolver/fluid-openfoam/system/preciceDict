@@ -18,6 +18,7 @@ interfaces
   Interface1
   {
     mesh              Fluid-Mesh;
+    locations         faceCenters;
     patches           (interface);
     
     readData

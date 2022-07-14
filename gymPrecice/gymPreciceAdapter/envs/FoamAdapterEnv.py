@@ -44,6 +44,7 @@ class FoamAdapterEnv(gym.Env):
         self.__args = None
         self.__grid = None
         self.__mesh_id = None
+        self.__dim = None
         self.__vertex_id = None
         self.__temperature = None
         self.__temperature_id = None
@@ -87,8 +88,6 @@ class FoamAdapterEnv(gym.Env):
             if self.__solver_run:
                 raise Exception('solver_run pointer is not cleared -- should not reach here')
             self.__solver_run = self._launch_subprocess(run_cmd)
-            
-
         else:
             # run open-foam solver
             if self.__solver_run:
@@ -113,10 +112,9 @@ class FoamAdapterEnv(gym.Env):
         self.__is_initalized = True
         self.__is_first_reset = False
 
-        if not return_info:
-            return self._get_obs()
-        else:
+        if return_info:
             return self._get_obs(), {}
+        return self._get_obs()
 
     def step(self, action):
         if not self.__is_initalized:
@@ -163,7 +161,7 @@ class FoamAdapterEnv(gym.Env):
         set mesh-dependentgym env data:
         """
         self.action_space = spaces.Box(
-            low=1000, high=10000, shape=(self.__n,), dtype=np.float64)
+            low=100000, high=200000, shape=(self.__n,), dtype=np.float64)
         self.observation_space = spaces.Box(
             low=-inf, high=inf, shape=(self.__n,), dtype=np.float64)
 
@@ -209,9 +207,11 @@ class FoamAdapterEnv(gym.Env):
     def _set_precice_data(self):
         # precice data:
         # self.__t = 0.0
+        self.__dim = self.__interface.get_dimensions()
         self.__mesh_id = self.__interface.get_mesh_id("Adapter-Mesh")
         self.__vertex_id = self.__interface.set_mesh_vertices(
             self.__mesh_id, self.__grid)
+
         self.__temperature_id = self.__interface.get_data_id(
             "Temperature", self.__mesh_id)
         self.__temperature = np.zeros(self.__n)
@@ -222,15 +222,21 @@ class FoamAdapterEnv(gym.Env):
     def _parse_mesh_data(self, case_path):
         """ parse polyMesh to get interface points:"""
         foam_mesh = FoamMesh(case_path)
-        vertices = foam_mesh.boundary_vertices(b'interface')
-        self.__n = vertices.shape[0]
-        self.__grid = vertices
+
+        # nodes = foam_mesh.boundary_face_nodes(b'interface')
+        # self.__n = nodes.shape[0]
+        # self.__grid = nodes
+
+        faces = foam_mesh.boundary_face_centres(b'interface')
+        self.__n = faces.shape[0]
+        self.__grid = faces
 
     def _read(self):
         if self.__interface.is_read_data_available():
             self.__temperature = self.__interface.read_block_scalar_data(
                 self.__temperature_id, self.__vertex_id)
             print(f"avg-Temperature from Solver = {self.__temperature.mean():.2f}")
+            self._print_patch_data(self.__temperature, self.__grid)
 
     def _write(self):
         self.__interface.write_block_scalar_data(
@@ -242,6 +248,16 @@ class FoamAdapterEnv(gym.Env):
     def _calc_heat_flux(self, action):
         """ return dummy random values for heat_flux """
         return action
+
+    def _print_patch_data(self, data, patch):
+        idx = 1
+        for value in data:
+            p = patch[idx-1]
+            if idx % 5 != 0:
+                print(f"[{idx-1}, ({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}), {value:.4f}]", end=" ")
+            else:
+                print(f"[{idx-1}, ({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}), {value:.4f}]", end="\n")
+            idx += 1
 
     def _launch_subprocess(self, cmd):
         subproc = subprocess.Popen(cmd, shell=True)
@@ -275,7 +291,6 @@ class FoamAdapterEnv(gym.Env):
 
             # # force to kill the subprocess if still around
             # self._kill_subprocess(subproc) #  not necessary, poll/wait should do the job!
-
         return None
 
     # def _kill_subprocess(self, subproc):

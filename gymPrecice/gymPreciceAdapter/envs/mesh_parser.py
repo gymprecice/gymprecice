@@ -4,6 +4,7 @@ parse mesh data from constant/polymesh
 credit: https://github.com/xu-xianghua/ofpp.git
 """
 from __future__ import print_function
+from distutils.fancy_getopt import fancy_getopt
 
 import numpy as np
 import os
@@ -124,17 +125,56 @@ class FoamMesh(object):
             return (self.owner[f] for f in range(b.start, b.start+b.num))
         except KeyError:
             return ()
-    
-    def boundary_vertices(self, bd):
+
+    def boundary_face_centres(self, bd):
         """
-        return point id list on boundary bd
+        return coordinate of faces on boundary bd
         :param bd: boundary name, byte str
-        :return: point id generator
         """
         try:
             b = self.boundary[bd]
             faces = np.array([self.faces[f] for f in range(b.start, b.start+b.num)])
-            points_idx = np.unique(faces.ravel())
+            face_centres = []
+
+            for face in faces:
+                vertices = np.array([self.points[idx] for idx in face])
+                n_vertices = face.size
+                if n_vertices == 3:
+                    face_centres.append(vertices.sum(axis=0) / 3)
+                else:
+                    center_point = vertices.sum(axis=0) / n_vertices
+                    vertex_idx = 0
+                    sum_area = 0
+                    sum_area_centre = 0
+                    for vertex in vertices:
+                        next_vertex = vertices[(vertex_idx + 1) % n_vertices]
+                        triangle_centre = vertex + next_vertex + center_point
+                        normal_vector = np.cross(vertex-center_point, next_vertex-center_point)
+                        area = np.sqrt(normal_vector.dot(normal_vector))
+
+                        sum_area += area
+                        sum_area_centre += area * triangle_centre
+                        vertex_idx += 1
+
+                    if sum_area > 1e-16:
+                        face_centres.append(sum_area_centre / (3*sum_area))
+                    else:
+                        return face_centres.append(center_point)
+            return np.array(face_centres)
+
+        except KeyError:
+            return ()
+
+    def boundary_face_nodes(self, bd):
+        """
+        return coordinate of points on boundary bd
+        :param bd: boundary name, byte str
+        """
+        try:
+            b = self.boundary[bd]
+            faces = np.array([self.faces[f] for f in range(b.start, b.start+b.num)])
+            faces = faces.ravel()
+            points_idx = faces[np.sort(np.unique(faces, return_index=True)[1])]
             vertices = np.array([self.points[idx] for idx in points_idx])
             return vertices
         except KeyError:

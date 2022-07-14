@@ -43,7 +43,7 @@ def train():
     # create the environment
     env = gym.make("FoamAdapterEnv-v0")
 
-    for epoch in range(2):  # epochs
+    for epoch in range(1):  # epochs
         observation, _ = env.reset(return_info=True, options=options)
         counter = 0
         while True:

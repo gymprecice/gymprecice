@@ -48,7 +48,7 @@
     <m2n:sockets from="Adapter" to="Fluid" exchange-directory="/data/ms2137/works/coupling_play/tests/rl_play/examples/exp2_flowHotPlate_foam/" />
 
     <coupling-scheme:serial-explicit>
-      <max-time value="1.0" />
+      <max-time value="0.2" />
       <time-window-size value="0.1" valid-digits="8" />
       <participants first="Adapter" second="Fluid" />
       <exchange data="Temperature" mesh="Fluid-Mesh" from="Fluid" to="Adapter" initialize="true"/>
