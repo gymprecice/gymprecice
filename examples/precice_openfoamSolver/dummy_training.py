@@ -2,7 +2,7 @@ import gym
 from gymPreciceAdapter.envs import FoamAdapterEnv
 
 
-def agetn(*argv):
+def agent(*argv):
     """
     dummy agent to return an action based on observation from env
     """
@@ -47,7 +47,7 @@ def train():
         observation, _ = env.reset(return_info=True, options=options)
         counter = 0
         while True:
-            action = agetn(env, observation)
+            action = agent(env, observation)
             observation, reward, done, _ = env.step(action)
             counter += 1
             if done:
