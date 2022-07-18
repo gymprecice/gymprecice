@@ -60,9 +60,9 @@ class OpenFoamRLEnv(gym.Env):
         self.__filehandler_dict = {}
         # this should be parsed from the OpenFOAM case files
         self.__probes_filename_list = [
-            '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/U',
-            '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/T',
-            '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/p',
+            f"{options['case_path']}/postProcessing/probes/0/U",
+            f"{options['case_path']}/postProcessing/probes/0/T",
+            f"{options['case_path']}/postProcessing/probes/0/p",
         ]
 
     # gym methods:

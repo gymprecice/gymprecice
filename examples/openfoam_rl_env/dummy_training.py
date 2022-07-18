@@ -15,12 +15,6 @@ def agent(*argv):
 if __name__ == '__main__':
     rand_seed = 12345
     fix_randseeds(rand_seed)
-    n_parallel_env = 4
-    env_options = {
-        "precice_cfg": "precice-config.xml",
-        # "n_parallel": n_parallel_env,
-        "rand_seed": rand_seed,
-    }
 
     # shell options to run the solver (this can/should be placed in a
     # separate python script)
@@ -41,20 +35,25 @@ if __name__ == '__main__':
     # foam_preprocess_cmd = f"sh ../foam-preprocess.sh > {foam_preprocess_log} 2>&1"
 
     # reset oprions
+    n_parallel_env = 4
+
     options = {
+        "precice_cfg": "precice-config.xml",
         "case_path": foam_case_path,
         "preprocess_cmd": foam_preprocess_cmd,
         "run_cmd": foam_run_cmd,
         "solver_full_reset": foam_full_reset,
+        "rand_seed": rand_seed,
+        # "n_parallel": n_parallel_env,
     }
 
     # create the environment
     # env = gym.make("FoamAdapterEnv-v0")
 
-    env = OpenFoamRLEnv(env_options)
+    env = OpenFoamRLEnv(options)
 
     for epoch in range(2):  # epochs
-        observation, _ = env.reset(return_info=True, seed=env_options['rand_seed'], options=options)
+        observation, _ = env.reset(return_info=True, seed=options['rand_seed'], options=options)
         counter = 0
         while True:
             action = agent(env, observation)
