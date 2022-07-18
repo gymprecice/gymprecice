@@ -14,7 +14,7 @@ from mesh_parser import FoamMesh
 
 import time
 import psutil
-from utils import get_cfg_data
+from utils import get_cfg_data, parse_probe_lines
 
 
 class OpenFoamRLEnv(gym.Env):
@@ -58,8 +58,14 @@ class OpenFoamRLEnv(gym.Env):
         self.__solver_run = None  # physical solver
         self.__solver_full_reset = False  # if True, run foam-preprocessor upon every reset
         self.__filehandler_dict = {}
-    # gym methods:
+        # this should be parsed from the OpenFOAM case files
+        self.__probes_filename_list = [
+            '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/U',
+            '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/T',
+            '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/p',
+        ]
 
+    # gym methods:
     def reset(self, *, seed=None, return_info=True, options=None):
         super().reset(seed=seed)
 
@@ -83,6 +89,7 @@ class OpenFoamRLEnv(gym.Env):
 
         if len(self.__filehandler_dict) > 0:
             self.close_probes_rewards_files()
+            self.__filehandler_dict = {}
 
         # run open-foam solver
         if self.__solver_run:
@@ -317,18 +324,21 @@ class OpenFoamRLEnv(gym.Env):
     def read_probes_rewards_files(self):
         # file names and how the data should be used could be obtained by parsing the probes dict
         # read line by line at each loop
-        temp_filename = '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/U'
-        if temp_filename not in self.__filehandler_dict.keys():
-            file_object = open(temp_filename, 'r')
-            self.__filehandler_dict[temp_filename] = file_object
+        for temp_filename in self.__probes_filename_list:
+            print(f'reading filename: {temp_filename}')
+            if temp_filename not in self.__filehandler_dict.keys():
+                file_object = open(temp_filename, 'r')
+                self.__filehandler_dict[temp_filename] = file_object
 
-        while True:
-            line_text = self.__filehandler_dict[temp_filename].readline()
-            if line_text == "":
-                break
-            line_text = line_text.strip()
-            if len(line_text) > 0:
-                print(line_text)
+            while True:
+                line_text = self.__filehandler_dict[temp_filename].readline()
+                if line_text == "":
+                    break
+                line_text = line_text.strip()
+                if len(line_text) > 0:
+                    is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text)
+                if not is_comment:
+                    print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
 
         # read all the lines from the start at each step
         # temp_filename = '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/U'

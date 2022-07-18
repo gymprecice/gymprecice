@@ -4,6 +4,7 @@ import numpy as np
 import xmltodict
 import pprint
 import copy
+import re
 
 
 def fix_randseeds(seed=1234):
@@ -28,6 +29,39 @@ def load_file(foldername, filename):
         foam_text = filehandle.readlines()
     foam_text = '\n'.join(foam_text)
     return foam_text
+
+
+def parse_probe_lines(line_string):
+    if line_string[0] == "#":
+        print(f"comment line: {line_string}")
+        is_comment = True
+        return is_comment, None, None, None
+
+    is_comment = False
+    numeric_const_pattern = r"""
+        [-+]? # optional sign
+        (?:
+        (?: \d* \. \d+ ) # .1 .12 .123 etc 9.1 etc 98.1 etc
+        |
+        (?: \d+ \.? ) # 1. 12. 123. etc 1 12 123 etc
+        )
+        # followed by optional exponent part if desired
+        (?: [Ee] [+-]? \d+ ) ?
+    """
+    rx = re.compile(numeric_const_pattern, re.VERBOSE)
+    float_list = rx.findall(line_string)
+    float_list = [float(x) for x in float_list]
+
+    if line_string.count("(") > 0:
+        print("vector variables")
+        num_probes = line_string.count("(")
+        assert num_probes == line_string.count(")"), f'corrupt file, number of ( and ) should be equal:" \
+            "{line_string.count(")")}, {line_string.count(")")}'
+        assert (len(float_list) - 1) % num_probes == 0, f'corrupt file, each probe should have the same number of components, {len(float_list)}, {num_probes}'
+    else:
+        num_probes = len(float_list) - 1
+    # comment or not, time idx, number of probes, probe values
+    return is_comment, float_list[0], num_probes, float_list[1:]
 
 
 def get_cfg_data(foldername, filename):

@@ -53,7 +53,7 @@ if __name__ == '__main__':
 
     env = OpenFoamRLEnv(env_options)
 
-    for epoch in range(1):  # epochs
+    for epoch in range(2):  # epochs
         observation, _ = env.reset(return_info=True, seed=env_options['rand_seed'], options=options)
         counter = 0
         while True:
