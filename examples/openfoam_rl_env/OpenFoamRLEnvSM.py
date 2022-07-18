@@ -57,7 +57,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__solver_preprocess = None
         self.__solver_run = None  # physical solver
         self.__solver_full_reset = False  # if True, run foam-preprocessor upon every reset
-
+        self.__filehandler_dict = {}
     # gym methods:
 
     def reset(self, *, seed=None, return_info=True, options=None):
@@ -172,7 +172,7 @@ class OpenFoamRLEnv(gym.Env):
         self._write()
         self.__interface.advance(self.__precice_dt)
         self._read()
-        self.read_probes_rewards()
+        self.read_probes_rewards_files()
 
         # self.__t += self.__precice_dt
 
@@ -311,14 +311,54 @@ class OpenFoamRLEnv(gym.Env):
         # self.observation_space = self.__temperature
         return self.__read_data["Temperature"]
 
-    def read_probes_rewards(self):
+    def read_probes_rewards_files(self):
         # file names and how the data should be used could be obtained by parsing the probes dict
+        # read line by line at each loop
         temp_filename = '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/U'
-        with open(temp_filename, 'r') as filehandle:
-            foam_text = filehandle.readlines()
-            foam_text = [x.strip() for x in foam_text]
-            foam_text = '\n'.join(foam_text)
-            print(foam_text)
+        if temp_filename not in self.__filehandler_dict.keys():
+            file_object = open(temp_filename, 'r')
+            self.__filehandler_dict[temp_filename] = file_object
+
+        while True:
+            line_text = self.__filehandler_dict[temp_filename].readline()
+            if line_text == "":
+                break
+            line_text = line_text.strip()
+            if len(line_text) > 0:
+                print(line_text)
+
+        # read all the lines from the start at each step
+        # temp_filename = '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/U'
+        # with open(temp_filename, 'r') as filehandle:
+        #     foam_text = filehandle.readlines()
+        #     foam_text = [x.strip() for x in foam_text]
+        #     foam_text = '\n'.join(foam_text)
+        #     print(foam_text)
+
+    def close_probes_rewards_files(self):
+        for filename_ in self.__filehandler_dict.keys():
+            file_object = self.__filehandler_dict[filename_]
+            try:
+                file_object.close()
+            except Exception as e:
+                print(e)
+                pass
+
+    def __del__(self):
+        # close all the open files
+        self.close_probes_rewards_files()
+        if self.__interface:
+            try:
+                print('crashing the interface using negative timestep')
+                self.__interface.advance(-1)
+                # another idea is to advance with random actions till the coupling finish and finalize
+                # self.__interface.finalize()
+            except Exception as e:
+                pass
+        # print('delete the interface')
+        # self.__interface.finalize()
+
+
 
     # def _print_patch_data(self, data, patch):
     #     idx = 1
