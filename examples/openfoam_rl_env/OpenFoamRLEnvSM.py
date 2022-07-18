@@ -81,6 +81,9 @@ class OpenFoamRLEnv(gym.Env):
             # # set mesh-dependent gym data (observation & action)
             # self._set_env_obs_act()
 
+        if len(self.__filehandler_dict) > 0:
+            self.close_probes_rewards_files()
+
         # run open-foam solver
         if self.__solver_run:
             raise Exception('solver_run pointer is not cleared -- should not reach here')
