@@ -1,0 +1,118 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v1912                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     pimpleFoam;
+
+startFrom       latestTime;
+
+startTime       0;
+
+stopAt          endTime;
+
+endTime         0.01;
+
+deltaT          1e-4;
+
+writeControl    runTime;
+
+writeInterval   0.005;
+
+purgeWrite      0;
+
+writeFormat     ascii;
+
+writePrecision  8;
+
+timeFormat      general;
+
+timePrecision   8;
+
+runTimeModifiable false;
+
+
+libs ("libcylindricalSinusoidalVelocityProfile2D.so");
+
+
+functions
+{
+    forces
+    {
+        type            forceCoeffs;
+        libs            (forces);
+        writeControl    timeStep;
+        writeInterval   1;
+        log false;
+
+        patches
+        (
+            "cylinder_.*"
+        );
+
+        rhoInf      1;
+        rho         rhoInf;
+
+        CofR        (0.2 0.2 0.005);
+        liftDir     (0 1 0);
+        dragDir     (1 0 0);
+        //pitchAxis   (0 0 1);
+        magUInf     1.0;
+        lRef        0.1;
+        Aref        0.001;
+    }
+
+    Jet1FlowRate
+    {
+        type            surfaceFieldValue;
+        libs            ("libfieldFunctionObjects.so");
+
+        log             true;
+        writeControl    timeStep;
+        writeFields     false;
+
+        regionType      patch;
+        name            cylinder_jet1;
+
+        operation        areaNormalIntegrate;
+
+        fields
+        (
+            U
+        );
+    }
+    Jet2FlowRate
+    {
+        type            surfaceFieldValue;
+        libs            ("libfieldFunctionObjects.so");
+
+        log             true;
+        writeControl    timeStep;
+        writeFields     false;
+
+        regionType      patch;
+        name            cylinder_jet2;
+
+        operation        areaNormalIntegrate;
+
+        fields
+        (
+            U
+        );
+    }
+}
+
+
+// ************************************************************************* //

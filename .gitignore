@@ -2,7 +2,7 @@
 !.gitignore
 *.log
 log.*
-**__pycache__/
+*__pycache__/
 *.json
 *-info/
 output/
@@ -16,3 +16,5 @@ processor*
 !0.orig/
 !0/
 polyMesh/
+linux*/
+lnInclude/

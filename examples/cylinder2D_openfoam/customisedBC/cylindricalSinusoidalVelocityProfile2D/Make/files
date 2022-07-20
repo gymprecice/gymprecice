@@ -1,0 +1,3 @@
+cylindricalSinusoidalVelocityProfile2DFvPatchVectorField.C
+
+LIB = $(FOAM_USER_LIBBIN)/libcylindricalSinusoidalVelocityProfile2D
