@@ -34,8 +34,32 @@ if __name__ == '__main__':
     # foam_run_cmd = f"sh ../foam-run.sh > {foam_run_log} 2>&1"
     # foam_preprocess_cmd = f"sh ../foam-preprocess.sh > {foam_preprocess_log} 2>&1"
 
-    # reset oprions
+    # reset options
     n_parallel_env = 4
+
+    # Size and type is redundant data (included controlDict or called from a file)
+    # Multiple way to do this in OpenFoam so we delegate it to user
+    postprocessing_data = {
+        'p': {
+            'use': 'reward',  # goes into observation or rewards
+            'type': 'scaler',  # scaler vs field
+            'size': 3,  # number of probes
+            'output_folder': '/postProcessing/patchProbes/0/p',  # depends on the type of the probe/patchProbe/etc
+        },
+        'U': {
+            'use': 'observation',  # goes into observation or rewards
+            'type': 'field',  # scaler vs field
+            'size': 3,  # number of probes
+            'output_folder': '/postProcessing/patchProbes/0/U'
+        },
+        'T': {
+            'use': 'observation',  # goes into observation or rewards
+            'type': 'field',  # scaler vs field
+            'size': 3,  # number of probes
+            'output_folder': '/postProcessing/patchProbes/0/T'
+
+        },
+    }
 
     options = {
         "precice_cfg": "precice-config.xml",
@@ -44,6 +68,7 @@ if __name__ == '__main__':
         "run_cmd": foam_run_cmd,
         "solver_full_reset": foam_full_reset,
         "rand_seed": rand_seed,
+        "postprocessing_data": postprocessing_data,
         # "n_parallel": n_parallel_env,
     }
 
@@ -57,9 +82,15 @@ if __name__ == '__main__':
         counter = 0
         while True:
             action = agent(env, observation)
-            # TODO: check why env seed is not set correctly. for now np.random is reproducable
-            action = np.random.randn(action.shape[0])
+            # TODO: check why env seed is not set correctly. for now np.random is reproducible
+            action = 1000.0*np.random.randn(action.shape[0])
             observation, reward, done, _ = env.step(action)
+            print('Debug data from outer loop')
+            print(f"observation:")
+            for obs_item in observation:
+                print(obs_item)
+            print(f"reward: {reward}")
+
             counter += 1
             if done:
                 print(f"Epoch # {epoch+1}: \"done\" after {counter} steps")

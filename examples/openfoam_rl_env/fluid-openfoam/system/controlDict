@@ -39,7 +39,8 @@ runTimeModifiable false;
 
 functions
 {
-    #includeFunc probes
+    // #includeFunc probes
+    #includeFunc patchProbes
 
     preCICE_Adapter
     {

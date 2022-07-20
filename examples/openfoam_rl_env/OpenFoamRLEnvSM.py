@@ -29,7 +29,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__options = options
 
         # gym env attributes:
-        self.__is_initalized = False
+        self.__is_initialized = False
         self.__is_first_reset = True  # if True, gym env reset has been called at least once
         # action_ and observation_space will be set in _set_precice_data
         self.action_space = None
@@ -57,13 +57,10 @@ class OpenFoamRLEnv(gym.Env):
         self.__solver_preprocess = None
         self.__solver_run = None  # physical solver
         self.__solver_full_reset = False  # if True, run foam-preprocessor upon every reset
-        self.__filehandler_dict = {}
-        # this should be parsed from the OpenFOAM case files
-        self.__probes_filename_list = [
-            f"{options['case_path']}/postProcessing/probes/0/U",
-            f"{options['case_path']}/postProcessing/probes/0/T",
-            f"{options['case_path']}/postProcessing/probes/0/p",
-        ]
+
+        # observations and rewards are obtained from post-processing files
+        self.__probes_rewards_data = {}
+        self.__postprocessing_filehandler_dict = {}
 
     # gym methods:
     def reset(self, *, seed=None, return_info=True, options=None):
@@ -87,9 +84,10 @@ class OpenFoamRLEnv(gym.Env):
             # # set mesh-dependent gym data (observation & action)
             # self._set_env_obs_act()
 
-        if len(self.__filehandler_dict) > 0:
-            self.close_probes_rewards_files()
-            self.__filehandler_dict = {}
+        if len(self.__postprocessing_filehandler_dict) > 0:
+            self.__close_postprocessing_files()
+            self.__postprocessing_filehandler_dict = {}
+            self.__probes_rewards_data = {}
 
         # run open-foam solver
         if self.__solver_run:
@@ -101,7 +99,7 @@ class OpenFoamRLEnv(gym.Env):
         self._init_precice()
         self._set_precice_data()
         self.define_env_obs_act()
-        # debuging for the now
+        # debugging for the now
         self._parse_mesh_data(case_path)
 
         if self.__interface.is_action_required(action_write_initial_data()):
@@ -114,7 +112,7 @@ class OpenFoamRLEnv(gym.Env):
             print("-------------------------------------------")
             self._read()
 
-        self.__is_initalized = True
+        self.__is_initialized = True
         self.__is_first_reset = False
 
         if return_info:
@@ -122,7 +120,7 @@ class OpenFoamRLEnv(gym.Env):
         return self.read_data_to_observations()
 
     def step(self, action):
-        if not self.__is_initalized:
+        if not self.__is_initialized:
             raise Exception("Call reset before interacting with the environment.")
 
         if self.__interface.is_action_required(
@@ -142,7 +140,7 @@ class OpenFoamRLEnv(gym.Env):
         if done:
             self.__interface.finalize()
             del self.__interface
-            print("preCICE finalised...\n")
+            print("preCICE finalized...\n")
             # we need to check here that solver run is finalized
             self.__solver_run = self._finalize_subprocess(self.__solver_run)
 
@@ -163,7 +161,7 @@ class OpenFoamRLEnv(gym.Env):
     # preCICE related methods:
     def _init_precice(self):
         if self.__interface:
-            raise Exception("precice interface already initalized, we should not reach here in normal situations")
+            raise Exception("precice interface already initialized, we should not reach here in normal situations")
         self.__interface = precice.Interface("RL-Gym", self.__options['precice_cfg'], 0, 1)
 
         self.__dim = self.__interface.get_dimensions()
@@ -211,7 +209,7 @@ class OpenFoamRLEnv(gym.Env):
             print("grid obtained from precice single mesh: ")
             print(vertex_coords)
             print(vertex_coords.shape, vertex_id.shape)
-            print("---- recived all the data needed from the fluid solver")
+            print("---- received all the data needed from the fluid solver")
 
     def _read(self):
         self.__read_data = {}
@@ -240,7 +238,7 @@ class OpenFoamRLEnv(gym.Env):
         # check if the command is working
         time.sleep(0.5)  # have to add a very tiny sleep
 
-        # check if the spawning process is sucessful
+        # check if the spawning process is successful
         if not psutil.pid_exists(subproc.pid):
             raise Exception(f'Error: subprocess failed to be launched: {cmd}')
 
@@ -304,10 +302,20 @@ class OpenFoamRLEnv(gym.Env):
             low=-np.inf, high=np.inf, shape=(self.__n,), dtype=np.float64)
 
     def get_reward(self):
-        # In a simulation enviroment there are two type of observations:
+        # In a simulation environment there are two type of observations:
         # 1- Observations for control (real observations)
         # 2- Observation/states for estimating rewards (e.g. drag or lift forces)
-        return 1.0
+        reward_list = []
+        for field_ in self.__options['postprocessing_data'].keys():
+            field_info = self.__options['postprocessing_data'][field_]
+            if field_info['use'] == "reward" and \
+                    field_ in self.__probes_rewards_data.keys() and \
+                    len(self.__probes_rewards_data[field_]) > 0:
+                print(f"going into rewards {field_}===============>>>>>>>>>")
+                # get the last row of the list
+                reward_list.append(self.__probes_rewards_data[field_][-1])
+
+        return reward_list
 
     def action_to_write_data(self, action):
         """ return dummy random values for heat_flux """
@@ -315,23 +323,35 @@ class OpenFoamRLEnv(gym.Env):
         return write_data_dict
 
     def read_data_to_observations(self):
-        if not self.__is_initalized:
+        if not self.__is_initialized:
             raise Exception("Call reset before interacting with the environment.")
 
+        obs_list = []
         # self.observation_space = self.__temperature
-        return self.__read_data["Temperature"]
+        for field_ in self.__options['postprocessing_data'].keys():
+            field_info = self.__options['postprocessing_data'][field_]
+            if field_info['use'] == "observation" and \
+                    field_ in self.__probes_rewards_data.keys() and \
+                    len(self.__probes_rewards_data[field_]) > 0:
+                # get the last row of the list
+                obs_list.append(self.__probes_rewards_data[field_][-1])
+
+        obs_list.append(self.__read_data["Temperature"])  # TODO: delete this as we only read from post-processing files
+        return obs_list
 
     def read_probes_rewards_files(self):
         # file names and how the data should be used could be obtained by parsing the probes dict
         # read line by line at each loop
-        for temp_filename in self.__probes_filename_list:
+        for field_ in self.__options['postprocessing_data'].keys():
+
+            temp_filename = f"{self.__options['case_path']}{self.__options['postprocessing_data'][field_]['output_folder']}"
             print(f'reading filename: {temp_filename}')
-            if temp_filename not in self.__filehandler_dict.keys():
+            if temp_filename not in self.__postprocessing_filehandler_dict.keys():
                 file_object = open(temp_filename, 'r')
-                self.__filehandler_dict[temp_filename] = file_object
+                self.__postprocessing_filehandler_dict[temp_filename] = file_object
 
             while True:
-                line_text = self.__filehandler_dict[temp_filename].readline()
+                line_text = self.__postprocessing_filehandler_dict[temp_filename].readline()
                 if line_text == "":
                     break
                 line_text = line_text.strip()
@@ -339,6 +359,10 @@ class OpenFoamRLEnv(gym.Env):
                     is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text)
                 if not is_comment:
                     print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
+
+                if field_ not in self.__probes_rewards_data.keys():
+                    self.__probes_rewards_data[field_] = []
+                self.__probes_rewards_data[field_].append([time_idx, n_probes, probe_data])
 
         # read all the lines from the start at each step
         # temp_filename = '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/U'
@@ -348,9 +372,9 @@ class OpenFoamRLEnv(gym.Env):
         #     foam_text = '\n'.join(foam_text)
         #     print(foam_text)
 
-    def close_probes_rewards_files(self):
-        for filename_ in self.__filehandler_dict.keys():
-            file_object = self.__filehandler_dict[filename_]
+    def __close_postprocessing_files(self):
+        for filename_ in self.__postprocessing_filehandler_dict.keys():
+            file_object = self.__postprocessing_filehandler_dict[filename_]
             try:
                 file_object.close()
             except Exception as e:
@@ -359,7 +383,7 @@ class OpenFoamRLEnv(gym.Env):
 
     def __del__(self):
         # close all the open files
-        self.close_probes_rewards_files()
+        self.__close_postprocessing_files()
         if self.__interface:
             try:
                 print('crashing the interface using negative timestep')
@@ -370,8 +394,6 @@ class OpenFoamRLEnv(gym.Env):
                 pass
         # print('delete the interface')
         # self.__interface.finalize()
-
-
 
     # def _print_patch_data(self, data, patch):
     #     idx = 1
