@@ -1,0 +1,31 @@
+    patchProbes
+    {
+        type            patchProbes;
+        functionObjectLibs ("libsampling.so");
+
+        // Write at same frequency as fields
+        enabled         true;
+        outputControl   timeStep;
+        outputInterval  1;
+
+
+        // Name of the directory for probe data
+        name            patchProbes;
+ 
+        // Patches to sample (wildcards allowed)
+        patches         (".*"); // (".*inl.*");
+  
+        // Fields to be probed
+        fields          (p U T);
+ 
+        // Locations to probe. These get snapped onto the nearest point
+        // on the selected patches
+        probeLocations
+        (
+            (0.1 0.0 0.2)
+            (0.3 0.0 0.2)
+            (0.5 0.0 0.2)
+            (0.7 0.0 0.2)
+            (0.9 0.0 0.2)
+        );
+    }
