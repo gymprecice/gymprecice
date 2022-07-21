@@ -8,6 +8,7 @@ log.*
 output/
 precice-run/
 *.foam
+*.OpenFOAM
 postProcessing/
 processor*
 [0-9]*/
@@ -18,3 +19,4 @@ processor*
 polyMesh/
 linux*/
 lnInclude/
+dynamicCode/

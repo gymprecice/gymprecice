@@ -40,23 +40,13 @@ boundaryField
     
     cylinder_jet1
     {
-        type            cylindricalSinusoidalProfile2D;
-        origin        (0 0 0.005);
-        axis          (1.0 0.0 0.005);
-        theta0        90;
-        w             10;
-        volumetricFlowRate  constant 0.00001;
+        type            fixedValue;
         value           uniform (0 0 0);
     }
 
     cylinder_jet2
     {
-        type          cylindricalSinusoidalProfile2D;
-        origin        (0 0 0.005);
-        axis          (1.0 0.0 0.005);
-        theta0        90;
-        w             10;
-        volumetricFlowRate  constant -0.00001;
+        type            fixedValue;
         value           uniform (0 0 0);
     }
 

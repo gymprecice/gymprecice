@@ -23,13 +23,13 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         0.01;
+endTime         0.1;
 
 deltaT          1e-4;
 
 writeControl    runTime;
 
-writeInterval   0.005;
+writeInterval   0.01;
 
 purgeWrite      0;
 
@@ -49,6 +49,12 @@ libs ("libcylindricalSinusoidalVelocityProfile2D.so");
 
 functions
 {
+    preCICE_Adapter
+    {
+        type preciceAdapterFunctionObject;
+        libs ("libpreciceAdapterFunctionObject.so");
+    }
+
     forces
     {
         type            forceCoeffs;
