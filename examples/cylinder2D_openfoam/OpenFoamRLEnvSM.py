@@ -41,7 +41,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__mesh_variables = mesh_variables
         self.__mesh_list = mesh_list
         # scaler and vector variables should be used to define the size of action space
-        self.__scaler_variables = scaler_variables
+        self.scaler_variables = scaler_variables
         self.vector_variables = vector_variables
 
         # coupling attributes:
@@ -176,10 +176,11 @@ class OpenFoamRLEnv(gym.Env):
         self.__mesh_id = {}
         for mesh_name in self.__mesh_list:
             mesh_id = self.__interface.get_mesh_id(mesh_name)
+            print(f"Mesh_ID: {mesh_id}, Mesh_name: {mesh_name}")
             bounding_box = [-np.inf, np.inf] * self.__dim
-            self.__interface.set_mesh_access_region(mesh_id, bounding_box)
+            #self.__interface.set_mesh_access_region(mesh_id, bounding_box)  # ERROR:  setMeshAccessRegion may only be called once.
             self.__mesh_id[mesh_name] = mesh_id
-
+        self.__interface.set_mesh_access_region(mesh_id, bounding_box)
         # establish connection with the solver
         self.__precice_dt = self.__interface.initialize()
 
@@ -224,9 +225,12 @@ class OpenFoamRLEnv(gym.Env):
             for mesh_name in self.__mesh_list:
                 read_var_list = self.__mesh_variables[mesh_name]['read']
                 for read_var in read_var_list:
-                    # TODO: data-type checking needed 
-                    self.__read_data[read_var] = self.__interface.read_block_scalar_data(  
-                        self.__read_id[read_var], self.__vertex_id[mesh_name])
+                    if read_var in self.vector_variables:
+                        self.__read_data[read_var] = self.__interface.read_block_vector_data(  
+                            self.__read_id[read_var], self.__vertex_id[mesh_name])
+                    else:
+                        self.__read_data[read_var] = self.__interface.read_block_scalar_data(  
+                            self.__read_id[read_var], self.__vertex_id[mesh_name])
                     print(f"avg-{read_var} from Solver = {self.__read_data[read_var].mean():.4f}")
                     print("-------------------------------------------")
 
@@ -234,8 +238,11 @@ class OpenFoamRLEnv(gym.Env):
         for mesh_name in self.__mesh_list:
             write_var_list = self.__mesh_variables[mesh_name]['write']
             for write_var in write_var_list:
-                # TODO: data-type checking needed 
-                self.__interface.write_block_vector_data(  
+                if write_var in self.vector_variables:
+                    self.__interface.write_block_vector_data(  
+                    self.__write_id[write_var], self.__vertex_id[mesh_name], self.__write_data[write_var])
+                else:
+                    self.__interface.write_block_scalar_data(  
                     self.__write_id[write_var], self.__vertex_id[mesh_name], self.__write_data[write_var])
                 print(f"avg-{write_var} to solver = {self.__write_data[write_var].mean():.4f}")
                 print("-------------------------------------------")
@@ -292,7 +299,6 @@ class OpenFoamRLEnv(gym.Env):
             print(self.__vertex_coords[0])
             print(np.sum(np.abs(self.__vertex_coords[0] - self.Cf)))
             raise Exception('information obtained from the single mesh precice is not correct: grid')
-        
 
     def define_env_obs_act(self):
         # TODO: this should be problem specific
@@ -328,6 +334,7 @@ class OpenFoamRLEnv(gym.Env):
         return reward_list
 
     def _set_patch_field_to_write(self, action):
+        # TODO: this should be problem specific
         print(f"Prescribed action: FlowRate = {action[0]:.6f} [m/s3] on jet1")
 
         # convert volumetric flow rate to a sinusoidal profile on the interface 
