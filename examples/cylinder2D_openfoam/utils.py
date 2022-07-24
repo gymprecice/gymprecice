@@ -1,5 +1,6 @@
 import random
 import os
+from typing import OrderedDict
 import numpy as np
 import xmltodict
 import pprint
@@ -64,31 +65,35 @@ def parse_probe_lines(line_string):
     return is_comment, float_list[0], num_probes, float_list[1:]
 
 
+def get_xml_item(root, chain_to_root:list, n:int = 0):
+    if n < len(chain_to_root):
+        return get_xml_item(root[chain_to_root[n]], chain_to_root, n+1)   
+    else:
+        return [root] if type(root) == dict else root
+
 def get_cfg_data(foldername, filename):
-
     foam_string = load_file(foldername, filename)
-    # print(foam_string)
-
-    xml_tree = xmltodict.parse(foam_string, process_namespaces=False)
+    xml_tree = xmltodict.parse(foam_string, process_namespaces=False, dict_constructor=dict)
     pprint.pprint(xml_tree, sort_dicts=False, width=120)
-
+    
     try:
         scaler_variables = []
-        for dict_ in xml_tree['precice-configuration']['solver-interface']['data:scalar']:
-            print(dict_['@name'])
-            scaler_variables.append(dict_['@name'])
+        xml_item = get_xml_item(xml_tree, ['precice-configuration', 'solver-interface', 'data:scalar'])
+        for element in xml_item:
+            scaler_variables.append(element['@name'])
     except Exception as e:
-        pass
+        print(e)
 
     try:
         vector_variables = []
-        for dict_ in xml_tree['precice-configuration']['solver-interface']['data:vector']:
-            print(dict_['@name'])
-            vector_variables.append(dict_['@name'])
+        xml_item = get_xml_item(xml_tree, ['precice-configuration', 'solver-interface', 'data:vector'])
+        for element in xml_item:
+            vector_variables.append(element['@name'])
     except Exception as e:
-        pass
+        print(e)
 
-    for item_ in xml_tree['precice-configuration']['solver-interface']['participant']:
+    xml_item = get_xml_item(xml_tree, ['precice-configuration', 'solver-interface', 'participant'])
+    for item_ in xml_item:
         if 'rl-gym' in item_['@name'].lower():
             gym_data = copy.deepcopy(item_)
             print(gym_data)
