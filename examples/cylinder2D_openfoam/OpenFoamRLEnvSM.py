@@ -118,13 +118,6 @@ class OpenFoamRLEnv(gym.Env):
             with open(complete_filepath, 'w') as file_obj:
                 file_obj.write(new_string)
 
-        # TODO: create a set of new preciceDict in each case folder
-        # this have different precideDict have to be generated for each parallel run
-        # Quick hack by doing following modification
-        # participant Fluid_0;
-        # mesh Fluid-Mesh_0;
-        # Velocity_0 and Pressure_0 in the read and write sections
-
         # Get a new version of precice-config.xml
         parallel_tree = make_parallel_config(str(cwd) + '/', "precice-config.xml", self.__options['n_parallel'], run_folder_list)
         precice_config_parallel_file = str(run_folder) + "/precice-config.xml"
@@ -155,7 +148,7 @@ class OpenFoamRLEnv(gym.Env):
         run_cmd = self.__options.get("run_cmd", "")
 
         self.__solver_full_reset = self.__options.get("solver_full_reset", self.__solver_full_reset)
-        if self.__is_first_reset or self.__solver_full_reset:
+        if False or self.__is_first_reset or self.__solver_full_reset:
             # clean open-foam case
             self.__solver_clean = self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
             # self.__solver_clean = self._finalize_subprocess(self.__solver_clean)
@@ -345,7 +338,7 @@ class OpenFoamRLEnv(gym.Env):
                 raise Exception(f"run is not successful: {completed_process}")
             return None
         elif cmd_type == 'preprocess':
-            # TODO: preprocess on the main folder before the symbolic links
+            # preprocess on the main folder before the symbolic links
             completed_process = subprocess.run(cmd_str, shell=True, cwd=cwd)
             if completed_process.returncode != 0:
                 raise Exception(f"run is not successful: {completed_process}")
