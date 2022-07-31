@@ -9,6 +9,8 @@ touch post.foam
 # mesh creation
 runApplication blockMesh
 runApplication transformPoints -translate '(-0.2 -0.2 0)' 
+runApplication topoSet
+runApplication createPatch -overwrite
 
 # set inlet velocity
 cp -r 0.org 0

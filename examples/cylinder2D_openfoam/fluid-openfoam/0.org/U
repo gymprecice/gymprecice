@@ -38,16 +38,14 @@ boundaryField
         type            noSlip;
     }
     
-    cylinder_jet1
+    jet1
     {
-        type            fixedValue;
-        value           uniform (0 0 0);
+         type            noSlip;
     }
 
-    cylinder_jet2
+    jet2
     {
-        type            fixedValue;
-        value           uniform (0 0 0);
+         type            noSlip;
     }
 
     "(front|back)"

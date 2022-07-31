@@ -20,7 +20,7 @@ internalField   uniform 0;
 
 boundaryField
 {
-    "(inlet|cylinder_wall|cylinder_jet1|cylinder_jet2|top|bottom)"
+    "(inlet|cylinder_wall|jet1|jet2|top|bottom)"
     {
         type            zeroGradient;
     }
