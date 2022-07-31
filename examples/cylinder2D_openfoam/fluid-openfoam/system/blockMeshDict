@@ -20,20 +20,11 @@ cylinderX 0.2;
 cylinderY 0.2;
 radius 0.05;
 xPartOfR #eval{ sqrt(2)/2 * $radius};
-
-// jet specifications
-jetWidth 10;  // jet width in degrees
-jetCentre 90;  // jet centre in degrees
-xPartOfJet #eval{ cos(degToRad($jetCentre - $jetWidth / 2)) * $radius};
-yPartOfJet #eval{ sin(degToRad($jetCentre - $jetWidth / 2)) * $radius}; 
-
-blocks 100;
-blocks1 #eval{ floor((((360 - (2 * $jetWidth)) / 180) * $blocks ))};  // nonJet
-blocks2 #eval{ 7 * ((2 * $blocks) - $blocks1) };   // Jet
-blocks3 #eval{ round((($lengthX-$cylinderX * 2)) / ($cylinderX * 2) * $blocks )};
-
+blocks 25;
+blocks2 #eval{ round((($lengthX-$cylinderX * 2)) / ($cylinderX * 2) * $blocks)};
 
 thickness 0.01;
+
 
 scale   1;
 
@@ -53,10 +44,10 @@ vertices #codeStream
             /* 3*/ {$lengthX, $lengthY, 0},
             /* 4*/ {$cylinderX * 2, $lengthY, 0},
             /* 5*/ {0, $lengthY, 0},
-            /* 6*/ {$cylinderX - $xPartOfJet, $cylinderY - $yPartOfJet, 0},
-            /* 7*/ {$cylinderX + $xPartOfJet, $cylinderY - $yPartOfJet, 0},
-            /* 8*/ {$cylinderX - $xPartOfJet, $cylinderY + $yPartOfJet, 0},
-            /* 9*/ {$cylinderX + $xPartOfJet, $cylinderY + $yPartOfJet, 0}
+            /* 6*/ {$cylinderX - $xPartOfR, $cylinderY - $xPartOfR, 0},
+            /* 7*/ {$cylinderX + $xPartOfR, $cylinderY - $xPartOfR, 0},
+            /* 8*/ {$cylinderX - $xPartOfR, $cylinderY + $xPartOfR, 0},
+            /* 9*/ {$cylinderX + $xPartOfR, $cylinderY + $xPartOfR, 0}
         });
 
         // Duplicate z points for thickness
@@ -74,11 +65,11 @@ vertices #codeStream
 
 blocks
 (
-    hex (0 1 7 6 10 11 17 16) ($blocks2 $blocks 1) simpleGrading (1 0.5 1)
-    hex (1 4 9 7 11 14 19 17) ($blocks1 $blocks 1) simpleGrading (1 0.5 1)
-    hex (4 5 8 9 14 15 18 19) ($blocks2 $blocks 1) simpleGrading (1 0.5 1)
-    hex (5 0 6 8 15 10 16 18) ($blocks1 $blocks 1) simpleGrading (1 0.5 1)
-    hex (1 2 3 4 11 12 13 14) ($blocks3 $blocks1 1) simpleGrading (4 1 1)
+    hex (0 1 7 6 10 11 17 16) ($blocks $blocks 1) simpleGrading (1 0.25 1)
+    hex (1 4 9 7 11 14 19 17) ($blocks $blocks 1) simpleGrading (1 0.25 1)
+    hex (4 5 8 9 14 15 18 19) ($blocks $blocks 1) simpleGrading (1 0.25 1)
+    hex (5 0 6 8 15 10 16 18) ($blocks $blocks 1) simpleGrading (1 0.25 1)
+    hex (1 2 3 4 11 12 13 14) ($blocks2 $blocks 1) simpleGrading (4 1 1)
 );
 
 edges
@@ -158,24 +149,10 @@ boundary
         type patch;
         faces
         (
-            (9 7 17 19)
-            (6 8 18 16)
-        );
-    }
-    cylinder_jet1
-    {
-        type patch;
-        faces
-        (
-            (8 9 19 18)
-        );
-    }
-    cylinder_jet2
-    {
-        type patch;
-        faces
-        (
-            (7 6 16 17)
+            (6 7 17 16)
+            (7 9 19 17)
+            (9 8 18 19)
+            (8 6 16 18)
         );
     }
 );

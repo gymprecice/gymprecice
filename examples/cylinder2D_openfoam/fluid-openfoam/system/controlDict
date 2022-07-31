@@ -15,6 +15,9 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
+libs ("libCustomisedMeshTools.so");
+
+
 application     pimpleFoam;
 
 startFrom       latestTime;
@@ -23,17 +26,17 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         0.1;
+endTime         10.0;
 
 deltaT          1e-4;
 
 writeControl    runTime;
 
-writeInterval   0.01;
+writeInterval   1.0;
 
 purgeWrite      0;
 
-writeFormat     ascii;
+writeFormat     binary;
 
 writePrecision  8;
 
@@ -42,10 +45,6 @@ timeFormat      general;
 timePrecision   8;
 
 runTimeModifiable false;
-
-
-libs ("libcylindricalSinusoidalVelocityProfile2D.so");
-
 
 functions
 {
@@ -65,19 +64,19 @@ functions
 
         patches
         (
-            "cylinder_.*"
+            cylinder_wall
+            jet1
+            jet2
         );
 
-        rhoInf      1;
-        rho         rhoInf;
-
-        CofR        (0.2 0.2 0.005);
-        liftDir     (0 1 0);
-        dragDir     (1 0 0);
-        //pitchAxis   (0 0 1);
-        magUInf     1.0;
-        lRef        0.1;
-        Aref        0.001;
+        rhoInf          1;
+        rho             rhoInf;
+        CofR            (0.0 0.0 0.005);
+        liftDir         (0 1 0);
+        dragDir         (1 0 0);
+        magUInf         1.0;
+        lRef            0.1;
+        Aref            0.001;
     }
 
     Jet1FlowRate
@@ -90,7 +89,7 @@ functions
         writeFields     false;
 
         regionType      patch;
-        name            cylinder_jet1;
+        name            jet1;
 
         operation        areaNormalIntegrate;
 
@@ -109,7 +108,7 @@ functions
         writeFields     false;
 
         regionType      patch;
-        name            cylinder_jet2;
+        name            jet2;
 
         operation        areaNormalIntegrate;
 

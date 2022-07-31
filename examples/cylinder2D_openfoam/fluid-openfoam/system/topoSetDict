@@ -1,0 +1,45 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2112                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      topoSetDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+actions
+(
+    {
+        name    jet1Faces;
+        type    faceSet;
+        action  new;
+        source  arcToFace;
+        patch   cylinder_wall;
+        origin  ( 0 0 0.005 ); // origin of the cylindrical-arc patch 
+        radius  0.05; // radius of the cylindrical-arc patch 
+        centreAngle  90; // angle of arc-patch centre
+        widthAngle       10; // width of arc-patch
+    }
+
+    {
+        name    jet2Faces;
+        type    faceSet;
+        action  new;
+        source  arcToFace;
+        patch   cylinder_wall;
+        origin  ( 0 0 0.005 ); // origin of the cylindrical-arc patch 
+        radius  0.05; // radius of the cylindrical-arc patch
+        centreAngle  270; // angle of arc-patch centre
+        widthAngle       10; // width of arc-patch
+    }
+);
+
+
+// ************************************************************************* //
