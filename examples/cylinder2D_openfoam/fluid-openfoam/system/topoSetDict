@@ -24,8 +24,8 @@ actions
         patch   cylinder_wall;
         origin  ( 0 0 0.005 ); // origin of the cylindrical-arc patch 
         radius  0.05; // radius of the cylindrical-arc patch 
-        centreAngle  90; // angle of arc-patch centre
-        widthAngle       10; // width of arc-patch
+        arcCentre  90; // angle of arc-patch centre
+        arcWidth       10; // width of arc-patch
     }
 
     {
@@ -36,8 +36,8 @@ actions
         patch   cylinder_wall;
         origin  ( 0 0 0.005 ); // origin of the cylindrical-arc patch 
         radius  0.05; // radius of the cylindrical-arc patch
-        centreAngle  270; // angle of arc-patch centre
-        widthAngle       10; // width of arc-patch
+        arcCentre  270; // angle of arc-patch centre
+        arcWidth       10; // width of arc-patch
     }
 );
 

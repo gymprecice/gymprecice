@@ -150,8 +150,8 @@ Foam::arcToFace::arcToFace
     selectedPatches_(),
     origin_(dict.lookup("origin")),
     radius_(dict.get<scalar>("radius")),
-    w_(dict.get<scalar>("widthAngle")),
-    theta0_(dict.get<scalar>("centreAngle"))
+    w_(dict.get<scalar>("arcWidth")),
+    theta0_(dict.get<scalar>("arcCentre"))
 {
     // Look for 'patches' and 'patch', but accept 'name' as well
     if (!dict.readIfPresent("patches", selectedPatches_))

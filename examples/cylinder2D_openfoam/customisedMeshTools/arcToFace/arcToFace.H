@@ -50,8 +50,8 @@ Usage
         source         arcToFace;
         origin         (<oX> <oY> <oZ>); 
         radius         <radius>;
-        centreAngle    <arcCentre>; 
-        widthAngle     <arcWidth>; 
+        arcCentre    <arcCentre>; 
+        arcWidth     <arcWidth>; 
 
         // Conditional mandatory entries
         // Select either of the below
