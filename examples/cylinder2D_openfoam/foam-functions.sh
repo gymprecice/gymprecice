@@ -34,12 +34,27 @@ runfoam() {
 }
 
 cleanfoam() {
-    # results in killing my ssh connection !!
     set -e
     . "${WM_PROJECT_DIR}/bin/tools/CleanFunctions"
     echo "ds;lfkdls;k"
     cleanCase
     rm -rfv 0
+    rm -rfv ./preCICE-output/ \
+            ./precice-*-iterations.log \
+            ./precice-*-convergence.log \
+            ./precice-*-events.json \
+            ./precice-*-events-summary.log \
+            ./precice-postProcessingInfo.log \
+            ./precice-*-watchpoint-*.log \
+            ./precice-*-watchintegral-*.log \
+            ./core \
+            ./postProcessing \
+            log.* \
+            *.json \
+            *.log
+}
+
+softcleanfoam() {
     rm -rfv ./preCICE-output/ \
             ./precice-*-iterations.log \
             ./precice-*-convergence.log \

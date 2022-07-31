@@ -8,6 +8,9 @@ import numpy as np
 import math
 import precice
 from precice import action_write_initial_data, action_write_iteration_checkpoint
+from pathlib import Path
+from datetime import datetime
+import os
 
 import gym
 from gym import spaces
@@ -15,7 +18,9 @@ from mesh_parser import FoamMesh
 
 import time
 import psutil
-from utils import get_cfg_data, parse_probe_lines
+from utils import get_cfg_data, parse_probe_lines, make_parallel_config, load_file, parallel_precice_dict
+import xmltodict
+import copy
 
 
 class OpenFoamRLEnv(gym.Env):
@@ -27,7 +32,7 @@ class OpenFoamRLEnv(gym.Env):
     def __init__(self, options) -> None:
         super().__init__()
 
-        self.__options = options
+        self.__options = copy.deepcopy(options)
 
         # gym env attributes:
         self.__is_initialized = False
@@ -35,6 +40,7 @@ class OpenFoamRLEnv(gym.Env):
         # action_ and observation_space will be set in _set_precice_data
         self.action_space = None
         self.observation_space = None
+        self.run_folders = self.make_run_folders()
 
         scaler_variables, vector_variables, mesh_list, mesh_variables = \
             get_cfg_data('', self.__options['precice_cfg'])
@@ -63,32 +69,111 @@ class OpenFoamRLEnv(gym.Env):
         self.__probes_rewards_data = {}
         self.__postprocessing_filehandler_dict = {}
 
+    def make_run_folders(self):
+        # clean the case file and run grid preprocessor on the original OpenFoam case files
+        shell_cmd = self.__options.get("foam_shell_cmd", "")
+        case_path = self.__options.get("case_path", "")
+        clean_cmd = self.__options.get("clean_cmd", "")
+        preprocess_cmd = self.__options.get("preprocess_cmd", "")
+
+        self.__solver_clean = self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
+        # self.__solver_clean = self._finalize_subprocess(self.__solver_clean)
+        assert self.__solver_clean is None
+        # TODO: move run open-foam preprocess before the symbolic links
+        self.__solver_preprocess = self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
+        # self.__solver_preprocess = self._finalize_subprocess(self.__solver_preprocess)
+        assert self.__solver_preprocess is None
+
+        # Create an empty folder for the RL_Gym to run OpenFoam
+        cwd = Path.cwd()
+        time_str = datetime.now().strftime('%m%d%Y_%H%M%S')
+        run_folder_name = f'rl_gym_run_{time_str}'
+        run_folder = cwd.joinpath(run_folder_name)
+        try:
+            run_folder.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            raise Exception(f'failed to create run folder: {e}')
+
+        # Create a n_parallel case_folders as symbolic links
+        case_path_str = self.__options['case_path']
+        source_folder_str = str(cwd) + '/' + case_path_str
+        run_folder_list = []
+
+        for idx_ in range(self.__options['n_parallel']):
+            dist_folder_str = str(run_folder) + '/' + case_path_str + f'_{idx_}'
+            run_folder_list.append(dist_folder_str)
+            try:
+                os.system(f'cp -rs {source_folder_str} {dist_folder_str}')
+            except Exception as e:
+                raise Exception(f'Failed to create symbolic links to foam case files: {e}')
+
+            precicedict_str = load_file(dist_folder_str + "/system/", 'preciceDict')
+            print(precicedict_str)
+            new_string = parallel_precice_dict(precicedict_str, idx_)
+            print(new_string)
+            # delete the symbolic link
+            complete_filepath = f'{dist_folder_str}/system/preciceDict'
+
+            os.system(f"rm {complete_filepath}")
+            with open(complete_filepath, 'w') as file_obj:
+                file_obj.write(new_string)
+
+        # TODO: create a set of new preciceDict in each case folder
+        # this have different precideDict have to be generated for each parallel run
+        # Quick hack by doing following modification
+        # participant Fluid_0;
+        # mesh Fluid-Mesh_0;
+        # Velocity_0 and Pressure_0 in the read and write sections
+
+        # Get a new version of precice-config.xml
+        parallel_tree = make_parallel_config(str(cwd) + '/', "precice-config.xml", self.__options['n_parallel'], run_folder_list)
+        precice_config_parallel_file = str(run_folder) + "/precice-config.xml"
+
+        with open(precice_config_parallel_file, 'w') as file_obj:
+            file_obj.write(xmltodict.unparse(parallel_tree, encoding='utf-8', pretty=True))
+        os.chdir(str(run_folder))
+        os.system(f'cp ../foam-functions.sh .')
+
+        self.__options['precice_cfg'] = precice_config_parallel_file
+
+        # TODO: A quick hack to run on a single processor
+        self.__options['case_path'] = self.__options['case_path'] + '_0'
+        # print(self.__options['case_path'])
+
+        return run_folder_list
+
     # gym methods:
     def reset(self, *, seed=None, return_info=True, options=None):
         super().reset(seed=seed)
 
         # get the solver-launch options
-        case_path = options.get("case_path", "")
-        clean_cmd = options.get("clean_cmd", "")
-        preprocess_cmd = options.get("preprocess_cmd", "")
-        run_cmd = options.get("run_cmd", "")
-        self.__solver_full_reset = options.get(
-            "solver_full_reset", self.__solver_full_reset)
+        shell_cmd = self.__options.get("foam_shell_cmd", "")
+        case_path = self.__options.get("case_path", "")
+        clean_cmd = self.__options.get("clean_cmd", "")
+        softclean_cmd = self.__options.get("softclean_cmd", "")
+        preprocess_cmd = self.__options.get("preprocess_cmd", "")
+        run_cmd = self.__options.get("run_cmd", "")
 
-        if (self.__is_first_reset or self.__solver_full_reset):
+        self.__solver_full_reset = self.__options.get("solver_full_reset", self.__solver_full_reset)
+        if self.__is_first_reset or self.__solver_full_reset:
             # clean open-foam case
-            self.__solver_clean = self._launch_subprocess(clean_cmd, case_path)
+            self.__solver_clean = self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
+            # self.__solver_clean = self._finalize_subprocess(self.__solver_clean)
+            assert self.__solver_clean is None
+            # TODO: move run open-foam preprocess before the symbolic links
+            self.__solver_preprocess = self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
+            # self.__solver_preprocess = self._finalize_subprocess(self.__solver_preprocess)
+            assert self.__solver_preprocess is None
+        else:
+            # clean the log files
+            self.__solver_clean = self._launch_subprocess(shell_cmd, softclean_cmd, case_path, cmd_type='softclean')
             self.__solver_clean = self._finalize_subprocess(self.__solver_clean)
             assert self.__solver_clean is None
-            # run open-foam preprocess
-            self.__solver_preprocess = self._launch_subprocess(preprocess_cmd, case_path)
-            self.__solver_preprocess = self._finalize_subprocess(self.__solver_preprocess)
-            assert self.__solver_preprocess is None
 
-            # # parse solver mesh data
-            # self._parse_mesh_data(case_path)
-            # # set mesh-dependent gym data (observation & action)
-            # self._set_env_obs_act()
+        # # parse solver mesh data
+        # self._parse_mesh_data(case_path)
+        # # set mesh-dependent gym data (observation & action)
+        # self._set_env_obs_act()
 
         if len(self.__postprocessing_filehandler_dict) > 0:
             self.__close_postprocessing_files()
@@ -98,7 +183,7 @@ class OpenFoamRLEnv(gym.Env):
         # run open-foam solver
         if self.__solver_run:
             raise Exception('solver_run pointer is not cleared -- should not reach here')
-        self.__solver_run = self._launch_subprocess(run_cmd, case_path)
+        self.__solver_run = self._launch_subprocess(shell_cmd, run_cmd, case_path, cmd_type='run')
         assert self.__solver_run is not None
 
         # initiate precice interface and read single mesh data
@@ -178,7 +263,7 @@ class OpenFoamRLEnv(gym.Env):
             mesh_id = self.__interface.get_mesh_id(mesh_name)
             print(f"Mesh_ID: {mesh_id}, Mesh_name: {mesh_name}")
             bounding_box = [-np.inf, np.inf] * self.__dim
-            #self.__interface.set_mesh_access_region(mesh_id, bounding_box)  # ERROR:  setMeshAccessRegion may only be called once.
+            # self.__interface.set_mesh_access_region(mesh_id, bounding_box)  # ERROR:  setMeshAccessRegion may only be called once.
             self.__mesh_id[mesh_name] = mesh_id
         self.__interface.set_mesh_access_region(mesh_id, bounding_box)
         # establish connection with the solver
@@ -226,10 +311,10 @@ class OpenFoamRLEnv(gym.Env):
                 read_var_list = self.__mesh_variables[mesh_name]['read']
                 for read_var in read_var_list:
                     if read_var in self.vector_variables:
-                        self.__read_data[read_var] = self.__interface.read_block_vector_data(  
+                        self.__read_data[read_var] = self.__interface.read_block_vector_data(
                             self.__read_id[read_var], self.__vertex_id[mesh_name])
                     else:
-                        self.__read_data[read_var] = self.__interface.read_block_scalar_data(  
+                        self.__read_data[read_var] = self.__interface.read_block_scalar_data(
                             self.__read_id[read_var], self.__vertex_id[mesh_name])
                     print(f"avg-{read_var} from Solver = {self.__read_data[read_var].mean():.4f}")
                     print("-------------------------------------------")
@@ -239,28 +324,44 @@ class OpenFoamRLEnv(gym.Env):
             write_var_list = self.__mesh_variables[mesh_name]['write']
             for write_var in write_var_list:
                 if write_var in self.vector_variables:
-                    self.__interface.write_block_vector_data(  
-                    self.__write_id[write_var], self.__vertex_id[mesh_name], self.__write_data[write_var])
+                    self.__interface.write_block_vector_data(
+                        self.__write_id[write_var], self.__vertex_id[mesh_name], self.__write_data[write_var])
                 else:
-                    self.__interface.write_block_scalar_data(  
-                    self.__write_id[write_var], self.__vertex_id[mesh_name], self.__write_data[write_var])
+                    self.__interface.write_block_scalar_data(
+                        self.__write_id[write_var], self.__vertex_id[mesh_name], self.__write_data[write_var])
                 print(f"avg-{write_var} to solver = {self.__write_data[write_var].mean():.4f}")
                 print("-------------------------------------------")
 
-    def _launch_subprocess(self, cmd, cwd=None):
-        subproc = subprocess.Popen(cmd, shell=True, cwd=cwd)
+    def _launch_subprocess(self, shell_cmd, cmd, cwd, cmd_type):
+        cmd_str = f'. ../{shell_cmd} {cmd}'  # here we have relative path
+        if cmd_type in ['clean', 'softclean']:
+            try:
+                completed_process = subprocess.run(cmd_str, shell=True, cwd=cwd)
+            except Exception as e:
+                print(e)
+                raise Exception(f'failed to run {cmd_type}: {cmd_str} from the folder {cwd}')
 
-        # check if the command is working
-        time.sleep(0.5)  # have to add a very tiny sleep
+            if completed_process.returncode != 0:
+                raise Exception(f"run is not successful: {completed_process}")
+            return None
+        elif cmd_type == 'preprocess':
+            # TODO: preprocess on the main folder before the symbolic links
+            completed_process = subprocess.run(cmd_str, shell=True, cwd=cwd)
+            if completed_process.returncode != 0:
+                raise Exception(f"run is not successful: {completed_process}")
+            return None
+        else:
+            subproc = subprocess.Popen(cmd_str, shell=True, cwd=cwd)
+            time.sleep(0.5)  # have to add a very tiny sleep
+            # check if the spawning process is successful
+            if not psutil.pid_exists(subproc.pid):
+                raise Exception(f'Error: subprocess failed to be launched: {cmd} run from {cwd}')
 
-        # check if the spawning process is successful
-        if not psutil.pid_exists(subproc.pid):
-            raise Exception(f'Error: subprocess failed to be launched: {cmd}')
-
-        # finalize the subprocess if it is terminated (normally/abnormally)
-        if psutil.Process(subproc.pid).status() == psutil.STATUS_ZOMBIE:
-            return self._finalize_subprocess(subproc)
-        return subproc
+            # finalize the subprocess if it is terminated (normally/abnormally)
+            if psutil.Process(subproc.pid).status() == psutil.STATUS_ZOMBIE:
+                print(psutil.Process(subproc.pid), psutil.Process(subproc.pid).status())
+                raise Exception(f'Error: subprocess failed to be launched: {cmd_str} STATUS_ZOMBIE run from {cwd}')
+            return subproc
 
     def _finalize_subprocess(self, subproc):
         if subproc and psutil.pid_exists(subproc.pid):
@@ -302,7 +403,7 @@ class OpenFoamRLEnv(gym.Env):
 
     def define_env_obs_act(self):
         # TODO: this should be problem specific
-        # 1) action space need to be generalized here 
+        # 1) action space need to be generalized here
         # 2) action space is not equal to observation space
         # 3) some of variables are scaler and other are vector
         # 4) where is rewards -- it is communicated? or read from online file?
@@ -337,27 +438,26 @@ class OpenFoamRLEnv(gym.Env):
         # TODO: this should be problem specific
         print(f"Prescribed action: FlowRate = {action[0]:.6f} [m/s3] on jet1")
 
-        # convert volumetric flow rate to a sinusoidal profile on the interface 
+        # convert volumetric flow rate to a sinusoidal profile on the interface
         avg_U = action[0] / np.sum(self.magSf)
         origin = np.array([0, 0, 0.005])
         d = np.array([1, 0, 0])
         w = 10
-        r = np.zeros((self.Cf.shape[0],3))
+        r = np.zeros((self.Cf.shape[0], 3))
         theta = np.zeros(self.Cf.shape[0])
-        U = np.zeros((self.Cf.shape[0],3))
-        
-        
+        U = np.zeros((self.Cf.shape[0], 3))
+
         # estimated flow rate based on the sinusoidal profile
         Q_calc = 0
         for i, c in enumerate(self.Cf):
-            r[i] = (c - origin)/(np.sqrt((c - origin).dot((c - origin))))
+            r[i] = (c - origin) / (np.sqrt((c - origin).dot((c - origin))))
             theta[i] = math.radians(90) - math.acos(np.dot(r[i], d))
             U[i] = avg_U * math.pi / 2 * math.cos(math.pi / math.radians(w) * theta[i]) * self.nf[i]
             Q_calc += U[i].dot(self.Sf[i])
-            
+
         # correct velocity profile to enforce mass conservation
         Q_err = action[0] - Q_calc
-        U_err = Q_err/np.sum(self.magSf) * self.nf
+        U_err = Q_err / np.sum(self.magSf) * self.nf
         U += U_err
 
         # return the velocity profile
@@ -370,10 +470,10 @@ class OpenFoamRLEnv(gym.Env):
             return U
         else:
             raise Exception('estimated velocity profile violates mass conservation')
-    
+
     def action_to_write_data(self, action):
         """ return dummy random values for Velocity """
-        write_data_dict = {"Velocity": action}
+        write_data_dict = {"Velocity_0": action}
         return write_data_dict
 
     def read_data_to_observations(self):
@@ -390,7 +490,8 @@ class OpenFoamRLEnv(gym.Env):
                 # get the last row of the list
                 obs_list.append(self.__probes_rewards_data[field_][-1])
 
-        obs_list.append(self.__read_data["Pressure"])  # TODO: delete this as we only read from post-processing files
+        # TODO: delete this as we only read from post-processing files
+        obs_list.append(self.__read_data["Pressure_0"])
         return obs_list
 
     def read_probes_rewards_files(self):
