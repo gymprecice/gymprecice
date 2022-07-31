@@ -15,7 +15,7 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-libs ("libCustomisedMeshTools.so");
+libs ("libCustomisedMeshTools.so" "libCustomisedBCs.so");
 
 
 application     pimpleFoam;
@@ -32,7 +32,7 @@ deltaT          1e-4;
 
 writeControl    runTime;
 
-writeInterval   1.0;
+writeInterval   0.1;
 
 purgeWrite      0;
 

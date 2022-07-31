@@ -52,7 +52,7 @@ cylindricalSinusoidalVelocityProfile2DFvPatchVectorField
 :
     fixedValueFvPatchVectorField(p, iF),
     origin_(Zero),
-    axis_(Zero),
+    radius_(0.0),
     w_(0.0),
     theta0_(0.0),
     flowRate_(),
@@ -73,9 +73,9 @@ cylindricalSinusoidalVelocityProfile2DFvPatchVectorField
 :
     fixedValueFvPatchVectorField(p, iF),
     origin_(dict.getCompat<vector>("origin", {{"centre", 1712}})),
-    axis_(dict.lookup("axis")),
-    w_(dict.get<scalar>("w")),
-    theta0_(dict.get<scalar>("theta0")),
+    radius_(dict.get<scalar>("radius")),
+    w_(dict.get<scalar>("arcWidth")),
+    theta0_(dict.get<scalar>("arcCentre")),
     rhoName_("rho"),
     rhoInlet_(dict.getOrDefault<scalar>("rhoInlet", -VGREAT)),
     volumetric_(true)
@@ -126,7 +126,7 @@ cylindricalSinusoidalVelocityProfile2DFvPatchVectorField
 :
     fixedValueFvPatchField<vector>(ptf, p, iF, mapper),
     origin_(ptf.origin_),
-    axis_(ptf.axis_),
+    radius_(ptf.radius_),
     w_(ptf.w_),
     theta0_(ptf.theta0_),
     flowRate_(ptf.flowRate_.clone()),
@@ -144,7 +144,7 @@ cylindricalSinusoidalVelocityProfile2DFvPatchVectorField
 :
     fixedValueFvPatchVectorField(ptf),
     origin_(ptf.origin_),
-    axis_(ptf.axis_),
+    radius_(ptf.radius_),
     w_(ptf.w_),
     theta0_(ptf.theta0_),
     flowRate_(ptf.flowRate_.clone()),
@@ -163,7 +163,7 @@ cylindricalSinusoidalVelocityProfile2DFvPatchVectorField
 :
     fixedValueFvPatchVectorField(ptf, iF),
     origin_(ptf.origin_),
-    axis_(ptf.axis_),
+    radius_(ptf.radius_),
     w_(ptf.w_),
     theta0_(ptf.theta0_),
     flowRate_(ptf.flowRate_.clone()),
@@ -192,18 +192,21 @@ void Foam::cylindricalSinusoidalVelocityProfile2DFvPatchVectorField::rmap
 template<class RhoType>
 Foam::vectorField Foam::cylindricalSinusoidalVelocityProfile2DFvPatchVectorField::evaluateVelocityProfile(const RhoType& rho)
 {
-    //- Magnitude of uniform velocity profile on the cylindrical-arc patch
-    const scalar avgU = -flowRate_->value(t())/gSum(rho*patch().magSf());
-
     // Get patch normal unit vectors
     const vectorField n(patch().nf());
+
+    // Get patch centre
+    point arcCtr(radius_*Foam::cos(Foam::degToRad(theta0_)), radius_*Foam::sin(Foam::degToRad(theta0_)), origin_.z());
+
+    //- Magnitude of uniform velocity profile on the cylindrical-arc patch
+    const scalar avgU = -flowRate_->value(t())/gSum(rho*patch().magSf());
     
     // Reference axis to compute theta
-    vector d((axis_ - origin_)/mag(axis_ - origin_));
+    vector d((arcCtr - origin_)/mag(arcCtr - origin_));
     
     const vectorField r((patch().Cf() - origin_)/mag(patch().Cf() - origin_));
 
-    scalarField theta(Foam::degToRad(theta0_) - Foam::acos(r & d));
+    scalarField theta(Foam::acos(r & d));
 
     // Return sinusoidal velocity profile on the patch 
     return (avgU*Foam::constant::mathematical::piByTwo*Foam::cos(Foam::constant::mathematical::pi/Foam::degToRad(w_)*theta) * n);
@@ -230,10 +233,18 @@ void Foam::cylindricalSinusoidalVelocityProfile2DFvPatchVectorField::updateValue
     const RhoType& rho
 )
 {
-    vectorField U_profile = evaluateVelocityProfile(rho);
-    correctVelocityProfile(U_profile, rho);
-
-    operator==(U_profile);
+    if (flowRate_->value(t()) == 0.0) // No-slip BC for Q=0.0
+    {
+       vectorField U_profile(this->size(), Zero);
+       operator==(U_profile);
+    }
+    else
+    {
+        vectorField U_profile = evaluateVelocityProfile(rho);
+        correctVelocityProfile(U_profile, rho);
+        operator==(U_profile);
+    }
+    
 }
 
 
@@ -283,9 +294,9 @@ void Foam::cylindricalSinusoidalVelocityProfile2DFvPatchVectorField::write
 {
     fvPatchVectorField::write(os);
     os.writeEntry("origin", origin_);
-    os.writeEntry("axis", axis_);
-    os.writeEntry("w", w_);
-    os.writeEntry("theta0", theta0_);
+    os.writeEntry("radius", radius_);
+    os.writeEntry("arcWidth", w_);
+    os.writeEntry("arcCentre", theta0_);
     flowRate_->writeData(os);
     if (!volumetric_)
     {

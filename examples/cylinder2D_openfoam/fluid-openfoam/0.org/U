@@ -35,17 +35,29 @@ boundaryField
 
     "(cylinder_wall|top|bottom)"
     {
-        type            noSlip;
+        type noSlip;
     }
     
     jet1
     {
-         type            noSlip;
+        type            cylindricalSinusoidalProfile2D;
+        origin          ( 0 0 0.005 ); //- arc origin
+        radius          0.05;  //- arc radius
+        arcCentre         90; ///- arc centre
+        arcWidth               10; //- arc angle
+        volumetricFlowRate constant 1e-04; 
+        value           uniform ( 0 0 0 );
     }
 
     jet2
     {
-         type            noSlip;
+        type            cylindricalSinusoidalProfile2D;
+        origin          ( 0 0 0.005 ); 
+        radius          0.05;  
+        arcCentre         270; 
+        arcWidth               10; 
+        volumetricFlowRate constant -1e-04; 
+        value           uniform ( 0 0 0 );
     }
 
     "(front|back)"

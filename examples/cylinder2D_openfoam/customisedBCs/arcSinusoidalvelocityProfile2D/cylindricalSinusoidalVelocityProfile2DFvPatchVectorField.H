@@ -49,7 +49,7 @@ Usage
     \table
         Property             | Description                  | Req'd | Default
         origin_               | single vector value         | yes |
-        axis_                 | single vector value         | yes |
+        radius_               | single vector value         | yes |
         theta0_               | single scalar value         | yes |
         w_                    | single scalar value         | yes |
         volumetricFlowRate_   | single scalar value         | yes |
@@ -61,12 +61,12 @@ Usage
     <patchName>
     {
         type            cylindricalSinusoidalProfile2D;
-        origin          ( 0 0 0.005 ); // origin of the cylindrical-arc patch 
-        axis            ( 1 0 0.005 ); 
-        theta0          90; // smallest angle (clockwise or anticlockwise) between axis and patch centre
-        w               10; // arc-angle of patch
+        origin          ( 0 0 0.005 ); 
+        radius           0.05;  
+        arcCentre      90; 
+        arcWidth       10; 
         volumetricFlowRate constant 1e-05; 
-        value           uniform ( 0 0 0 );
+        value   uniform ( 0 0 0 );
     }
     \endverbatim
 
@@ -96,16 +96,16 @@ class cylindricalSinusoidalVelocityProfile2DFvPatchVectorField
 {
     // Private Data
 
-        //- Origin of the cylinder which includes arc-shaped patch
-        const vector origin_;
+        //- arc origin
+        const point origin_;
 
-        //- Reference axis from which the centre-angle of arc-shaped patch is measured 
-        const vector axis_;
+        //- arc radius
+        scalar radius_;
         
-        //- Width-angle of arc-shaped patch in deg(=360 for full cylinder)
+        //- arc angle
         const scalar w_;
 
-        //- Centre-angle of arc-shaped patch in deg(the smallest angle measured from reference axis)
+        //- arc centre
         const scalar theta0_;
 
         //- Patch integral flow rate

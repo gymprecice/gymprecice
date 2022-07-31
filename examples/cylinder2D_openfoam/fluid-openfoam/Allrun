@@ -4,7 +4,8 @@ cd "${0%/*}" || exit                                # Run from this directory
 #------------------------------------------------------------------------------
 
 # dummy file for post-processing with paraview
-touch post.foam
+touch case.foam
+touch case.OpenFOAM
 
 # mesh creation
 runApplication blockMesh
