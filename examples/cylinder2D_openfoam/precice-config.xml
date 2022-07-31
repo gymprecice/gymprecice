@@ -28,10 +28,10 @@
       <write-data name="Velocity" mesh="Fluid-Mesh" />
     </participant>
 
-    <m2n:sockets from="RL-Gym" to="Fluid" exchange-directory="/data/ms2137/works/rl_of/rl_play/examples/cylinder2D_openfoam"/>
+    <m2n:sockets from="RL-Gym" to="Fluid" exchange-directory="/data/ahmed/rl_play/examples/cylinder2D_openfoam/"/>
 
     <coupling-scheme:serial-explicit>
-      <max-time value="0.05" />
+      <max-time value="0.0003" />
       <time-window-size value="0.0001" valid-digits="8" />
       <participants first="RL-Gym" second="Fluid" />
       <exchange data="Pressure" mesh="Fluid-Mesh" from="Fluid" to="RL-Gym" initialize="true"/>

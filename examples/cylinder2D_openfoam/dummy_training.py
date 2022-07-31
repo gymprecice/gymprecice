@@ -18,27 +18,31 @@ if __name__ == '__main__':
 
     # shell options to run the solver (this can/should be placed in a
     # separate python script)
-    foam_case_path = "./fluid-openfoam"
-    foam_src_cmd = ". ../foam-functions.sh"
+    foam_case_path = "fluid-openfoam"
+    foam_shell_cmd = "foam-functions.sh"
     foam_clean_cmd = "cleanfoam"
+    foam_softclean_cmd = "softcleanfoam"
+
     foam_preprocess_cmd = "preprocessfoam"
     foam_run_cmd = "runfoam"
     foam_preprocess_log = "foam_preprocess.log"
     foam_clean_log = "foam_clean.log"
+    foam_softclean_log = "foam_softclean.log"
     foam_run_log = "foam_run.log"
 
     # if True, then the preprocessing (here: blockMesh) happens per each epoch:
     foam_full_reset = False
 
-    foam_clean_cmd = f"{foam_src_cmd} && {foam_clean_cmd} > {foam_clean_log} 2>&1"
-    foam_preprocess_cmd = f"{foam_src_cmd} && {foam_preprocess_cmd} > {foam_preprocess_log} 2>&1"
-    foam_run_cmd = f"{foam_src_cmd} && {foam_run_cmd} > {foam_run_log} 2>&1"
+    foam_clean_cmd = f" && {foam_clean_cmd} > {foam_clean_log} 2>&1"
+    foam_softclean_cmd = f" && {foam_softclean_cmd} > {foam_softclean_log} 2>&1"
+    foam_preprocess_cmd = f" && {foam_preprocess_cmd} > {foam_preprocess_log} 2>&1"
+    foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log} 2>&1"
 
     # foam_run_cmd = f"sh ../foam-run.sh > {foam_run_log} 2>&1"
     # foam_preprocess_cmd = f"sh ../foam-preprocess.sh > {foam_preprocess_log} 2>&1"
 
     # reset options
-    n_parallel_env = 4
+    n_parallel_env = 1
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -53,27 +57,28 @@ if __name__ == '__main__':
             'use': 'observation',  # goes into observation or rewards
             'type': 'field',  # scaler vs field
             'size': 3,  # number of probes
-            'output_folder': '/postProcessing/patchProbes/0/U'
+            'output_folder': '/postProcessing/patchProbes/0/U',
         },
         'T': {
             'use': 'observation',  # goes into observation or rewards
             'type': 'field',  # scaler vs field
             'size': 3,  # number of probes
-            'output_folder': '/postProcessing/patchProbes/0/T'
-
+            'output_folder': '/postProcessing/patchProbes/0/T',
         },
     }
 
     options = {
         "precice_cfg": "precice-config.xml",
         "case_path": foam_case_path,
+        "foam_shell_cmd": foam_shell_cmd,
         "clean_cmd": foam_clean_cmd,
+        "softclean_cmd": foam_softclean_cmd,
         "preprocess_cmd": foam_preprocess_cmd,
         "run_cmd": foam_run_cmd,
         "solver_full_reset": foam_full_reset,
         "rand_seed": rand_seed,
         "postprocessing_data": postprocessing_data,
-        # "n_parallel": n_parallel_env,
+        "n_parallel": n_parallel_env,
     }
 
     # create the environment
