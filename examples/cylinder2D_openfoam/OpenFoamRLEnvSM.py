@@ -151,7 +151,7 @@ class OpenFoamRLEnv(gym.Env):
 
         for p_idx in range(self.__options['n_parallel_env']):
             p_case_path = case_path + f'_{p_idx}'
-            if False or self.__is_first_reset or self.__solver_full_reset:
+            if False:  # or self.__is_first_reset or self.__solver_full_reset:
                 # clean open-foam case
                 self._launch_subprocess(shell_cmd, clean_cmd, p_case_path, cmd_type='clean')
                 # self.__solver_clean = self._finalize_subprocess(self.__solver_clean)

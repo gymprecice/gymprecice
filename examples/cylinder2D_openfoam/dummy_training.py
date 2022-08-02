@@ -42,7 +42,7 @@ if __name__ == '__main__':
     # foam_preprocess_cmd = f"sh ../foam-preprocess.sh > {foam_preprocess_log} 2>&1"
 
     # reset options
-    n_parallel_env = 2
+    n_parallel_env = 8
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -89,7 +89,7 @@ if __name__ == '__main__':
         "rand_seed": rand_seed,
         "postprocessing_data": postprocessing_data,
         "n_parallel_env": n_parallel_env,
-        "is_dummy_run": False,
+        "is_dummy_run": True,
     }
 
     # create the environment
@@ -97,14 +97,14 @@ if __name__ == '__main__':
     t0 = time.time()
     env = OpenFoamRLEnv(options)
     # good scalability regardless of the number of parallel environments
-    print(f"Run time of defining OpenFoamRLEnv is {time.time()-t0} seconds")  
+    print(f"Run time of defining OpenFoamRLEnv is {time.time()-t0} seconds")
 
     for epoch in range(1):  # epochs
-        t0 = time.time()
+        t01 = time.time()
         observation, _ = env.reset(return_info=True, seed=options['rand_seed'], options=options)
-        print(f"Run time of defining env.reset is {time.time()-t0} seconds -- Baaad scalability")
+        print(f"Run time of defining env.reset is {time.time()-t01} seconds")
 
-        t0 = time.time()
+        t02 = time.time()
         counter = 0
         while True:
 
@@ -127,4 +127,6 @@ if __name__ == '__main__':
                 print(f"Epoch # {epoch+1}: \"done\" after {counter} steps")
                 print("-------------------------------------")
                 break
-        print(f'Finished epoch in {time.time()-t0} seconds')
+        print(f'Finished epoch in {time.time()-t02} seconds')
+    
+    print(f"Total run time is {time.time()-t0} seconds")
