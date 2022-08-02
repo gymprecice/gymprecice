@@ -92,7 +92,7 @@ class OpenFoamRLEnv(gym.Env):
 
         # Create an empty folder for the RL_Gym to run OpenFoam
         cwd = Path.cwd()
-        time_str = datetime.now().strftime('%m%d%Y_%H%M%S')
+        time_str = datetime.now().strftime('%d%m%Y_%H%M%S')
         run_folder_name = f'rl_gym_run_{time_str}'
         run_folder = cwd.joinpath(run_folder_name)
         try:
@@ -134,7 +134,6 @@ class OpenFoamRLEnv(gym.Env):
         os.system(f'cp ../foam-functions.sh .')
 
         self.__options['precice_cfg'] = precice_config_parallel_file
-
         return run_folder_list
 
     # gym methods:
@@ -177,7 +176,11 @@ class OpenFoamRLEnv(gym.Env):
 
         for p_idx in range(self.__options['n_parallel_env']):
             p_case_path = case_path + f'_{p_idx}'
-            p_process = self._launch_subprocess(shell_cmd, run_cmd, p_case_path, cmd_type='run')
+            if self.__options['is_dummy_run']:
+                p_process = self._launch_dummy_subprocess(p_idx, p_case_path)
+            else:
+                p_process = self._launch_subprocess(shell_cmd, run_cmd, p_case_path, cmd_type='run')
+
             assert p_process is not None
             self.__solver_run.append(p_process)
 
@@ -197,8 +200,10 @@ class OpenFoamRLEnv(gym.Env):
             self._write()
             self.__interface.mark_action_fulfilled(action_write_initial_data())
 
+        t0 = time.time()
         self.__interface.initialize_data()
-
+        print(f"RL-gym self.__interface.initialize_data() done in {time.time()-t0} seconds")
+        # this results in reading data ahead of time when this is participat 2
         if self.__interface.is_read_data_available():
             self._read()
 
@@ -291,7 +296,11 @@ class OpenFoamRLEnv(gym.Env):
         self._write()
         self.__interface.advance(self.__precice_dt)
         self._read()
-        self.read_probes_rewards_files()
+        try:
+            self.read_probes_rewards_files()
+        except Exception as e:
+            print('FIX ME: problem in read_probes_rewards_files')
+            print(e)
 
         self.__t += self.__precice_dt
         print(f'RL Gym after advance =====>> time: {self.__t }')
@@ -346,7 +355,7 @@ class OpenFoamRLEnv(gym.Env):
                     else:
                         self.__read_data[read_var] = self.__interface.read_block_scalar_data(
                             self.__read_ids[read_var], self.__vertex_ids[mesh_name])
-                    print(f"avg-{read_var} using {mesh_name} read from solver = {self.__read_data[read_var].mean():.4f}")
+                    print(f"(RL-Gym), avg-{read_var} using {mesh_name} read = {self.__read_data[read_var].mean():.4f}")
                     print("-------------------------------------------")
 
     def _write(self):
@@ -365,8 +374,22 @@ class OpenFoamRLEnv(gym.Env):
                 else:
                     self.__interface.write_block_scalar_data(
                         self.__write_ids[write_var], self.__vertex_ids[mesh_name], self.__write_data[write_var])
-                print(f"avg-{write_var} using {mesh_name} write to solver = {self.__write_data[write_var].mean():.4f}")
+                print(f"(RL-Gym), avg-{write_var} using {mesh_name} write = {self.__write_data[write_var].mean():.4f}")
                 print("-------------------------------------------")
+
+    def _launch_dummy_subprocess(self, process_idx, cwd):
+        cmd_str = f'python -u fluid-solver.py'
+        subproc = subprocess.Popen(cmd_str, shell=True, cwd=cwd)
+        time.sleep(0.5)  # have to add a very tiny sleep
+        # check if the spawning process is successful
+        if not psutil.pid_exists(subproc.pid):
+            raise Exception(f'Error: subprocess failed to be launched: {cmd} run from {cwd}')
+
+        # finalize the subprocess if it is terminated (normally/abnormally)
+        if psutil.Process(subproc.pid).status() == psutil.STATUS_ZOMBIE:
+            print(psutil.Process(subproc.pid), psutil.Process(subproc.pid).status())
+            raise Exception(f'Error: subprocess failed to be launched: {cmd_str} STATUS_ZOMBIE run from {cwd}')
+        return subproc
 
     def _launch_subprocess(self, shell_cmd, cmd, cwd, cmd_type):
         cmd_str = f'. ../{shell_cmd} {cmd}'  # here we have relative path
@@ -419,7 +442,10 @@ class OpenFoamRLEnv(gym.Env):
 
     def _parse_mesh_data(self, case_path):
         """ parse polyMesh to get interface points:"""
+        t0 = time.time()
+        print('starting to parse FoamMesh')
         foam_mesh = FoamMesh(case_path)
+        print(f'Done to parsing FoamMesh in {time.time()-t0} seconds')
 
         # nodes = foam_mesh.boundary_face_nodes(b'interface')
         # self.__n = nodes.shape[0]

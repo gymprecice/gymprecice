@@ -31,6 +31,11 @@
         from="RL-Mesh"
         to="Fluid-Mesh"
         constraint="consistent" />
+      <mapping:nearest-neighbor
+        direction="write"
+        from="Fluid-Mesh"
+        to="RL-Mesh"
+        constraint="consistent" />
     </participant>
 
     <participant name="RL-Gym">
@@ -38,21 +43,16 @@
       <use-mesh name="Fluid-Mesh" from="Fluid"/>
       <read-data name="Pressure" mesh="RL-Mesh" />
       <write-data name="Velocity" mesh="RL-Mesh" />
-      <mapping:nearest-neighbor
-        direction="read"
-        from="Fluid-Mesh"
-        to="RL-Mesh"
-        constraint="consistent" />
     </participant>
 
-    <m2n:sockets from="Fluid" to="RL-Gym" exchange-directory="/data/ahmed/rl_play/examples/cylinder2D_openfoam/"/>
+    <m2n:sockets from="RL-Gym" to="Fluid" exchange-directory="/data/ahmed/rl_play/examples/cylinder2D_openfoam/"/>
 
-    <coupling-scheme:serial-explicit>
-      <max-time value="0.0003" />
+    <coupling-scheme:parallel-explicit>
+      <max-time value="0.001" />
       <time-window-size value="0.0001" valid-digits="8" />
       <participants first="Fluid" second="RL-Gym"/>
-      <exchange data="Velocity" mesh="Fluid-Mesh" from="RL-Gym" to="Fluid"  initialize="true"/>
-      <exchange data="Pressure" mesh="Fluid-Mesh" from="Fluid" to="RL-Gym"/>
-    </coupling-scheme:serial-explicit>
+      <exchange data="Velocity" mesh="RL-Mesh" from="RL-Gym" to="Fluid" initialize="True"/>
+      <exchange data="Pressure" mesh="RL-Mesh" from="Fluid" to="RL-Gym"/>
+    </coupling-scheme:parallel-explicit>
   </solver-interface>
 </precice-configuration>

@@ -418,13 +418,9 @@ def make_parallel_config(foldername, filename, n_parallel_env, parallel_folders_
                     print(read_data_list)
                     print(new_read_data_list)
 
-                    if use_mapping:
+                    if use_mapping and 'mapping:nearest-neighbor' in participant_item.keys():
                         # for now we only support mapping:nearest-neighbor
-                        try:
-                            mapping_list = participant_item['mapping:nearest-neighbor']
-                        except Exception as e:
-                            raise Exception(f'Exception {e}: parallel processing of precice xml configurations only supports mapping:nearest-neighbor for the time being')
-
+                        mapping_list = participant_item['mapping:nearest-neighbor']
                         new_mapping_list = mod_mapping_lists(mapping_list, range(n_parallel_env))
                         print("==== mapping_list")
                         print(mapping_list)
@@ -501,18 +497,19 @@ def make_parallel_config(foldername, filename, n_parallel_env, parallel_folders_
             print("===== m2n:sockets")
             print(m2n_list)
             mod_tree_sub[key] = repeat_m2n(m2n_list, n_parallel_env, parallel_folders_list)
-        elif key == "coupling-scheme:serial-explicit":
+        elif key == "coupling-scheme:parallel-explicit":
             coupling_dict = mod_tree_sub[key]
             print("===== coupling scheme")
             print(coupling_dict)
             mod_tree_sub[key] = repeat_coupling(coupling_dict, n_parallel_env)
         else:
-            raise Exception(f'parallel xml config: unkown dictionary key: {key}')
+            raise Exception(f'parallel xml config: unknown dictionary key: {key}')
 
     # Replace the serial coupling with parallel coupling --> after the iteration on the keys
-    if n_parallel_env > 1:
-        mod_tree_sub["coupling-scheme:parallel-explicit"] = mod_tree_sub["coupling-scheme:serial-explicit"]
-        del mod_tree_sub["coupling-scheme:serial-explicit"]
+    # parallel-explicit works correctly !!
+    # if n_parallel_env > 1:
+    #     mod_tree_sub["coupling-scheme:parallel-explicit"] = mod_tree_sub["coupling-scheme:serial-explicit"]
+    #     del mod_tree_sub["coupling-scheme:serial-explicit"]
 
     # pprint.pprint(mod_tree_sub, sort_dicts=False, width=120)
 
