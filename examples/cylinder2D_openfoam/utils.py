@@ -6,6 +6,7 @@ import xmltodict
 import pprint
 import copy
 import re
+from functools import partial
 
 
 def fix_randseeds(seed=1234):
@@ -56,7 +57,7 @@ def parse_probe_lines(line_string):
     float_list = [float(x) for x in float_list]
 
     if line_string.count("(") > 0:
-        print("vector variables")
+        print("vector variable")
         num_probes = line_string.count("(")
         assert num_probes == line_string.count(")"), f'corrupt file, number of ( and ) should be equal:" \
             "{line_string.count(")")}, {line_string.count(")")}'
@@ -517,43 +518,77 @@ def make_parallel_config(foldername, filename, n_parallel_env, parallel_folders_
     return mod_tree
 
 
+def augment_str(match_obj, leading_string, trailing_string, idx):
+    # match items that could be repeated but on different lines
+    if match_obj.group() is not None:
+        matched_str = str(match_obj.group())
+        matched_str = matched_str.replace(leading_string, "")
+        matched_str = matched_str.replace(trailing_string, "")
+        matched_str = matched_str.strip()
+        modified_str = leading_string + " " + matched_str + f'_{idx}' + " " + trailing_string
+        print(modified_str)
+        return modified_str
+
+
+def augment_str2(match_obj, leading_string, trailing_string, idx):
+    # match items with that could be repeated within brackets on same line or multiple lines
+    if match_obj.group() is not None:
+        matched_str = str(match_obj.group())
+        # print(matched_str)
+        matched_str = matched_str.replace(leading_string, "")
+        matched_str = matched_str.replace(trailing_string, "")
+        matched_str = matched_str.replace("(", "")
+        matched_str = matched_str.replace(")", "")
+
+        matched_str_list = [x.strip() + f'_{idx}' for x in re.split(r"\n|[' ']", matched_str) if len(x.strip()) > 0]
+        modified_str = leading_string + " (" + " ".join(matched_str_list) + " )" + trailing_string
+        print(modified_str)
+        return modified_str
+
+
 def parallel_precice_dict(precicedict_str, idx_):
     """ preciceDict in the OpenFoam Case need to be adapted for parallel nameing  
         very quick hack based on regex
     """
     precicedict_str = copy.deepcopy(precicedict_str)
 
-    # find participant name
-    splitted_list = re.split(r"participant\s*(.*?)\s*;", precicedict_str)
-    assert len(splitted_list) == 3, 'participant should be found only once'
-    mid_list = [x.strip() + f'_{idx_}' for x in re.split(r"\n|[' ']", splitted_list[1])]
-    mid_str = ''.join(["participant "] + mid_list + [";"])
-    new_list = [splitted_list[0]] + [mid_str] + [splitted_list[2]]
-    precicedict_str = ''.join(new_list)
+    # find participant name --> expect a single participant in the file
+    leading_string = "participant"
+    trailing_string = ";"
+    pattern = fr"{leading_string}\s*(.*)\s*{trailing_string}"
+    precicedict_str = re.sub(
+        pattern,
+        partial(augment_str, leading_string=leading_string, trailing_string=trailing_string, idx=idx_), 
+        precicedict_str)
 
-    # find mesh name
-    splitted_list = re.split(r"mesh\s*(.*?)\s*;", precicedict_str)
-    assert len(splitted_list) == 3, 'mesh should be found only once -- may be not'
-    mid_list = [x.strip() + f'_{idx_}' for x in re.split(r"\n|[' ']", splitted_list[1])]
-    mid_str = ''.join(["mesh "] + mid_list + [";"])
-    new_list = [splitted_list[0]] + [mid_str] + [splitted_list[2]]
-    precicedict_str = ''.join(new_list)
+    # find mesh name --> may be more than one mesh
+    leading_string = "mesh"
+    trailing_string = ";"
+    pattern = fr"{leading_string}\s*(.*)\s*{trailing_string}"
+    precicedict_str = re.sub(
+        pattern,
+        partial(augment_str, leading_string=leading_string, trailing_string=trailing_string, idx=idx_), 
+        precicedict_str)
 
     # find readData names
-    splitted_list = re.split(r"readData\s*\(\s*(.*?)\s*\);", precicedict_str)
-    assert len(splitted_list) == 3, 'readData should be found only once'
-    mid_list = [x.strip() + f'_{idx_}' for x in re.split(r"\n|[' ']", splitted_list[1])]
-    mid_str = ' '.join(["readData ("] + mid_list + [");"])
-    new_list = [splitted_list[0]] + [mid_str] + [splitted_list[2]]
-    precicedict_str = ''.join(new_list)
+    leading_string = "readData"
+    trailing_string = ";"
+    # ? for shortest match and then shortest number of repetitions
+    pattern = fr"{leading_string}\s*\((\s*.*?)*?\){trailing_string}"   # fr"{leading_string}\s*\(.*\){trailing_string}"
+    precicedict_str = re.sub(
+        pattern,
+        partial(augment_str2, leading_string=leading_string, trailing_string=trailing_string, idx=idx_),
+        precicedict_str)
 
     # find writeData names
-    splitted_list = re.split(r"writeData\s*\(\s*(.*?)\s*\);", precicedict_str)
-    assert len(splitted_list) == 3, 'writeData should be found only once'
-    mid_list = [x.strip() + f'_{idx_}' for x in re.split(r"\n|[' ']", splitted_list[1])]
-    mid_str = ' '.join(["writeData ("] + mid_list + [");"])
-    new_list = [splitted_list[0]] + [mid_str] + [splitted_list[2]]
-    precicedict_str = ''.join(new_list)
+    leading_string = 'writeData'
+    trailing_string = ";"
+    # ? for shortest match and then shortest number of repetitions
+    pattern = fr"{leading_string}\s*\((\s*.*?)*?\){trailing_string}"   # fr"{leading_string}\s*\(.*\){trailing_string}"
+    precicedict_str = re.sub(
+        pattern,
+        partial(augment_str2, leading_string=leading_string, trailing_string=trailing_string, idx=idx_),
+        precicedict_str)
 
     # clean the file from the extra newlines
     while '\n\n' in precicedict_str:
@@ -581,7 +616,71 @@ if __name__ == '__main__':
         with open(filename + f'_{idx_}', 'w') as file_obj:
             file_obj.write(new_string)
 
+    # test for multiple meshes in preciceDict
+    precicedict_str = r"""
+    interfaces
+    {
+    Interface1
+    {
+        mesh              Fluid-Mesh-Centers;
+        locations         faceCenters;
+        connectivity      false;
+        patches           (interface);
+
+        // ... writeData, readData ...
+    };
+
+    Interface2
+    {
+        mesh              Fluid-Mesh-Nodes;
+        locations         faceNodes;
+        connectivity      true;
+        patches           (interface);
+
+        // ... writeData, readData ...
+    };
+    };
+    """
+    for idx_ in range(2):
+        new_string = parallel_precice_dict(precicedict_str, idx_)
+        print(new_string)
+
+    precicedict_str = r"""
+    interfaces
+    {
+    Interface1
+    {
+        mesh Fluid-Mesh;
+        locations         faceCenters;
+        patches           (cylinder_jet1);
+
+        readData ( Velocity );
+
+        writeData ( Pressure Temp);
+    };
+
+    Interface1
+    {
+        mesh Fluid-Meshh;
+        locations         faceCenters;
+        patches           (cylinder_jet1);
+
+        readData ( Velocity Temp
+        VarOn2ndLine Var2_Line2
+        Var3
+        );
+
+        writeData ( Pressure_0 );
+    };
+    };
+    """
+    for idx_ in range(2):
+        new_string = parallel_precice_dict(precicedict_str, idx_)
+        print(new_string)
+
     output_filename = "precice-config_parallel_auto.xml"
+    filename = "precice-config.xml"
+    foldername = ""
     n_parallel_env = 4
     # loading the file at once might not be optimal for large files
     parallel_folders_list = [f'/data/ahmed/rl_play/examples/cylinder2D_openfoam/temp_{idx}' for idx in range(n_parallel_env)]
