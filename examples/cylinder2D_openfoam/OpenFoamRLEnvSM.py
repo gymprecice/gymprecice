@@ -26,6 +26,9 @@ import copy
 class OpenFoamRLEnv(gym.Env):
     """
     RL Env via a dummy precice adapter class
+    standard OpenAI gym functions (step, reset, close, render)
+    internal functions starts with '_' (e.g. _make_run_folders)
+    problem setup functions starts with setup_ (e.g. setup_env_obs_act)
     """
     metadata = {"render_modes": [], "render_fps": 4}
 
@@ -40,7 +43,7 @@ class OpenFoamRLEnv(gym.Env):
         # action_ and observation_space will be set in _set_precice_data
         self.action_space = None
         self.observation_space = None
-        self.run_folders = self.make_run_folders()
+        self.run_folders = self._make_run_folders()
 
         scaler_variables, vector_variables, mesh_list, mesh_variables = \
             get_cfg_data('', self.__options['precice_cfg'])
@@ -60,19 +63,31 @@ class OpenFoamRLEnv(gym.Env):
         self.__mesh_id = None
         self.__dim = None
         self.__vertex_ids = None
-        # # self.__interfaces = np.array(["interface", "top"])
-        # self.__n = None
 
         # solver attributes:
-        # self.__solver_preprocess = None
         self.__solver_run = []  # physical solver
         self.__solver_full_reset = False  # if True, run foam-preprocess upon every reset
 
         # observations and rewards are obtained from post-processing files
         self.__probes_rewards_data = {}
         self.__postprocessing_filehandler_dict = {}
+        self.__precice_read_data = {}
 
-    def make_run_folders(self):
+    def __del__(self):
+        # close all the open files
+        self._close_postprocessing_files()
+        if self.__interface:
+            try:
+                print('crashing the interface using negative timestep')
+                self.__interface.advance(-1)
+                # another idea is to advance with random actions till the coupling finish and finalize
+                # self.__interface.finalize()
+            except Exception as e:
+                pass
+        # print('delete the interface')
+        # self.__interface.finalize()
+
+    def _make_run_folders(self):
         # 1- clean the case file
         # 2- run grid preprocessor on the original OpenFoam case files
         # 3- parse mesh data from the case folder to get the rl-grid
@@ -88,7 +103,7 @@ class OpenFoamRLEnv(gym.Env):
         self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
 
         # parse solver mesh data
-        self._parse_mesh_data(case_path)
+        self.setup_mesh_data(case_path)
 
         # Create an empty folder for the RL_Gym to run OpenFoam
         cwd = Path.cwd()
@@ -166,9 +181,7 @@ class OpenFoamRLEnv(gym.Env):
                 # assert self.__solver_clean is None
 
         if len(self.__postprocessing_filehandler_dict) > 0:
-            self.__close_postprocessing_files()
-            self.__postprocessing_filehandler_dict = {}
-            self.__probes_rewards_data = {}
+            self._close_postprocessing_files()
 
         # run open-foam solver
         if len(self.__solver_run) > 0:
@@ -184,18 +197,25 @@ class OpenFoamRLEnv(gym.Env):
             assert p_process is not None
             self.__solver_run.append(p_process)
 
+        # checking spawning after n_parallel calls to avoid sleeping $n times
+        time.sleep(0.5)  # single wait time for all parallel runs
+        for p_idx in range(self.__options['n_parallel_env']):
+            p_case_path = case_path + f'_{p_idx}'
+            self._check_subprocess(self.__solver_run[p_idx], run_cmd, p_case_path)
+
         # initiate precice interface and read single mesh data
         self._init_precice()
         self._set_precice_data()
-        self.define_env_obs_act()
+        self.setup_env_obs_act()
 
         if self.__interface.is_action_required(action_write_initial_data()):
             # what is the action for this case no action have been provided
             # TODO: what is the first action before we can do this reliably
             self.__write_data = {}
             for p_idx in range(self.__options['n_parallel_env']):
-                conv_action = self._set_patch_field_to_write([0.0000, 0.0000])
-                actions_dict = self.action_to_write_data(conv_action, p_idx)
+                initial_action = self.setup_initial_action(p_idx)
+                conv_action = self.setup_patch_field_to_write(initial_action)
+                actions_dict = self.setup_action_to_write_data(conv_action, p_idx)
                 self.__write_data.update(actions_dict)
             self._write()
             self.__interface.mark_action_fulfilled(action_write_initial_data())
@@ -210,11 +230,16 @@ class OpenFoamRLEnv(gym.Env):
         self.__is_initialized = True
         self.__is_first_reset = False
         self.__t = 0
+        self.__probes_rewards_data = {}
+        self.__precice_read_data = {}
+
+        # TODO: remove read_precice_observations call
+        obs_list = self._read_precice_observations() + self.setup_observations()
 
         if return_info:
-            return self.read_data_to_observations(), {}
+            return obs_list, {}
 
-        return self.read_data_to_observations()
+        return obs_list
 
     def step(self, action):
         if not self.__is_initialized:
@@ -228,15 +253,15 @@ class OpenFoamRLEnv(gym.Env):
         self.__write_data = {}
         # dummy random values to be sent to the solver
         for p_idx in range(self.__options['n_parallel_env']):
-            conv_action = self._set_patch_field_to_write(action[p_idx])
-            actions_dict = self.action_to_write_data(conv_action, p_idx)
+            conv_action = self.setup_patch_field_to_write(action[p_idx])
+            actions_dict = self.setup_action_to_write_data(conv_action, p_idx)
             self.__write_data.update(actions_dict)
         # print('inside step function --- just before advance===========================')
         # print(self.__write_data)
 
         self._advance()
 
-        reward = self.get_reward()
+        reward = self.setup_reward()
         done = not self.__interface.is_coupling_ongoing()
 
         # delete precice object upon done (a workaround to get precice reset)
@@ -251,7 +276,10 @@ class OpenFoamRLEnv(gym.Env):
             self.__interface = None
             self.__solver_full_reset = False
 
-        return self.read_data_to_observations(), reward, done, {}
+        # TODO: remove read_precice_observations call as we most likely will not read anything from precice
+        obs_list = self._read_precice_observations() + self.setup_observations()
+
+        return obs_list, reward, done, {}
 
     def render(self, mode='human'):
         """ not implemented """
@@ -275,35 +303,26 @@ class OpenFoamRLEnv(gym.Env):
         for mesh_name in self.__mesh_list:
             mesh_id = self.__interface.get_mesh_id(mesh_name)
             print(f"Mesh_ID: {mesh_id}, Mesh_name: {mesh_name}")
-            bounding_box = [-np.inf, np.inf] * self.__dim
+            # bounding_box = [-np.inf, np.inf] * self.__dim
             # self.__interface.set_mesh_access_region(mesh_id, bounding_box)  # ERROR:  setMeshAccessRegion may only be called once.
             self.__mesh_id[mesh_name] = mesh_id
 
-            # vertex_coords = np.zeros([5, self.__dim])
-            vertex_coords = self.Cf
+            vertex_coords = self.setup_mesh_coords(mesh_name)
             vertex_ids = self.__interface.set_mesh_vertices(mesh_id, vertex_coords)
-            # print(vertex_ids)
             self.__vertex_ids[mesh_name] = vertex_ids
             self.__vertex_coords[mesh_name] = vertex_coords
-        print('all the grids get the same grid from self.Cf')
-        print(vertex_coords.shape)
-        print(vertex_coords)
-        # self.__interface.set_mesh_access_region(mesh_id, bounding_box)
         # establish connection with the solver
         self.__precice_dt = self.__interface.initialize()
 
     def _advance(self):
         self._write()
         self.__interface.advance(self.__precice_dt)
-        self._read()
-        try:
-            self.read_probes_rewards_files()
-        except Exception as e:
-            print('FIX ME: problem in read_probes_rewards_files')
-            print(e)
-
+        # increase the time before reading the probes/forces for internal consistency checks
         self.__t += self.__precice_dt
-        print(f'RL Gym after advance =====>> time: {self.__t }')
+        if not self.__options['is_dummy_run']:
+            self._read_probes_rewards_files()
+        # read precice after reading the files to avoid a nasty bug because of slow reading from files
+        self._read()
 
     def _set_precice_data(self):
         self.__read_ids = {}
@@ -311,13 +330,6 @@ class OpenFoamRLEnv(gym.Env):
 
         # precice data from a single mesh on the solver side
         for mesh_name in self.__mesh_list:
-            # vertex_ids, vertex_coords = self.__interface.get_mesh_vertices_and_ids(self.__mesh_id[mesh_name])
-            # self.__vertex_ids[mesh_name] = vertex_ids
-            # self.__vertex_coords[mesh_name] = vertex_coords
-
-            # print(self.__mesh_variables)
-            # print(self.__mesh_variables[mesh_name])
-
             try:
                 read_var_list = self.__mesh_variables[mesh_name]['read']
             except Exception as e:
@@ -328,20 +340,16 @@ class OpenFoamRLEnv(gym.Env):
             except Exception as e:
                 # a valid situation when the mesh doesn't have any write variables
                 write_var_list = []
-            print("_set_precice_data", mesh_name, write_var_list, read_var_list)
+
             for read_var in read_var_list:
                 self.__read_ids[read_var] = self.__interface.get_data_id(read_var, self.__mesh_id[mesh_name])
 
             for write_var in write_var_list:
                 self.__write_ids[write_var] = self.__interface.get_data_id(write_var, self.__mesh_id[mesh_name])
 
-            print(mesh_name, self.__vertex_ids[mesh_name], self.__read_ids, self.__write_ids)
-            # print("grid obtained from precice single mesh: ")
-            # print(vertex_coords)
-            # print(vertex_coords.shape, vertex_id.shape)
+            # print(mesh_name, self.__vertex_ids[mesh_name], self.__read_ids, self.__write_ids)
 
     def _read(self):
-        self.__read_data = {}
         if self.__interface.is_read_data_available():
             for mesh_name in self.__mesh_list:
                 try:
@@ -350,12 +358,12 @@ class OpenFoamRLEnv(gym.Env):
                     read_var_list = []
                 for read_var in read_var_list:
                     if read_var in self.vector_variables:
-                        self.__read_data[read_var] = self.__interface.read_block_vector_data(
+                        self.__precice_read_data[read_var] = self.__interface.read_block_vector_data(
                             self.__read_ids[read_var], self.__vertex_ids[mesh_name])
                     else:
-                        self.__read_data[read_var] = self.__interface.read_block_scalar_data(
+                        self.__precice_read_data[read_var] = self.__interface.read_block_scalar_data(
                             self.__read_ids[read_var], self.__vertex_ids[mesh_name])
-                    print(f"(RL-Gym), avg-{read_var} using {mesh_name} read = {self.__read_data[read_var].mean():.4f}")
+                    print(f"(RL-Gym), avg-{read_var} using {mesh_name} read = {self.__precice_read_data[read_var].mean():.4f}")
                     print("-------------------------------------------")
 
     def _write(self):
@@ -366,9 +374,6 @@ class OpenFoamRLEnv(gym.Env):
                 write_var_list = []
             for write_var in write_var_list:
                 if write_var in self.vector_variables:
-                    # print(mesh_name, write_var)
-                    # print(self.__write_data)
-                    # print("----")
                     self.__interface.write_block_vector_data(
                         self.__write_ids[write_var], self.__vertex_ids[mesh_name], self.__write_data[write_var])
                 else:
@@ -380,15 +385,6 @@ class OpenFoamRLEnv(gym.Env):
     def _launch_dummy_subprocess(self, process_idx, cwd):
         cmd_str = f'python -u fluid-solver.py'
         subproc = subprocess.Popen(cmd_str, shell=True, cwd=cwd)
-        time.sleep(0.5)  # have to add a very tiny sleep
-        # check if the spawning process is successful
-        if not psutil.pid_exists(subproc.pid):
-            raise Exception(f'Error: subprocess failed to be launched: {cmd} run from {cwd}')
-
-        # finalize the subprocess if it is terminated (normally/abnormally)
-        if psutil.Process(subproc.pid).status() == psutil.STATUS_ZOMBIE:
-            print(psutil.Process(subproc.pid), psutil.Process(subproc.pid).status())
-            raise Exception(f'Error: subprocess failed to be launched: {cmd_str} STATUS_ZOMBIE run from {cwd}')
         return subproc
 
     def _launch_subprocess(self, shell_cmd, cmd, cwd, cmd_type):
@@ -411,16 +407,17 @@ class OpenFoamRLEnv(gym.Env):
             return None
         else:
             subproc = subprocess.Popen(cmd_str, shell=True, cwd=cwd)
-            time.sleep(0.5)  # have to add a very tiny sleep
-            # check if the spawning process is successful
-            if not psutil.pid_exists(subproc.pid):
-                raise Exception(f'Error: subprocess failed to be launched: {cmd} run from {cwd}')
-
-            # finalize the subprocess if it is terminated (normally/abnormally)
-            if psutil.Process(subproc.pid).status() == psutil.STATUS_ZOMBIE:
-                print(psutil.Process(subproc.pid), psutil.Process(subproc.pid).status())
-                raise Exception(f'Error: subprocess failed to be launched: {cmd_str} STATUS_ZOMBIE run from {cwd}')
             return subproc
+
+    def _check_subprocess(self, subproc, run_cmd, p_case_path):
+        # check if the spawning process is successful
+        if not psutil.pid_exists(subproc.pid):
+            raise Exception(f'Error: subprocess failed to be launched: {run_cmd} run from {p_case_path}')
+
+        # finalize the subprocess if it is terminated (normally/abnormally)
+        if psutil.Process(subproc.pid).status() == psutil.STATUS_ZOMBIE:
+            print(psutil.Process(subproc.pid), psutil.Process(subproc.pid).status())
+            raise Exception(f'Error: subprocess failed to be launched: {run_cmd} STATUS_ZOMBIE run from {p_case_path}')
 
     def _finalize_subprocess(self, process_list):
         for subproc in process_list:
@@ -440,68 +437,82 @@ class OpenFoamRLEnv(gym.Env):
                 # self._kill_subprocess(subproc) #  not necessary, poll/wait should do the job!
         return []
 
-    def _parse_mesh_data(self, case_path):
-        """ parse polyMesh to get interface points:"""
-        t0 = time.time()
-        print('starting to parse FoamMesh')
-        foam_mesh = FoamMesh(case_path)
-        print(f'Done to parsing FoamMesh in {time.time()-t0} seconds')
+    def _read_precice_observations(self):
+        # TODO: delete this as we only read from post-processing files
+        precice_obs_list = []
+        for read_var in self.__precice_read_data.keys():
+            precice_obs_list.append(self.__precice_read_data[read_var])
+        return precice_obs_list
 
-        # nodes = foam_mesh.boundary_face_nodes(b'interface')
-        # self.__n = nodes.shape[0]
-        # self.__grid = nodes
+    def _get_observations_dict(self):
+        if not self.__is_initialized:
+            raise Exception("Call reset before interacting with the environment.")
+        obs_dict = {}
+        for field_ in self.__options['postprocessing_data'].keys():
+            field_info = self.__options['postprocessing_data'][field_]
+            if field_info['use'] == "observation" and \
+                    field_ in self.__probes_rewards_data.keys() and \
+                    len(self.__probes_rewards_data[field_]) > 0:
+                # get the last n_parallel_env of the list as it orders by processor index
+                obs_dict[field_] = self.__probes_rewards_data[field_][-self.__options['n_parallel_env']:]
 
-        # if len(self.__mesh_list) > 1:
-        #     raise Exception('currently this only works for single mesh used for both observations and actions')
+        return obs_dict
 
-        self.Cf = foam_mesh.boundary_face_centres(b'cylinder_jet1')        
-        self.Sf, self.magSf, self.nf = foam_mesh.boundary_face_area(b'cylinder_jet1')
-        # assert self.__n == self.Cf.shape[0], f'information obtained from the single mesh precice is not correct: size {self.__n}, {self.Cf.shape[0]}'
-        # single_mesh = self.__vertex_coords[self.__mesh_list[0]]
-        # if np.sum(np.abs(single_mesh - self.Cf)) > 1e-6:
-        #     print(self.Cf)
-        #     print(self.__vertex_coords[0])
-        #     print(np.sum(np.abs(self.__vertex_coords[0] - self.Cf)))
-        #     raise Exception('information obtained from the single mesh precice is not correct: grid')
-
-    def define_env_obs_act(self):
-        # TODO: this should be problem specific
-        # 1) action space need to be generalized here
-        # 2) action space is not equal to observation space
-        # 3) some of variables are scaler and other are vector
-        # 4) where is rewards -- it is communicated? or read from online file?
-
-        self.__n = 0
-        # TODO: hidden assumption rl_gym have one mesh
-        for mesh_name in self.__mesh_list:
-            self.__n += self.__vertex_coords[mesh_name].shape[0]
-
-        self.__n = int(self.__n / self.__options['n_parallel_env'])
-
-        print(f'size of the grid is {self.__n}')
-
-        self.action_space = spaces.Box(
-            low=0, high=0.0001, shape=(1, ), dtype=np.float64)
-        self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.__n,), dtype=np.float64)
-
-    def get_reward(self):
-        # In a simulation environment there are two type of observations:
-        # 1- Observations for control (real observations)
-        # 2- Observation/states for estimating rewards (e.g. drag or lift forces)
-        reward_list = []
+    def _get_reward_dict(self):
+        reward_dict = {}
         for field_ in self.__options['postprocessing_data'].keys():
             field_info = self.__options['postprocessing_data'][field_]
             if field_info['use'] == "reward" and \
                     field_ in self.__probes_rewards_data.keys() and \
                     len(self.__probes_rewards_data[field_]) > 0:
                 # get the last n_env rows
-                reward_list.append(self.__probes_rewards_data[field_][-self.__options['n_parallel_env']:])
+                reward_dict[field_] = self.__probes_rewards_data[field_][-self.__options['n_parallel_env']:]
 
-        return reward_list
+        return reward_dict
 
-    def _set_patch_field_to_write(self, action):
-        # TODO: this should be problem specific
+    def _read_probes_rewards_files(self):
+        # sequential read of a single line (last line) of the file at each RL-Gym step
+        for p_idx in range(self.__options['n_parallel_env']):
+            p_case_path = self.__options['case_path'] + f'_{p_idx}'
+            for field_ in self.__options['postprocessing_data'].keys():
+
+                temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
+                print(f'reading filename: {temp_filename}')
+                if temp_filename not in self.__postprocessing_filehandler_dict.keys():
+                    file_object = open(temp_filename, 'r')
+                    self.__postprocessing_filehandler_dict[temp_filename] = file_object
+
+                while True:
+                    line_text = self.__postprocessing_filehandler_dict[temp_filename].readline()
+                    if line_text == "":
+                        break
+                    assert len(line_text) > 0, 'read a single line but it is of length 0 !!'
+                    line_text = line_text.strip()
+                    is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text)
+                    if is_comment:
+                        continue
+                    print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
+
+                    if field_ not in self.__probes_rewards_data.keys():
+                        self.__probes_rewards_data[field_] = []
+                    self.__probes_rewards_data[field_].append([time_idx, n_probes, probe_data])
+                    assert np.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"
+                    # only read one line and return
+                    break
+
+    def _close_postprocessing_files(self):
+        for filename_ in self.__postprocessing_filehandler_dict.keys():
+            file_object = self.__postprocessing_filehandler_dict[filename_]
+            try:
+                file_object.close()
+            except Exception as e:
+                print(f"error in closing probes/forces file: {e}")
+                pass
+        self.__postprocessing_filehandler_dict = {}
+
+    # problem specific functions
+    def setup_patch_field_to_write(self, action):
+        """ Problem specific function """
         print(f"Prescribed action: FlowRate = {action[0]:.6f} [m/s3] on jet1")
 
         # convert volumetric flow rate to a sinusoidal profile on the interface
@@ -537,124 +548,71 @@ class OpenFoamRLEnv(gym.Env):
         else:
             raise Exception('estimated velocity profile violates mass conservation')
 
-    def action_to_write_data(self, action, p_idx=0):
+    def setup_mesh_data(self, case_path):
+        """ Problem specific function """
+        """ parse polyMesh to get interface points:"""
+        t0 = time.time()
+        print('starting to parse FoamMesh')
+        foam_mesh = FoamMesh(case_path)
+        print(f'Done to parsing FoamMesh in {time.time()-t0} seconds')
+
+        self.Cf = foam_mesh.boundary_face_centres(b'cylinder_jet1')        
+        self.Sf, self.magSf, self.nf = foam_mesh.boundary_face_area(b'cylinder_jet1')
+        # assert self.__n == self.Cf.shape[0], f'information obtained from the single mesh precice is not correct: size {self.__n}, {self.Cf.shape[0]}'
+        # single_mesh = self.__vertex_coords[self.__mesh_list[0]]
+        # if np.sum(np.abs(single_mesh - self.Cf)) > 1e-6:
+        #     print(self.Cf)
+        #     print(self.__vertex_coords[0])
+        #     print(np.sum(np.abs(self.__vertex_coords[0] - self.Cf)))
+        #     raise Exception('information obtained from the single mesh precice is not correct: grid')
+
+    def setup_mesh_coords(self, mesh_name):
+        """ Problem specific function """
+        return self.Cf
+
+    def setup_env_obs_act(self):
+        # TODO: this should be problem specific
+        # 1) action space need to be generalized here
+        # 2) action space is not equal to observation space
+        # 3) some of variables are scaler and other are vector
+        # 4) where is rewards -- it is communicated? or read from online file?
+
+        self.__n = 0
+        for mesh_name in self.__mesh_list:
+            self.__n += self.__vertex_coords[mesh_name].shape[0]
+        # TODO: this should work even if RL-Gym have more than one mesh (not tested)
+        self.__n = int(self.__n / self.__options['n_parallel_env'])
+        print(f'size of the grid is {self.__n}')
+
+        self.action_space = spaces.Box(
+            low=0, high=0.0001, shape=(1, ), dtype=np.float64)
+        self.observation_space = spaces.Box(
+            low=-np.inf, high=np.inf, shape=(self.__n,), dtype=np.float64)
+
+    def setup_action_to_write_data(self, action, p_idx=0):
+        """ Problem specific function """
         """ return dummy random values for Velocity """
         write_data_dict = {f"Velocity_{p_idx}": action}
         return write_data_dict
 
-    def read_data_to_observations(self):
-        if not self.__is_initialized:
-            raise Exception("Call reset before interacting with the environment.")
+    def setup_initial_action(self, p_idx):
+        return [0, 0]
 
+    def setup_observations(self):
+        obs_dict = self._get_observations_dict()
+        # now we print all of the observations to a list
         obs_list = []
-        for field_ in self.__options['postprocessing_data'].keys():
-            field_info = self.__options['postprocessing_data'][field_]
-            if field_info['use'] == "observation" and \
-                    field_ in self.__probes_rewards_data.keys() and \
-                    len(self.__probes_rewards_data[field_]) > 0:
-                # get the last row of the list
-                obs_list.append(self.__probes_rewards_data[field_][-1])
-
-        # TODO: delete this as we only read from post-processing files
-        try:
-            for p_idx in range(self.__options['n_parallel_env']):
-                obs_list.append(self.__read_data[f"Pressure_{p_idx}"])
-        except Exception as e:
-            pass
+        # we should be filtering here some of the columns only
+        for field_ in obs_dict.keys():
+            obs_list.append([field_, obs_dict[field_]])
         return obs_list
 
-    def read_probes_rewards_files(self):
-        # file names and how the data should be used could be obtained by parsing the probes dict
-        # read line by line at each loop
-        for p_idx in range(self.__options['n_parallel_env']):
-            p_case_path = self.__options['case_path'] + f'_{p_idx}'
-            for field_ in self.__options['postprocessing_data'].keys():
-
-                temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
-                print(f'reading filename: {temp_filename}')
-                if temp_filename not in self.__postprocessing_filehandler_dict.keys():
-                    file_object = open(temp_filename, 'r')
-                    self.__postprocessing_filehandler_dict[temp_filename] = file_object
-
-                while True:
-                    line_text = self.__postprocessing_filehandler_dict[temp_filename].readline()
-                    if line_text == "":
-                        break
-                    assert len(line_text) > 0, 'read a single line but it is of length 0 !!'
-                    line_text = line_text.strip()
-                    is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text)
-                    if not is_comment:
-                        print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
-                    else:
-                        continue
-                    if field_ not in self.__probes_rewards_data.keys():
-                        self.__probes_rewards_data[field_] = []
-                    self.__probes_rewards_data[field_].append([time_idx, n_probes, probe_data])
-
-        # read all the lines from the start at each step
-        # temp_filename = '/data/ahmed/rl_play/examples/openfoam_rl_env/fluid-openfoam/postProcessing/probes/0/U'
-        # with open(temp_filename, 'r') as filehandle:
-        #     foam_text = filehandle.readlines()
-        #     foam_text = [x.strip() for x in foam_text]
-        #     foam_text = '\n'.join(foam_text)
-        #     print(foam_text)
-
-    def __close_postprocessing_files(self):
-        for filename_ in self.__postprocessing_filehandler_dict.keys():
-            file_object = self.__postprocessing_filehandler_dict[filename_]
-            try:
-                file_object.close()
-            except Exception as e:
-                print(e)
-                pass
-
-    def __del__(self):
-        # close all the open files
-        self.__close_postprocessing_files()
-        if self.__interface:
-            try:
-                print('crashing the interface using negative timestep')
-                self.__interface.advance(-1)
-                # another idea is to advance with random actions till the coupling finish and finalize
-                # self.__interface.finalize()
-            except Exception as e:
-                pass
-        # print('delete the interface')
-        # self.__interface.finalize()
-
-    # def _print_patch_data(self, data, patch):
-    #     idx = 1
-    #     for value in data:
-    #         p = patch[idx - 1]
-    #         if idx % 5 != 0:
-    #             print(f"[{idx-1}, ({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}), {value:.4f}]", end=" ")
-    #         else:
-    #             print(f"[{idx-1}, ({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}), {value:.4f}]", end="\n")
-    #         idx += 1
-
-    # def _config_precice(self):
-    #     parser = argparse.ArgumentParser()
-    #     parser.add_argument(
-    #         "configurationFileName", help="Name of the xml config file.",
-    #         nargs='?', type=str, default="precice-config.xml")  # default="../precice-config.xml")
-
-    #     try:
-    #         self.__args = parser.parse_args()
-    #     except Exception as e:
-    #         print(e)
-    #         raise Exception("Add the precice configuration file as argument")
-    #     print("\npreCICE configured...")
-    # def _kill_subprocess(self, subproc):
-    #         if psutil.pid_exists(subproc.pid):
-    #             try:
-    #                 self._psutil_kill(subproc.pid)  # clean the <defunct> shell process
-    #             except Exception as exception:
-    #                 raise Exception(f'failed to kill defunct process: {exception}')
-
-    # # https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true
-    # # kill both the shell and child process (solver command)
-    # def _psutil_kill(self, proc_pid):
-    #     process = psutil.Process(proc_pid)
-    #     for proc in process.children(recursive=True):
-    #         proc.kill()
-    #     process.kill()
+    def setup_reward(self):
+        """ Problem specific function """
+        reward_dict = self._get_reward_dict()
+        # now we print all of the reward to a list
+        rewards_list = []
+        # we should be filtering here some of the columns only
+        for field_ in reward_dict.keys():
+            rewards_list.append([field_, reward_dict[field_]])
+        return rewards_list

@@ -41,8 +41,7 @@ if __name__ == '__main__':
     # foam_run_cmd = f"sh ../foam-run.sh > {foam_run_log} 2>&1"
     # foam_preprocess_cmd = f"sh ../foam-preprocess.sh > {foam_preprocess_log} 2>&1"
 
-    # reset options
-    n_parallel_env = 8
+    n_parallel_env = 4
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -89,7 +88,7 @@ if __name__ == '__main__':
         "rand_seed": rand_seed,
         "postprocessing_data": postprocessing_data,
         "n_parallel_env": n_parallel_env,
-        "is_dummy_run": True,
+        "is_dummy_run": False,
     }
 
     # create the environment
