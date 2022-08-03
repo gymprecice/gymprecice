@@ -69,7 +69,7 @@ def parse_probe_lines(line_string):
 
 def get_xml_item(root, chain_to_root: list, n: int = 0):
     if n < len(chain_to_root):
-        return get_xml_item(root[chain_to_root[n]], chain_to_root, n+1)
+        return get_xml_item(root[chain_to_root[n]], chain_to_root, n + 1)
     else:
         return [root] if type(root) == dict else root
 
@@ -79,49 +79,83 @@ def get_cfg_data(foldername, filename):
     xml_tree = xmltodict.parse(foam_string, process_namespaces=False, dict_constructor=dict)
     pprint.pprint(xml_tree, sort_dicts=False, width=120)
 
-    try:
-        scaler_variables = []
-        xml_item = get_xml_item(xml_tree, ['precice-configuration', 'solver-interface', 'data:scalar'])
-        for element in xml_item:
-            scaler_variables.append(element['@name'])
-    except Exception as e:
-        print(e)
+    # try:
+    #     mesh_list = []
+    #     xml_item = get_xml_item(xml_tree, ['precice-configuration', 'solver-interface', 'mesh'])
+    #     for element in xml_item:
+    #         mesh_list.append(element['@name'])
+    # except Exception as e:
+    #     print(e)
 
-    try:
-        vector_variables = []
-        xml_item = get_xml_item(xml_tree, ['precice-configuration', 'solver-interface', 'data:vector'])
-        for element in xml_item:
-            vector_variables.append(element['@name'])
-    except Exception as e:
-        print(e)
+    # try:
+    #     scaler_variables = []
+    #     xml_item = get_xml_item(xml_tree, ['precice-configuration', 'solver-interface', 'data:scalar'])
+    #     for element in xml_item:
+    #         scaler_variables.append(element['@name'])
+    # except Exception as e:
+    #     print(e)
 
-    xml_item = get_xml_item(xml_tree, ['precice-configuration', 'solver-interface', 'participant'])
-    for item_ in xml_item:
+    # try:
+    #     vector_variables = []
+    #     xml_item = get_xml_item(xml_tree, ['precice-configuration', 'solver-interface', 'data:vector'])
+    #     for element in xml_item:
+    #         vector_variables.append(element['@name'])
+    # except Exception as e:
+    #     print(e)
+
+    # xml_item = get_xml_item(xml_tree, ['precice-configuration', 'solver-interface', 'participant'])
+    # for item_ in xml_item:
+    #     if 'rl-gym' in item_['@name'].lower():
+    #         gym_data = copy.deepcopy(item_)
+    #         print(gym_data)
+    #         break
+
+    solver_interface = xml_tree['precice-configuration']['solver-interface']
+    mesh_list = []
+    if 'mesh' in solver_interface.keys():
+        if isinstance(solver_interface['mesh'], dict):
+            solver_interface['mesh'] = [solver_interface['mesh']]
+        for item_ in solver_interface['mesh']:
+            mesh_list.append(item_['@name'])
+
+    scaler_variables = []
+    if 'data:scalar' in solver_interface.keys():
+        if isinstance(solver_interface['data:scalar'], dict):
+            solver_interface['data:scalar'] = [solver_interface['data:scalar']]
+        for item_ in solver_interface['data:scalar']:
+            scaler_variables.append(item_['@name'])
+
+    vector_variables = []
+    if 'data:scalar' in solver_interface.keys():
+        if isinstance(solver_interface['data:vector'], dict):
+            solver_interface['data:vector'] = [solver_interface['data:vector']]
+        for item_ in solver_interface['data:vector']:
+            vector_variables.append(item_['@name'])
+
+    # we only have one rl-gym participant
+    for item_ in xml_tree['precice-configuration']['solver-interface']['participant']:
         if 'rl-gym' in item_['@name'].lower():
-            gym_data = copy.deepcopy(item_)
-            print(gym_data)
+            gym_participant = copy.deepcopy(item_)
+            print(gym_participant)
             break
 
     mesh_variables = {}
-    if 'read-data' in gym_data.keys():
-        if isinstance(gym_data['read-data'], dict):
-            gym_data['read-data'] = [gym_data['read-data']]
-
-        for item_ in gym_data['read-data']:
+    if 'read-data' in gym_participant.keys():
+        if isinstance(gym_participant['read-data'], dict):
+            gym_participant['read-data'] = [gym_participant['read-data']]
+        for item_ in gym_participant['read-data']:
             if item_['@mesh'] not in mesh_variables.keys():
                 mesh_variables[item_['@mesh']] = {"read": [], "write": []}
             mesh_variables[item_['@mesh']]["read"].append(item_['@name'])
 
-    if 'write-data' in gym_data.keys():
-        if isinstance(gym_data['write-data'], dict):
-            gym_data['write-data'] = [gym_data['write-data']]
+    if 'write-data' in gym_participant.keys():
+        if isinstance(gym_participant['write-data'], dict):
+            gym_participant['write-data'] = [gym_participant['write-data']]
 
-        for item_ in gym_data['write-data']:
+        for item_ in gym_participant['write-data']:
             if item_['@mesh'] not in mesh_variables.keys():
                 mesh_variables[item_['@mesh']] = {"read": [], "write": []}
             mesh_variables[item_['@mesh']]["write"].append(item_['@name'])
-
-    mesh_list = list(mesh_variables.keys())
 
     return scaler_variables, vector_variables, mesh_list, mesh_variables
 
@@ -161,15 +195,21 @@ def mod_use_mesh_list(use_mesh_list, solver_indices):
         else:
             for idx in solver_indices:
                 if '@from' in mesh_item.keys():
-                    new_use_mesh_list.append({
-                        '@name': mesh_item['@name'] + f'_{idx}',
-                        '@from': mesh_item['@from'] + f'_{idx}',
-                    })
-                elif '@to' in mesh_item.keys():
-                    new_use_mesh_list.append({
-                        '@name': mesh_item['@name'] + f'_{idx}',
-                        '@to': mesh_item['@to'] + f'_{idx}',
-                    })
+                    if 'rl-gym' in mesh_item['@from'].lower():
+                        new_use_mesh_list.append({
+                            '@name': mesh_item['@name'] + f'_{idx}',
+                            '@from': mesh_item['@from'],
+                        })
+                    else:
+                        new_use_mesh_list.append({
+                            '@name': mesh_item['@name'] + f'_{idx}',
+                            '@from': mesh_item['@from'] + f'_{idx}',
+                        })
+                # elif '@to' in mesh_item.keys():
+                #     new_use_mesh_list.append({
+                #         '@name': mesh_item['@name'] + f'_{idx}',
+                #         '@to': mesh_item['@to'] + f'_{idx}',
+                #     })
                 elif '@provide' in mesh_item.keys():
                     new_use_mesh_list.append({
                         '@name': mesh_item['@name'] + f'_{idx}',
@@ -207,23 +247,31 @@ def mod_mapping_lists(mapping_list, solver_indices):
     if isinstance(mapping_list, dict):
         mapping_list = [mapping_list]
     new_mapping_list = []
-
+    print(mapping_list)
     for mapping_item in mapping_list:
         for idx in solver_indices:
-            if 'rl-gym' in mapping_item['@from'].lower():
-                new_mapping_list.append({
-                    '@direction': mapping_item['@direction'],
-                    '@from': mapping_item['@from'],
-                    '@to': mapping_item['@to'] + f'_{idx}',
-                    '@constraint': mapping_item['@constraint'],
-                })
-            elif 'rl-gym' in mapping_item['@to'].lower():
-                new_mapping_list.append({
-                    '@direction': mapping_item['@direction'],
-                    '@from': mapping_item['@from'] + f'_{idx}',
-                    '@to': mapping_item['@to'],
-                    '@constraint': mapping_item['@constraint'],
-                })
+            new_mapping_list.append({
+                '@direction': mapping_item['@direction'],
+                '@from': mapping_item['@from'] + f'_{idx}',
+                '@to': mapping_item['@to'] + f'_{idx}',
+                '@constraint': mapping_item['@constraint'],
+            })
+
+            # if 'rl-gym' in mapping_item['@from'].lower():
+            #     new_mapping_list.append({
+            #         '@direction': mapping_item['@direction'],
+            #         '@from': mapping_item['@from'],
+            #         '@to': mapping_item['@to'] + f'_{idx}',
+            #         '@constraint': mapping_item['@constraint'],
+            #     })
+            # elif 'rl-gym' in mapping_item['@to'].lower():
+            #     new_mapping_list.append({
+            #         '@direction': mapping_item['@direction'],
+            #         '@from': mapping_item['@from'] + f'_{idx}',
+            #         '@to': mapping_item['@to'],
+            #         '@constraint': mapping_item['@constraint'],
+            #     })
+
     return new_mapping_list
 
 
@@ -291,7 +339,7 @@ def repeat_coupling(coupling_dict, n_parallel_env):
     return new_coupling_list
 
 
-def make_parallel_config(foldername, filename, n_parallel_env, parallel_folders_list, use_mapping=False):
+def make_parallel_config(foldername, filename, n_parallel_env, parallel_folders_list, use_mapping):
     assert n_parallel_env == len(parallel_folders_list), f'different sizes of parallel env {n_parallel_env}, {len(parallel_folders_list)}'
 
     foam_string = load_file(foldername, filename)
@@ -370,13 +418,9 @@ def make_parallel_config(foldername, filename, n_parallel_env, parallel_folders_
                     print(read_data_list)
                     print(new_read_data_list)
 
-                    if use_mapping:
+                    if use_mapping and 'mapping:nearest-neighbor' in participant_item.keys():
                         # for now we only support mapping:nearest-neighbor
-                        try:
-                            mapping_list = participant_item['mapping:nearest-neighbor']
-                        except Exception as e:
-
-                            raise Exception(f'Exception {e}: parallel processing of precice xml configurations only supports mapping:nearest-neighbor for the time being')
+                        mapping_list = participant_item['mapping:nearest-neighbor']
                         new_mapping_list = mod_mapping_lists(mapping_list, range(n_parallel_env))
                         print("==== mapping_list")
                         print(mapping_list)
@@ -453,18 +497,19 @@ def make_parallel_config(foldername, filename, n_parallel_env, parallel_folders_
             print("===== m2n:sockets")
             print(m2n_list)
             mod_tree_sub[key] = repeat_m2n(m2n_list, n_parallel_env, parallel_folders_list)
-        elif key == "coupling-scheme:serial-explicit":
+        elif key == "coupling-scheme:parallel-explicit":
             coupling_dict = mod_tree_sub[key]
             print("===== coupling scheme")
             print(coupling_dict)
             mod_tree_sub[key] = repeat_coupling(coupling_dict, n_parallel_env)
         else:
-            raise Exception(f'parallel xml config: unkown dictionary key: {key}')
+            raise Exception(f'parallel xml config: unknown dictionary key: {key}')
 
     # Replace the serial coupling with parallel coupling --> after the iteration on the keys
-    if n_parallel_env > 1:
-        mod_tree_sub["coupling-scheme:parallel-explicit"] = mod_tree_sub["coupling-scheme:serial-explicit"]
-        del mod_tree_sub["coupling-scheme:serial-explicit"]
+    # parallel-explicit works correctly !!
+    # if n_parallel_env > 1:
+    #     mod_tree_sub["coupling-scheme:parallel-explicit"] = mod_tree_sub["coupling-scheme:serial-explicit"]
+    #     del mod_tree_sub["coupling-scheme:serial-explicit"]
 
     # pprint.pprint(mod_tree_sub, sort_dicts=False, width=120)
 
@@ -518,15 +563,6 @@ def parallel_precice_dict(precicedict_str, idx_):
 
 
 if __name__ == '__main__':
-    foldername = "fluid-openfoam/system/"
-    filename = 'preciceDict'
-    precicedict_str = load_file(foldername, filename)
-    for idx_ in range(2):
-        new_string = parallel_precice_dict(precicedict_str, idx_)
-        print(new_string)
-        # with open(filename + f'_{idx_}', 'w') as file_obj:
-        #     file_obj.write(new_string)
-
     foldername = ""
     filename = "precice-config.xml"
     scaler_variables, vector_variables, mesh_list, mesh_variables = get_cfg_data(foldername, filename)
@@ -536,10 +572,19 @@ if __name__ == '__main__':
     print(mesh_list)
     print(mesh_variables)
 
+    foldername = "fluid-openfoam/system/"
+    filename = 'preciceDict'
+    precicedict_str = load_file(foldername, filename)
+    for idx_ in range(2):
+        new_string = parallel_precice_dict(precicedict_str, idx_)
+        print(new_string)
+        with open(filename + f'_{idx_}', 'w') as file_obj:
+            file_obj.write(new_string)
+
     output_filename = "precice-config_parallel_auto.xml"
     n_parallel_env = 4
     # loading the file at once might not be optimal for large files
     parallel_folders_list = [f'/data/ahmed/rl_play/examples/cylinder2D_openfoam/temp_{idx}' for idx in range(n_parallel_env)]
-    parallel_tree = make_parallel_config(foldername, filename, n_parallel_env, parallel_folders_list)
+    parallel_tree = make_parallel_config(foldername, filename, n_parallel_env, parallel_folders_list, use_mapping=True)
     with open(output_filename, 'w') as output_file:
         output_file.write(xmltodict.unparse(parallel_tree, encoding='utf-8', pretty=True))

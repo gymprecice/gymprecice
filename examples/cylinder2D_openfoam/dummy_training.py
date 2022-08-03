@@ -2,7 +2,7 @@ import gym
 from OpenFoamRLEnvSM import OpenFoamRLEnv
 from utils import fix_randseeds
 import numpy as np
-
+import time
 
 def agent(*argv):
     """
@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
     # shell options to run the solver (this can/should be placed in a
     # separate python script)
-    foam_case_path = "fluid-openfoam"
+    foam_case_path = "fluid-openfoam-orig"
     foam_shell_cmd = "foam-functions.sh"
     foam_clean_cmd = "cleanfoam"
     foam_softclean_cmd = "softcleanfoam"
@@ -42,29 +42,39 @@ if __name__ == '__main__':
     # foam_preprocess_cmd = f"sh ../foam-preprocess.sh > {foam_preprocess_log} 2>&1"
 
     # reset options
-    n_parallel_env = 1
+    n_parallel_env = 8
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
     postprocessing_data = {
-        'p': {
+        'forces': {
             'use': 'reward',  # goes into observation or rewards
-            'type': 'scaler',  # scaler vs field
-            'size': 3,  # number of probes
-            'output_folder': '/postProcessing/patchProbes/0/p',  # depends on the type of the probe/patchProbe/etc
+            'type': 'forces',  # forces|probe|?
+            'datatype': 'scaler',  # scaler vs field
+            'size': 12,  # number of forces
+            'output_file': '/postProcessing/forces/0/coefficient.dat',  # depends on the type of the probe/patchProbe/etc
         },
-        'U': {
-            'use': 'observation',  # goes into observation or rewards
-            'type': 'field',  # scaler vs field
-            'size': 3,  # number of probes
-            'output_folder': '/postProcessing/patchProbes/0/U',
-        },
-        'T': {
-            'use': 'observation',  # goes into observation or rewards
-            'type': 'field',  # scaler vs field
-            'size': 3,  # number of probes
-            'output_folder': '/postProcessing/patchProbes/0/T',
-        },
+        # 'p': {
+        #     'use': 'reward',  # goes into observation or rewards
+        #     'type': 'probe',  # forces|probe|?
+        #     'datatype': 'scaler',  # scaler vs field
+        #     'size': 3,  # number of probes
+        #     'output_file': '/postProcessing/patchProbes/0/p',  # depends on the type of the probe/patchProbe/etc
+        # },
+        # 'U': {
+        #     'use': 'observation',  # goes into observation or rewards
+        #     'type': 'probe',  # forces|probe|?
+        #     'datatype': 'field',  # scaler vs field
+        #     'size': 3,  # number of probes
+        #     'output_file': '/postProcessing/patchProbes/0/U',
+        # },
+        # 'T': {
+        #     'use': 'observation',  # goes into observation or rewards
+        #     'type': 'probe',  # forces|probe|?
+        #     'datatype': 'scaler',  # scaler vs field
+        #     'size': 3,  # number of probes
+        #     'output_file': '/postProcessing/patchProbes/0/T',
+        # },
     }
 
     options = {
@@ -78,22 +88,34 @@ if __name__ == '__main__':
         "solver_full_reset": foam_full_reset,
         "rand_seed": rand_seed,
         "postprocessing_data": postprocessing_data,
-        "n_parallel": n_parallel_env,
+        "n_parallel_env": n_parallel_env,
+        "is_dummy_run": True,
     }
 
     # create the environment
     # env = gym.make("FoamAdapterEnv-v0")
-
+    t0 = time.time()
     env = OpenFoamRLEnv(options)
+    # good scalability regardless of the number of parallel environments
+    print(f"Run time of defining OpenFoamRLEnv is {time.time()-t0} seconds")
 
-    for epoch in range(2):  # epochs
+    for epoch in range(1):  # epochs
+        t01 = time.time()
         observation, _ = env.reset(return_info=True, seed=options['rand_seed'], options=options)
+        print(f"Run time of defining env.reset is {time.time()-t01} seconds")
+
+        t02 = time.time()
         counter = 0
         while True:
-            action = agent(env, observation)
-            # TODO: check why env seed is not set correctly. for now np.random is reproducible
-            action = abs(0.0001*np.random.randn(action.shape[0],))
-            observation, reward, done, _ = env.step(action)
+
+            action_ref = agent(env, observation)
+            action_list = []
+            for p_idx in range(n_parallel_env):
+                # TODO: check why env seed is not set correctly. for now np.random is reproducible
+                action = abs(0.0001 * np.random.randn(action_ref.shape[0],))
+                action_list.append(action)
+
+            observation, reward, done, _ = env.step(action_list)
             print('Debug data from outer loop')
             print(f"observation:")
             for obs_item in observation:
@@ -105,3 +127,6 @@ if __name__ == '__main__':
                 print(f"Epoch # {epoch+1}: \"done\" after {counter} steps")
                 print("-------------------------------------")
                 break
+        print(f'Finished epoch in {time.time()-t02} seconds')
+    
+    print(f"Total run time is {time.time()-t0} seconds")
