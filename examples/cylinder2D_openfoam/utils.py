@@ -596,6 +596,14 @@ def parallel_precice_dict(precicedict_str, idx_):
 
     return precicedict_str
 
+def find_interface_patches(precicedict_str):
+    # find patch names
+    splitted_list = re.split(r"patches\s*\(\s*(.*?)\s*\);", precicedict_str)
+    assert len(splitted_list) == 3, 'patches should be found only once'
+    patch_list = [patch_name for patch_name in re.split(r"\s+", splitted_list[1])]
+    return patch_list 
+
+
 
 if __name__ == '__main__':
     foldername = ""
