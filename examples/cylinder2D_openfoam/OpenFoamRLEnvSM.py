@@ -18,9 +18,11 @@ from mesh_parser import FoamMesh
 
 import time
 import psutil
-from utils import get_cfg_data, parse_probe_lines, make_parallel_config, load_file, parallel_precice_dict
+from utils import get_cfg_data, parse_probe_lines, make_parallel_config, load_file, parallel_precice_dict, find_interface_patches
 import xmltodict
 import copy
+
+from os.path import join
 
 
 class OpenFoamRLEnv(gym.Env):
@@ -33,13 +35,14 @@ class OpenFoamRLEnv(gym.Env):
         super().__init__()
 
         self.__options = copy.deepcopy(options)
-
+        self.__time_idx = 0
         # gym env attributes:
         self.__is_initialized = False
         self.__is_first_reset = True  # if True, gym env reset has been called at least once
         # action_ and observation_space will be set in _set_precice_data
         self.action_space = None
         self.observation_space = None
+        self.__patch_data = None 
         self.run_folders = self.make_run_folders()
 
         scaler_variables, vector_variables, mesh_list, mesh_variables = \
@@ -49,6 +52,7 @@ class OpenFoamRLEnv(gym.Env):
         mesh_list = [x for x in mesh_list if 'rl' in x.lower()]
         self.__mesh_variables = mesh_variables
         self.__mesh_list = mesh_list
+        
 
         # scaler and vector variables should be used to define the size of action space
         self.scaler_variables = scaler_variables
@@ -60,6 +64,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__mesh_id = None
         self.__dim = None
         self.__vertex_ids = None
+        
         # # self.__interfaces = np.array(["interface", "top"])
         # self.__n = None
 
@@ -87,9 +92,6 @@ class OpenFoamRLEnv(gym.Env):
         self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
         self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
 
-        # parse solver mesh data
-        self._parse_mesh_data(case_path)
-
         # Create an empty folder for the RL_Gym to run OpenFoam
         cwd = Path.cwd()
         time_str = datetime.now().strftime('%d%m%Y_%H%M%S')
@@ -99,17 +101,23 @@ class OpenFoamRLEnv(gym.Env):
             run_folder.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             raise Exception(f'failed to create run folder: {e}')
+        
+        case_path_str = self.__options['case_path']
+        source_folder_str = join(str(cwd), case_path_str)
+
+        # parse solver mesh data
+        patch_list = find_interface_patches(load_file(join(source_folder_str, 'system'), 'preciceDict'))
+        self.__patch_data = self._parse_mesh_data(case_path, patch_list) 
 
         # Create a n_parallel case_folders as symbolic links
-        case_path_str = self.__options['case_path']
-        source_folder_str = str(cwd) + '/' + case_path_str
+
         run_folder_list = []
 
         for idx_ in range(self.__options['n_parallel_env']):
             dist_folder_str = str(run_folder) + '/' + case_path_str + f'_{idx_}'
             run_folder_list.append(dist_folder_str)
             try:
-                os.system(f'cp -rs {source_folder_str} {dist_folder_str}')
+                os.system(f'cp -rs {source_folder_str} {dist_folder_str}') 
             except Exception as e:
                 raise Exception(f'Failed to create symbolic links to foam case files: {e}')
 
@@ -194,7 +202,7 @@ class OpenFoamRLEnv(gym.Env):
             # TODO: what is the first action before we can do this reliably
             self.__write_data = {}
             for p_idx in range(self.__options['n_parallel_env']):
-                conv_action = self._set_patch_field_to_write([0.0000, 0.0000])
+                conv_action = self._set_patch_field_to_write([-p_idx*0.00001, p_idx*0.00001], self.__patch_data) #TODO: problem-specific
                 actions_dict = self.action_to_write_data(conv_action, p_idx)
                 self.__write_data.update(actions_dict)
             self._write()
@@ -210,6 +218,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__is_initialized = True
         self.__is_first_reset = False
         self.__t = 0
+        self.__time_idx = 0
 
         if return_info:
             return self.read_data_to_observations(), {}
@@ -217,6 +226,7 @@ class OpenFoamRLEnv(gym.Env):
         return self.read_data_to_observations()
 
     def step(self, action):
+
         if not self.__is_initialized:
             raise Exception("Call reset before interacting with the environment.")
 
@@ -228,12 +238,19 @@ class OpenFoamRLEnv(gym.Env):
         self.__write_data = {}
         # dummy random values to be sent to the solver
         for p_idx in range(self.__options['n_parallel_env']):
-            conv_action = self._set_patch_field_to_write(action[p_idx])
-            actions_dict = self.action_to_write_data(conv_action, p_idx)
-            self.__write_data.update(actions_dict)
+            if (self.__time_idx%5 == 0):
+                print(f'At time step: {self.__time_idx} ======> Q: {action[p_idx]}')
+                conv_action = self._set_patch_field_to_write(action[p_idx], self.__patch_data)
+                actions_dict = self.action_to_write_data(conv_action, p_idx)
+                self.__write_data.update(actions_dict)
+            else:
+                print(f'At time step: {self.__time_idx} ======> Q: [0.0 0.0]')
+                conv_action = self._set_patch_field_to_write([0.0,0.0], self.__patch_data)
+                actions_dict = self.action_to_write_data(conv_action, p_idx)
+                self.__write_data.update(actions_dict)
         # print('inside step function --- just before advance===========================')
         # print(self.__write_data)
-
+        self.__time_idx += 1
         self._advance()
 
         reward = self.get_reward()
@@ -280,7 +297,13 @@ class OpenFoamRLEnv(gym.Env):
             self.__mesh_id[mesh_name] = mesh_id
 
             # vertex_coords = np.zeros([5, self.__dim])
-            vertex_coords = self.Cf
+            # TODO: a separate function to deal with patch_itergace geometric data
+            Cf = []
+            for patch_name in self.__patch_data.keys():
+                Cf.append(self.__patch_data[patch_name]['Cf'])
+            Cf = np.array([item for sublist in Cf for item in sublist])
+
+            vertex_coords = Cf
             vertex_ids = self.__interface.set_mesh_vertices(mesh_id, vertex_coords)
             # print(vertex_ids)
             self.__vertex_ids[mesh_name] = vertex_ids
@@ -440,7 +463,7 @@ class OpenFoamRLEnv(gym.Env):
                 # self._kill_subprocess(subproc) #  not necessary, poll/wait should do the job!
         return []
 
-    def _parse_mesh_data(self, case_path):
+    def _parse_mesh_data(self, case_path, patches):  #TODO: check why it fails for binary data
         """ parse polyMesh to get interface points:"""
         t0 = time.time()
         print('starting to parse FoamMesh')
@@ -453,9 +476,14 @@ class OpenFoamRLEnv(gym.Env):
 
         # if len(self.__mesh_list) > 1:
         #     raise Exception('currently this only works for single mesh used for both observations and actions')
+        patch_data = {}
+        for patch in patches:
+            Cf = foam_mesh.boundary_face_centres(patch.encode())        
+            Sf, magSf, nf = foam_mesh.boundary_face_area(patch.encode())
+            patch_data[patch] = {'Cf':Cf, 'Sf':Sf, 'magSf':magSf, 'nf':nf}
+        
+        return patch_data
 
-        self.Cf = foam_mesh.boundary_face_centres(b'cylinder_jet1')        
-        self.Sf, self.magSf, self.nf = foam_mesh.boundary_face_area(b'cylinder_jet1')
         # assert self.__n == self.Cf.shape[0], f'information obtained from the single mesh precice is not correct: size {self.__n}, {self.Cf.shape[0]}'
         # single_mesh = self.__vertex_coords[self.__mesh_list[0]]
         # if np.sum(np.abs(single_mesh - self.Cf)) > 1e-6:
@@ -476,12 +504,12 @@ class OpenFoamRLEnv(gym.Env):
         for mesh_name in self.__mesh_list:
             self.__n += self.__vertex_coords[mesh_name].shape[0]
 
-        self.__n = int(self.__n / self.__options['n_parallel_env'])
+        self.__n = int(self.__n / self.__options['n_parallel_env'])  #TODO: ????
 
         print(f'size of the grid is {self.__n}')
 
         self.action_space = spaces.Box(
-            low=0, high=0.0001, shape=(1, ), dtype=np.float64)
+            low=0, high=0.0001, shape=(2, ), dtype=np.float64)
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(self.__n,), dtype=np.float64)
 
@@ -500,42 +528,60 @@ class OpenFoamRLEnv(gym.Env):
 
         return reward_list
 
-    def _set_patch_field_to_write(self, action):
+    def _set_patch_field_to_write(self, action, patch_data):
         # TODO: this should be problem specific
-        print(f"Prescribed action: FlowRate = {action[0]:.6f} [m/s3] on jet1")
-
-        # convert volumetric flow rate to a sinusoidal profile on the interface
-        avg_U = action[0] / np.sum(self.magSf)
+        theta0 = [90, 270]
+        w = [10, 10]
+        theta0 = [math.radians(x) for x in theta0]
+        w = [math.radians(x) for x in w]
+        
         origin = np.array([0, 0, 0.005])
-        d = np.array([1, 0, 0])
-        w = 10
-        r = np.zeros((self.Cf.shape[0], 3))
-        theta = np.zeros(self.Cf.shape[0])
-        U = np.zeros((self.Cf.shape[0], 3))
+        radius = 0.05
+        
+        U = []
 
-        # estimated flow rate based on the sinusoidal profile
-        Q_calc = 0
-        for i, c in enumerate(self.Cf):
-            r[i] = (c - origin) / (np.sqrt((c - origin).dot((c - origin))))
-            theta[i] = math.radians(90) - math.acos(np.dot(r[i], d))
-            U[i] = avg_U * math.pi / 2 * math.cos(math.pi / math.radians(w) * theta[i]) * self.nf[i]
-            Q_calc += U[i].dot(self.Sf[i])
+        for idx, patch_name in enumerate(patch_data.keys()):
+            print(f"Prescribed action: FlowRate = {action[idx]:.6f} [m/s3] on {patch_name}")
+            patch_ctr = np.array([radius*math.cos(theta0[idx]), radius*math.sin(theta0[idx]), origin[2]])
+            magSf = patch_data[patch_name]['magSf']
+            Sf = patch_data[patch_name]['Sf']
+            Cf = patch_data[patch_name]['Cf']
+            nf = patch_data[patch_name]['nf']
+            w_patch = w[idx]
+            # convert volumetric flow rate to a sinusoidal profile on the interface
+            avg_U = action[idx] / np.sum(magSf)
 
-        # correct velocity profile to enforce mass conservation
-        Q_err = action[0] - Q_calc
-        U_err = Q_err / np.sum(self.magSf) * self.nf
-        U += U_err
+            d = (patch_ctr - origin)/(np.sqrt((patch_ctr - origin).dot((patch_ctr - origin))))
 
-        # return the velocity profile
-        Q_final = 0
-        for i, u in enumerate(U):
-            Q_final += u.dot(self.Sf[i])
+            U_patch = np.zeros((Cf.shape[0], 3))
 
-        if abs(Q_final - action[0]) < 1e-6:
-            print(f"Set flow rate = {Q_final:.6f} [m/s3] on the interface")
-            return U
-        else:
-            raise Exception('estimated velocity profile violates mass conservation')
+            # estimated flow rate based on the sinusoidal profile
+            Q_calc = 0
+            for i, c in enumerate(Cf):
+                r = (c - origin) / (np.sqrt((c - origin).dot((c - origin))))
+                theta = math.acos(np.dot(r, d))
+                U_patch[i] = avg_U * math.pi / 2 * math.cos(math.pi / w_patch * theta) * nf[i]
+                Q_calc += U_patch[i].dot(Sf[i])
+
+            # correct velocity profile to enforce mass conservation
+            Q_err = action[idx] - Q_calc
+            U_err = Q_err / np.sum(magSf) * nf
+            U_patch += U_err
+
+            # return the velocity profile
+            Q_final = 0
+            for i, Uf in enumerate(U_patch):
+                Q_final += Uf.dot(Sf[i])
+
+            if abs(Q_final - action[idx]) < 1e-12:
+                print(f"Set flow rate = {Q_final:.6f} [m/s3] on the {patch_name} interface")
+                U.append(U_patch)
+            else:
+                raise Exception('estimated velocity profile violates mass conservation')
+
+        U_profile = np.array([item for sublist in U for item in sublist])
+
+        return U_profile
 
     def action_to_write_data(self, action, p_idx=0):
         """ return dummy random values for Velocity """
@@ -559,6 +605,7 @@ class OpenFoamRLEnv(gym.Env):
         try:
             for p_idx in range(self.__options['n_parallel_env']):
                 obs_list.append(self.__read_data[f"Pressure_{p_idx}"])
+                print(f'average pressure for {self.__mesh_list[p_idx]} ======> {np.sum(np.array(obs_list[p_idx]))})')
         except Exception as e:
             pass
         return obs_list
