@@ -4,21 +4,22 @@ preprocessfoam() {
     set -e 
     . "${WM_PROJECT_DIR}/bin/tools/RunFunctions"
     
-    # paraview reader
-    touch fluid-openfoam.OpenFOAM
-    # parafoam reader
-    touch fluid-openfoam.foam
-    
+    # dummy files for post-processing with paraview
+    touch case.foam
+    touch case.OpenFOAM
+
     # mesh creation
     runApplication blockMesh
     runApplication transformPoints -translate '(-0.2 -0.2 0)' 
+    runApplication topoSet
+    runApplication createPatch -overwrite
 
     # set inlet velocity
     cp -r 0.org 0
     runApplication setExprBoundaryFields
 
-    if [ "${1:-}" = "-parallel" ]; then
-        # decompose and run case
+    if [ "${1-}" = "-parallel" ]; then
+        # decompose case
         runApplication decomposePar
         runParallel renumberMesh -overwrite
     fi
@@ -28,8 +29,10 @@ runfoam() {
     set -e
     . "${WM_PROJECT_DIR}/bin/tools/RunFunctions"
 
-    if [ "${1:-}" = "-parallel" ]; then
+    if [ "${1-}" = "-parallel" ]; then
+        # run case
         runParallel $(getApplication)
+
     else
         echo "-- OpenFoam solver $(getApplication) ... serial run"
         runApplication $(getApplication)
@@ -40,6 +43,7 @@ cleanfoam() {
     set -e
     . "${WM_PROJECT_DIR}/bin/tools/CleanFunctions"
     cleanCase
+    
     rm -rfv 0
     rm -rfv ./preCICE-output/ \
             ./precice-*-iterations.log \

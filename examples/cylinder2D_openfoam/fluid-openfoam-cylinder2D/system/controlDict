@@ -15,7 +15,7 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-libs ("libCustomisedMeshTools.so" "libCustomisedBCs.so");
+libs ("libCustomisedMeshTools.so");
 
 
 application     pimpleFoam;
@@ -26,7 +26,7 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         10.0;
+endTime         5.0;
 
 deltaT          1e-4;
 
@@ -36,7 +36,7 @@ writeInterval   0.1;
 
 purgeWrite      0;
 
-writeFormat     binary;
+writeFormat     ascii;
 
 writePrecision  8;
 
@@ -77,45 +77,6 @@ functions
         magUInf         1.0;
         lRef            0.1;
         Aref            0.001;
-    }
-
-    Jet1FlowRate
-    {
-        type            surfaceFieldValue;
-        libs            ("libfieldFunctionObjects.so");
-
-        log             true;
-        writeControl    timeStep;
-        writeFields     false;
-
-        regionType      patch;
-        name            jet1;
-
-        operation        areaNormalIntegrate;
-
-        fields
-        (
-            U
-        );
-    }
-    Jet2FlowRate
-    {
-        type            surfaceFieldValue;
-        libs            ("libfieldFunctionObjects.so");
-
-        log             true;
-        writeControl    timeStep;
-        writeFields     false;
-
-        regionType      patch;
-        name            jet2;
-
-        operation        areaNormalIntegrate;
-
-        fields
-        (
-            U
-        );
     }
 }
 

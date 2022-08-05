@@ -18,8 +18,8 @@ if __name__ == '__main__':
 
     # shell options to run the solver (this can/should be placed in a
     # separate python script)
-    foam_case_path = "fluid-openfoam-orig"
-    foam_shell_cmd = "foam-functions.sh"
+    foam_case_path = "fluid-openfoam-cylinder2D"
+    foam_shell_cmd = "foam-functions-cylinder2D.sh"
     foam_clean_cmd = "cleanfoam"
     foam_softclean_cmd = "softcleanfoam"
 
@@ -41,7 +41,8 @@ if __name__ == '__main__':
     # foam_run_cmd = f"sh ../foam-run.sh > {foam_run_log} 2>&1"
     # foam_preprocess_cmd = f"sh ../foam-preprocess.sh > {foam_preprocess_log} 2>&1"
 
-    n_parallel_env = 4
+    # reset options
+    n_parallel_env = 1
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -111,8 +112,10 @@ if __name__ == '__main__':
             action_list = []
             for p_idx in range(n_parallel_env):
                 # TODO: check why env seed is not set correctly. for now np.random is reproducible
-                action = abs(0.0001 * np.random.randn(action_ref.shape[0],))
+                action = abs(0.000 * np.random.randn(action_ref.shape[0],))
                 action_list.append(action)
+                
+            action_list = [[-0.00001, 0.00001]]
 
             observation, reward, done, _ = env.step(action_list)
             print('Debug data from outer loop')

@@ -47,7 +47,7 @@ class OpenFoamRLEnv(gym.Env):
         self.observation_space = None
 
         self.__patch_data = None 
-        self.run_folders = self.make_run_folders()
+        self.run_folders = self._make_run_folders()
 
         scaler_variables, vector_variables, mesh_list, mesh_variables = \
             get_cfg_data('', self.__options['precice_cfg'])
@@ -154,7 +154,7 @@ class OpenFoamRLEnv(gym.Env):
         with open(precice_config_parallel_file, 'w') as file_obj:
             file_obj.write(xmltodict.unparse(parallel_tree, encoding='utf-8', pretty=True))
         os.chdir(str(run_folder))
-        os.system(f'cp ../foam-functions.sh .')
+        os.system(f'cp ../{shell_cmd} .')
 
         self.__options['precice_cfg'] = precice_config_parallel_file
         return run_folder_list
@@ -341,7 +341,8 @@ class OpenFoamRLEnv(gym.Env):
         # increase the time before reading the probes/forces for internal consistency checks
         self.__t += self.__precice_dt
         if not self.__options['is_dummy_run']:
-            self._read_probes_rewards_files()
+            pass
+            #self._read_probes_rewards_files()
         # read precice after reading the files to avoid a nasty bug because of slow reading from files
         self._read()
 
@@ -654,7 +655,7 @@ class OpenFoamRLEnv(gym.Env):
         print(f'size of the grid is {self.__n}')
 
         self.action_space = spaces.Box(
-            low=0, high=0.0001, shape=(1, ), dtype=np.float64)
+            low=0, high=0.0001, shape=(2, ), dtype=np.float64)
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(self.__n,), dtype=np.float64)
 

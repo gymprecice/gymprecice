@@ -19,7 +19,7 @@ interfaces
   {
     mesh              Fluid-Mesh;
     locations         faceCenters;
-    patches           (jet1);
+    patches           (jet1 jet2);
     
     readData
     (
