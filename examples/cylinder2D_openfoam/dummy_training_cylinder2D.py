@@ -4,6 +4,7 @@ from utils import fix_randseeds
 import numpy as np
 import time
 
+
 def agent(*argv):
     """
     dummy agent to return an action based on observation from env
@@ -23,12 +24,17 @@ if __name__ == '__main__':
     foam_clean_cmd = "cleanfoam"
     foam_softclean_cmd = "softcleanfoam"
 
-    foam_preprocess_cmd = "preprocessfoam"
+    foam_preprocess_cmd = "preprocessfoam" 
     foam_run_cmd = "runfoam"
     foam_preprocess_log = "foam_preprocess.log"
     foam_clean_log = "foam_clean.log"
     foam_softclean_log = "foam_softclean.log"
     foam_run_log = "foam_run.log"
+
+    parallel_run = False
+    if parallel_run:
+        foam_preprocess_cmd += " -parallel"
+        foam_run_cmd += " -parallel"
 
     # if True, then the preprocessing (here: blockMesh) happens per each epoch:
     foam_full_reset = False
@@ -99,7 +105,7 @@ if __name__ == '__main__':
     # good scalability regardless of the number of parallel environments
     print(f"Run time of defining OpenFoamRLEnv is {time.time()-t0} seconds")
 
-    for epoch in range(1):  # epochs
+    for epoch in range(2):  # epochs
         t01 = time.time()
         observation, _ = env.reset(return_info=True, seed=options['rand_seed'], options=options)
         print(f"Run time of defining env.reset is {time.time()-t01} seconds")
@@ -114,7 +120,7 @@ if __name__ == '__main__':
                 # TODO: check why env seed is not set correctly. for now np.random is reproducible
                 action = abs(0.000 * np.random.randn(action_ref.shape[0],))
                 action_list.append(action)
-                
+
             action_list = [[-0.00001, 0.00001]]
 
             observation, reward, done, _ = env.step(action_list)

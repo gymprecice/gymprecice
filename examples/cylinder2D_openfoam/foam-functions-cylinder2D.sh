@@ -11,8 +11,8 @@ preprocessfoam() {
     # mesh creation
     runApplication blockMesh
     runApplication transformPoints -translate '(-0.2 -0.2 0)' 
-    runApplication topoSet
-    runApplication createPatch -overwrite
+    # runApplication topoSet
+    # runApplication createPatch -overwrite
 
     # set inlet velocity
     cp -r 0.org 0
@@ -28,11 +28,14 @@ preprocessfoam() {
 runfoam() {
     set -e
     . "${WM_PROJECT_DIR}/bin/tools/RunFunctions"
+    # soft cleaning removed the sybmolic links to case folder
+    # create real files for reach run
+    touch case.foam
+    touch case.OpenFOAM
 
     if [ "${1-}" = "-parallel" ]; then
-        # run case
+        echo "-- OpenFoam solver $(getApplication) ... parallel run"
         runParallel $(getApplication)
-
     else
         echo "-- OpenFoam solver $(getApplication) ... serial run"
         runApplication $(getApplication)
@@ -55,12 +58,24 @@ cleanfoam() {
             ./precice-*-watchintegral-*.log \
             ./core \
             ./postProcessing \
+            processor* \
             log.* \
             *.json \
-            *.log
+            *.log \
+            *.foam \
+            *.OpenFOAM
 }
 
 softcleanfoam() {
+    set -e
+    . "${WM_PROJECT_DIR}/bin/tools/CleanFunctions" 
+    cleanTimeDirectories
+    cleanAdiosOutput
+    cleanAuxiliary
+    cleanDynamicCode
+    cleanOptimisation
+    cleanPostProcessing
+
     rm -rfv ./preCICE-output/ \
             ./precice-*-iterations.log \
             ./precice-*-convergence.log \
@@ -73,5 +88,7 @@ softcleanfoam() {
             ./postProcessing \
             log.* \
             *.json \
-            *.log
+            *.log \
+            *.foam \
+            *.OpenFOAM
 }

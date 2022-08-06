@@ -32,7 +32,7 @@ deltaT          1e-4;
 
 writeControl    runTime;
 
-writeInterval   0.1;
+writeInterval   1e-4;
 
 purgeWrite      0;
 
@@ -48,12 +48,6 @@ runTimeModifiable false;
 
 functions
 {
-    preCICE_Adapter
-    {
-        type preciceAdapterFunctionObject;
-        libs ("libpreciceAdapterFunctionObject.so");
-    }
-
     forces
     {
         type            forceCoeffs;
@@ -77,6 +71,11 @@ functions
         magUInf         1.0;
         lRef            0.1;
         Aref            0.001;
+    }
+    preCICE_Adapter
+    {
+        type preciceAdapterFunctionObject;
+        libs ("libpreciceAdapterFunctionObject.so");
     }
 }
 

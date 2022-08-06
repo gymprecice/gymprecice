@@ -558,7 +558,7 @@ def parallel_precice_dict(precicedict_str, idx_):
     pattern = fr"{leading_string}\s*(.*)\s*{trailing_string}"
     precicedict_str = re.sub(
         pattern,
-        partial(augment_str, leading_string=leading_string, trailing_string=trailing_string, idx=idx_), 
+        partial(augment_str, leading_string=leading_string, trailing_string=trailing_string, idx=idx_),
         precicedict_str)
 
     # find mesh name --> may be more than one mesh
@@ -567,7 +567,7 @@ def parallel_precice_dict(precicedict_str, idx_):
     pattern = fr"{leading_string}\s*(.*)\s*{trailing_string}"
     precicedict_str = re.sub(
         pattern,
-        partial(augment_str, leading_string=leading_string, trailing_string=trailing_string, idx=idx_), 
+        partial(augment_str, leading_string=leading_string, trailing_string=trailing_string, idx=idx_),
         precicedict_str)
 
     # find readData names
@@ -596,13 +596,15 @@ def parallel_precice_dict(precicedict_str, idx_):
 
     return precicedict_str
 
+
 def find_interface_patches(precicedict_str):
     # find patch names
     splitted_list = re.split(r"patches\s*\(\s*(.*?)\s*\);", precicedict_str)
-    assert len(splitted_list) == 3, 'patches should be found only once'
-    patch_list = [patch_name for patch_name in re.split(r"\s+", splitted_list[1])]
-    return patch_list 
-
+    patch_list = []
+    for matched_str in splitted_list[1::2]:
+        local_list = [patch_name for patch_name in re.split(r"\s+", matched_str)]
+        patch_list += local_list
+    return patch_list
 
 
 if __name__ == '__main__':
@@ -660,7 +662,7 @@ if __name__ == '__main__':
     {
         mesh Fluid-Mesh;
         locations         faceCenters;
-        patches           (cylinder_jet1);
+        patches           (cylinder_jet1 jet11);
 
         readData ( Velocity );
 
@@ -671,7 +673,7 @@ if __name__ == '__main__':
     {
         mesh Fluid-Meshh;
         locations         faceCenters;
-        patches           (cylinder_jet1);
+        patches           (cylinder_jet2);
 
         readData ( Velocity Temp
         VarOn2ndLine Var2_Line2
