@@ -12,7 +12,11 @@ if __name__ == '__main__':
     while True:
         # print(list(foamserver.keys()))
         for key_ in foamserver.keys():
-            process_dict = copy.deepcopy(foamserver[key_])
+            try:
+                process_dict = copy.deepcopy(foamserver[key_])
+            except Exception as e:
+                print(f'problem with accessing a key: {e}')
+                pass
             assert 'command' in process_dict.keys(), 'command_str is not in keys'
             assert 'command_str' in process_dict.keys(), 'command_str is not in keys'
             assert 'run' in process_dict.keys(), 'run is not in keys'

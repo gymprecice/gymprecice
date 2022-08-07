@@ -144,7 +144,7 @@ class OpenFoamRLEnv(gym.Env):
 
         # parse solver mesh data
         patch_list = find_interface_patches(load_file(join(source_folder_str, 'system'), 'preciceDict'))
-        self.__patch_data = self.setup_mesh_data(case_path, patch_list)
+        self.__patch_data = self._get_interface_data(case_path, patch_list)
 
         # Create a n_parallel case_folders as symbolic links
 
@@ -639,6 +639,26 @@ class OpenFoamRLEnv(gym.Env):
                 pass
         self.__postprocessing_filehandler_dict = {}
 
+    def _get_interface_data(self, case_path, patches):  # TODO: check why it fails for binary data
+        """ parse polyMesh to get interface points """
+        t0 = time.time()
+        print('starting to parse FoamMesh')
+        foam_mesh = FoamMesh(case_path)
+        print(f'Done to parsing FoamMesh in {time.time()-t0} seconds')
+
+        # nodes = foam_mesh.boundary_face_nodes(b'interface')
+        # self.__n = nodes.shape[0]
+        # self.__grid = nodes
+
+        # if len(self.__mesh_list) > 1:
+        #     raise Exception('currently this only works for single mesh used for both observations and actions')
+        patch_data = {}
+        for patch in patches:
+            Cf = foam_mesh.boundary_face_centres(patch.encode())
+            Sf, magSf, nf = foam_mesh.boundary_face_area(patch.encode())
+            patch_data[patch] = {'Cf': Cf, 'Sf': Sf, 'magSf': magSf, 'nf': nf}
+        return patch_data
+
     def setup_patch_field_to_write(self, action, patch_data):
         # TODO: this should be problem specific
         theta0 = [90, 270]
@@ -693,29 +713,9 @@ class OpenFoamRLEnv(gym.Env):
 
         return U_profile
 
-    def setup_mesh_data(self, case_path, patches):  #TODO: check why it fails for binary data
-        """ parse polyMesh to get interface points:"""
-        t0 = time.time()
-        print('starting to parse FoamMesh')
-        foam_mesh = FoamMesh(case_path)
-        print(f'Done to parsing FoamMesh in {time.time()-t0} seconds')
-
-        # nodes = foam_mesh.boundary_face_nodes(b'interface')
-        # self.__n = nodes.shape[0]
-        # self.__grid = nodes
-
-        # if len(self.__mesh_list) > 1:
-        #     raise Exception('currently this only works for single mesh used for both observations and actions')
-        patch_data = {}
-        for patch in patches:
-            Cf = foam_mesh.boundary_face_centres(patch.encode())        
-            Sf, magSf, nf = foam_mesh.boundary_face_area(patch.encode())
-            patch_data[patch] = {'Cf': Cf, 'Sf': Sf, 'magSf': magSf, 'nf': nf}
-        return patch_data
-
-    def setup_mesh_coords(self, mesh_name):  # TODO: not in use for now
-        """ Problem specific function """
-        return self.Cf
+    # def setup_mesh_coords(self, mesh_name):  # TODO: not in use for now
+    #     """ Problem specific function """
+    #     return self.Cf
 
     def setup_env_obs_act(self):
         # TODO: this should be problem specific
