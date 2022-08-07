@@ -75,7 +75,7 @@ softcleanfoam() {
     cleanDynamicCode
     cleanOptimisation
     cleanPostProcessing
-
+    rm -rfv ./processor*/0.* 
     rm -rfv ./preCICE-output/ \
             ./precice-*-iterations.log \
             ./precice-*-convergence.log \

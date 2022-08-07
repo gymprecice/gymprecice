@@ -31,7 +31,7 @@ if __name__ == '__main__':
     foam_softclean_log = "foam_softclean.log"
     foam_run_log = "foam_run.log"
 
-    parallel_run = False
+    parallel_run = True
     if parallel_run:
         foam_preprocess_cmd += " -parallel"
         foam_run_cmd += " -parallel"

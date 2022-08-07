@@ -29,6 +29,7 @@ runfoam() {
     . "${WM_PROJECT_DIR}/bin/tools/RunFunctions"
 
     if [ "${1:-}" = "-parallel" ]; then
+        echo "-- OpenFoam solver $(getApplication) ... parallel run"
         runParallel $(getApplication)
     else
         echo "-- OpenFoam solver $(getApplication) ... serial run"
@@ -57,6 +58,15 @@ cleanfoam() {
 }
 
 softcleanfoam() {
+    set -e
+    . "${WM_PROJECT_DIR}/bin/tools/CleanFunctions" 
+    cleanTimeDirectories
+    cleanAdiosOutput
+    cleanAuxiliary
+    cleanDynamicCode
+    cleanOptimisation
+    cleanPostProcessing
+
     rm -rfv ./preCICE-output/ \
             ./precice-*-iterations.log \
             ./precice-*-convergence.log \

@@ -1,13 +1,17 @@
 # from cmath import inf
+# from mpi4py import MPI, futures
+# import sys
+import precice
+# from precice import action_write_initial_data, action_write_iteration_checkpoint
+from sqlitedict import SqliteDict
+
 from cmath import acos
-from signal import signal
+import signal
 import subprocess
 import argparse
 from tkinter.messagebox import NO
 import numpy as np
 import math
-import precice
-from precice import action_write_initial_data, action_write_iteration_checkpoint
 from pathlib import Path
 from datetime import datetime
 import os
@@ -21,9 +25,11 @@ import psutil
 from utils import get_cfg_data, parse_probe_lines, make_parallel_config, load_file, parallel_precice_dict, find_interface_patches
 import xmltodict
 import copy
+import shlex
 
 from os.path import join
 import os
+
 
 # def unload_module(module_name):
 #     import sys
@@ -32,6 +38,13 @@ import os
 #     except Exception as e:
 #         print(e)
 #         pass
+# for module_name in ['mpi4py.rc', 'cyprecice', 'precice', 'mpi4py.MPI', 'mpi4py']:
+#     unload_module(module_name)
+# from mpi4py import MPI  # import the 'MPI' module
+# try:
+#     MPI.Finalize()  # manual finalization of the MPI environment
+# except Exception as e:
+#     print(f"MPI.Finalize() failed: {e}")
 
 
 class OpenFoamRLEnv(gym.Env):
@@ -45,8 +58,9 @@ class OpenFoamRLEnv(gym.Env):
 
     def __init__(self, options) -> None:
         super().__init__()
-
         self.__options = copy.deepcopy(options)
+
+        self.__foamserver = SqliteDict("foamserver.sqlite", autocommit=True)
         self.__time_idx = 0
         # gym env attributes:
         self.__is_initialized = False
@@ -111,7 +125,7 @@ class OpenFoamRLEnv(gym.Env):
         case_path = self.__options.get("case_path", "")
         clean_cmd = self.__options.get("clean_cmd", "")
         preprocess_cmd = self.__options.get("preprocess_cmd", "")
-
+        # these will run normal
         self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
         self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
 
@@ -211,14 +225,6 @@ class OpenFoamRLEnv(gym.Env):
         if len(self.__solver_run) > 0:
             raise Exception('solver_run pointer is not cleared -- should not reach here')
 
-        # for module_name in ['mpi4py.rc', 'cyprecice', 'precice', 'mpi4py.MPI', 'mpi4py']:
-        #     unload_module(module_name)
-        # from mpi4py import MPI  # import the 'MPI' module
-        # try:
-        #     MPI.Finalize()  # manual finalization of the MPI environment
-        # except Exception as e:
-        #     print(f"MPI.Finalize() failed: {e}")
-
         for p_idx in range(self.__options['n_parallel_env']):
             p_case_path = case_path + f'_{p_idx}'
             if self.__options['is_dummy_run']:
@@ -226,7 +232,9 @@ class OpenFoamRLEnv(gym.Env):
             else:
                 p_process = self._launch_subprocess(shell_cmd, run_cmd, p_case_path, cmd_type='run')
 
-            assert p_process is not None
+            print(f'OpenFoam solver run in pid: {p_process}')
+
+            assert p_process > -1
             self.__solver_run.append(p_process)
 
         # checking spawning after n_parallel calls to avoid sleeping $n times
@@ -235,16 +243,12 @@ class OpenFoamRLEnv(gym.Env):
             p_case_path = case_path + f'_{p_idx}'
             self._check_subprocess(self.__solver_run[p_idx], shell_cmd, run_cmd, p_case_path, cmd_type='run')
 
-        # MPI.Init()
-        # import precice
-        # from precice import action_write_initial_data, action_write_iteration_checkpoint
-       
         # initiate precice interface and read single mesh data
         self._init_precice()
         self._set_precice_data()
         self.setup_env_obs_act()
 
-        if self.__interface.is_action_required(action_write_initial_data()):
+        if self.__interface.is_action_required(precice.action_write_initial_data()):
             # what is the action for this case no action have been provided
             # TODO: what is the first action before we can do this reliably
             self.__write_data = {}
@@ -255,7 +259,7 @@ class OpenFoamRLEnv(gym.Env):
 
                 self.__write_data.update(actions_dict)
             self._write()
-            self.__interface.mark_action_fulfilled(action_write_initial_data())
+            self.__interface.mark_action_fulfilled(precice.action_write_initial_data())
 
         t0 = time.time()
         self.__interface.initialize_data()
@@ -284,9 +288,9 @@ class OpenFoamRLEnv(gym.Env):
             raise Exception("Call reset before interacting with the environment.")
 
         if self.__interface.is_action_required(
-                action_write_iteration_checkpoint()):
+                precice.action_write_iteration_checkpoint()):
             self.__interface.mark_action_fulfilled(
-                action_write_iteration_checkpoint())
+                precice.action_write_iteration_checkpoint())
 
         self.__write_data = {}
         # dummy random values to be sent to the solver
@@ -453,42 +457,88 @@ class OpenFoamRLEnv(gym.Env):
         elif cmd_type == 'preprocess':
             # preprocess on the main folder before the symbolic links
             print(cmd_type, cmd_str, cwd, os.getcwd())
+            # future = self.__executor.submit(subprocess.run, cmd_str[:-27], shell=True, cwd=cwd)
+            # print(future.result())
             print("================")
-            completed_process = subprocess.run(cmd_str, shell=True, cwd=cwd)
-            if completed_process.returncode != 0:
-                raise Exception(f"run is not successful: {completed_process}")
-            return None
+
+            key_ = os.getcwd() + '/' + cwd
+            self.__foamserver[key_] = {
+                'command': 'run',
+                'command_str': cmd_str,
+                'process_pid': -1,
+                'run': False,
+            }
+            while True:
+                if self.__foamserver[key_]['run'] is True and self.__foamserver[key_]['process_pid'] > -1:
+                    subprocess_pid = self.__foamserver[key_]['process_pid']
+                    del self.__foamserver[key_]
+                    return subprocess_pid
+
+            # completed_process = subprocess.run(cmd_str, shell=True, cwd=cwd, start_new_session=True)
+            # if completed_process.returncode != 0:
+            #     raise Exception(f"run is not successful: {completed_process}")
+            # return None
         else:
             print(cmd_type, cmd_str, cwd, os.getcwd())
             print("================")
-            subproc = subprocess.Popen(cmd_str, shell=True, cwd=cwd)
-            return subproc
+            # future = self.__executor.submit(subprocess.Popen, cmd_str, shell=True, cwd=cwd)
+            # print(future)
+            key_ = os.getcwd() + '/' + cwd
+            self.__foamserver[key_] = {
+                'command': 'popen',
+                'command_str': cmd_str,
+                'process_pid': -1,
+                'run': False,
+            }
+            # print(self.__foamserver[complete_path])
+            while True:
+                if self.__foamserver[key_]['run'] is True and self.__foamserver[key_]['process_pid'] > -1:
+                    subprocess_pid = self.__foamserver[key_]['process_pid']
+                    del self.__foamserver[key_]
+                    return subprocess_pid
 
-    def _check_subprocess(self, subproc, shell_cmd, cmd, cwd, cmd_type):
+            # subproc = subprocess.Popen(cmd_str, shell=True, cwd=cwd)
+            # return subproc.pid
+
+    def _check_subprocess(self, subproc_pid, shell_cmd, cmd, cwd, cmd_type):
         cmd_str = f'. ../{shell_cmd} {cmd}'  # here we have relative path
-
         # check if the spawning process is successful
-        if not psutil.pid_exists(subproc.pid):
+        if not psutil.pid_exists(subproc_pid):
             raise Exception(f'Error: subprocess failed to be launched {cmd_type}: {cmd_str} run from {cwd}')
 
         # finalize the subprocess if it is terminated (normally/abnormally)
-        if psutil.Process(subproc.pid).status() == psutil.STATUS_ZOMBIE:
-            print(psutil.Process(subproc.pid), psutil.Process(subproc.pid).status())
+        if psutil.Process(subproc_pid).status() == psutil.STATUS_ZOMBIE:
+            print(psutil.Process(subproc_pid), psutil.Process(subproc_pid).status())
             raise Exception(f'Error: subprocess failed to be launched  {cmd_type}: {cmd_str} STATUS_ZOMBIE run from {cwd}')
 
     def _finalize_subprocess(self, process_list):
-        for subproc in process_list:
-            if subproc and psutil.pid_exists(subproc.pid):
-                if psutil.Process(subproc.pid).status() != psutil.STATUS_ZOMBIE:
-                    print("subprocess status is not zombie - waiting to finish ...")
-                    exit_signal = subproc.wait()
-                else:
-                    print("subprocess status is zombie - cleaning up ...")
-                    exit_signal = subproc.poll()
-                # check the subprocess exit signal
-                if exit_signal != 0:
-                    raise Exception("subprocess failed to complete its shell command: " + subproc.args)
-                print("subprocess successfully completed its shell command: " + subproc.args)
+        check_list = copy.deepcopy(process_list)
+        revisit_list = []
+        while True:
+            for subproc_pid in process_list:
+                if psutil.pid_exists(subproc_pid):
+                    subproc = psutil.Process(subproc_pid)
+                    if subproc.status() == psutil.STATUS_ZOMBIE:
+                        print(f"subprocess status zombie: pid {subproc_pid}, status: {subproc.status()} - call terminate ...")
+                        exit_signal = subproc.terminate()  # wait()
+                    else:
+                        revisit_list.append(subproc_pid)
+                        print(f"subprocess status is not zombie or terminated: pid {subproc_pid}, status: {subproc.status()} -- loop again")
+
+            if len(revisit_list) > 0:
+                check_list = copy.deepcopy(revisit_list)
+                revisit_list = []
+                time.sleep(0.1)
+            else:
+                return []
+
+                # else:
+                #     print(f"subprocess status is zombie - cleaning up ... pid {subproc_pid}")
+                #     exit_signal = subproc.poll()
+                # # check the subprocess exit signal
+                # if exit_signal != 0:
+                #     raise Exception(f"subprocess failed to complete its shell command: pid {subproc_pid}")
+                # print(f"subprocess successfully completed its shell command: pid {subproc_pid}")
 
                 # # force to kill the subprocess if still around
                 # self._kill_subprocess(subproc) #  not necessary, poll/wait should do the job!

@@ -481,7 +481,8 @@ def make_parallel_config(foldername, filename, n_parallel_env, parallel_folders_
                                 'use-mesh': new_use_mesh_list,
                                 'write-data': new_write_data_list,
                                 'read-data': new_read_data_list,
-                                'mapping:nearest-neighbor': new_mapping_list
+                                'mapping:nearest-neighbor': new_mapping_list,
+                                # r'intra-comm:sockets': '',
                             })
                         else:
                             new_participant_list.append({
@@ -489,6 +490,7 @@ def make_parallel_config(foldername, filename, n_parallel_env, parallel_folders_
                                 'use-mesh': new_use_mesh_list,
                                 'write-data': new_write_data_list,
                                 'read-data': new_read_data_list,
+                                # r'intra-comm:sockets': '',
                             })
 
             mod_tree_sub[key] = new_participant_list
