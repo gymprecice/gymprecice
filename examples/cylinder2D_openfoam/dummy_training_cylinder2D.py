@@ -48,7 +48,7 @@ if __name__ == '__main__':
     # foam_preprocess_cmd = f"sh ../foam-preprocess.sh > {foam_preprocess_log} 2>&1"
 
     # reset options
-    n_parallel_env = 1
+    n_parallel_env = 3
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -117,11 +117,10 @@ if __name__ == '__main__':
             action_ref = agent(env, observation)
             action_list = []
             for p_idx in range(n_parallel_env):
-                # TODO: check why env seed is not set correctly. for now np.random is reproducible
-                action = abs(0.000 * np.random.randn(action_ref.shape[0],))
-                action_list.append(action)
-
-            action_list = [[-0.00001, 0.00001]]
+                # # TODO: check why env seed is not set correctly. for now np.random is reproducible
+                # action = abs(0.000 * np.random.randn(action_ref.shape[0],))
+                # action_list.append(action)
+                action_list.append([-0.00001, 0.00001])
 
             observation, reward, done, _ = env.step(action_list)
             print('Debug data from outer loop')
