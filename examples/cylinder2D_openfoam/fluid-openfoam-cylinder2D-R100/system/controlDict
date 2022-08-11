@@ -23,7 +23,7 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         5.0;
+endTime         100.0;
 
 deltaT          5e-3;
 
@@ -32,6 +32,8 @@ writeControl    timeStep;
 writeInterval   1000;
 
 purgeWrite      0;
+
+//writeControl    none;
 
 writeFormat     ascii;
 
@@ -42,6 +44,9 @@ timeFormat      general;
 timePrecision   8;
 
 runTimeModifiable false;
+
+//adjustTimeStep yes;
+//maxCo 0.95;
 
 functions
 {

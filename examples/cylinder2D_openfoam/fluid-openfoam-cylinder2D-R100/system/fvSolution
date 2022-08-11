@@ -21,8 +21,8 @@ solvers
     {
         solver           GAMG;
         smoother         DICGaussSeidel;
-        tolerance        1e-5;
-        relTol           0.01;
+        tolerance        1e-6;
+        relTol           0.001;
     }
 
     pFinal
@@ -35,8 +35,8 @@ solvers
     {
         solver          smoothSolver;
         smoother        symGaussSeidel;
-        tolerance       1e-05;
-        relTol          0.1;
+        tolerance       1e-08;
+        relTol          0.001;
     }
 
     UFinal
@@ -48,12 +48,9 @@ solvers
 
 PIMPLE
 {
-    momentumPredictor   yes;
-    transonic           no;
-    nOuterCorrectors    5;
-    nCorrectors         1;
-    nNonOrthogonalCorrectors 0;
-    consistent          yes;
+    nOuterCorrectors    1;
+    nCorrectors         2;
+    nNonOrthogonalCorrectors 1;
 
     residualControl
     {

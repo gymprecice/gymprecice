@@ -17,12 +17,12 @@ FoamFile
 
 ddtSchemes
 {
-    default         Euler;
+    default         CrankNicolson 0.5;
 }
 
 gradSchemes
 {
-    default         Gauss linear;
+    default         leastSquares;
 }
 
 divSchemes
