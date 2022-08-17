@@ -11,8 +11,9 @@ preprocessfoam() {
     # mesh creation
     runApplication blockMesh
     runApplication transformPoints -translate '(-0.2 -0.2 0)' 
-    # runApplication topoSet
-    # runApplication createPatch -overwrite
+    runApplication topoSet
+    runApplication createPatch -overwrite
+    runApplication renumberMesh -overwrite
 
     # set inlet velocity
     cp -r 0.org 0
@@ -63,6 +64,7 @@ cleanfoam() {
             *.json \
             *.log \
             *.foam \
+	        system/*.msh \
             *.OpenFOAM
 }
 
@@ -90,5 +92,38 @@ softcleanfoam() {
             *.json \
             *.log \
             *.foam \
+	        system/*.msh \
             *.OpenFOAM
+}
+
+preprocessUnstructuredFoam() {
+    set -e 
+    . "${WM_PROJECT_DIR}/bin/tools/RunFunctions"
+    
+    # dummy files for post-processing with paraview
+    touch case.foam
+    touch case.OpenFOAM
+
+    # mesh creation
+    gmsh -3 "system/unstructured_msh.geo" > log.gmsh 2>&1
+    runApplication gmshToFoam -noFunctionObjects "system/unstructured_msh.msh"
+    sed -i '/physicalType/d' ./constant/polyMesh/boundary
+    awk -v RS="" '{ gsub(/front\n    {\n        type            patch/, "front\n    {\n        type            empty"); print }' constant/polyMesh/boundary > tmp 
+    mv tmp constant/polyMesh/boundary
+    awk -v RS="" '{ gsub(/back\n    {\n        type            patch/, "back\n    {\n        type            empty"); print }' constant/polyMesh/boundary >tmp
+    mv tmp constant/polyMesh/boundary
+    
+    runApplication topoSet
+    runApplication createPatch -overwrite
+    runApplication renumberMesh -overwrite
+
+    # set inlet velocity
+    cp -r 0.org 0
+    runApplication setExprBoundaryFields
+
+    if [ "${1-}" = "-parallel" ]; then
+        # decompose case
+        runApplication decomposePar
+        runParallel renumberMesh -overwrite
+    fi
 }

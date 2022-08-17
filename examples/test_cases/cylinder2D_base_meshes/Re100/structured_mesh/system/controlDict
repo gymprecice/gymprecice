@@ -1,0 +1,87 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v1912                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+libs ("libCustomisedMeshTools.so" "libCustomisedBCs.so");
+
+application     pimpleFoam;
+
+startFrom       startTime;
+
+startTime       0;
+
+stopAt          endTime;
+
+endTime         1000;
+
+deltaT          1e-3;
+
+writeControl   none;
+
+writeInterval   0.1;
+
+purgeWrite      0;
+
+writeFormat     ascii;
+
+writePrecision  8;
+
+timeFormat      general;
+
+timePrecision   8;
+
+runTimeModifiable false;
+
+adjustTimeStep yes;
+maxCo 0.99;
+
+functions
+{
+    forces
+    {
+        type            forceCoeffs;
+        libs            (forces);
+        writeControl    timeStep;
+        writeInterval   1;
+        log false;
+
+        patches
+        (
+            cylinder_wall
+            jet1
+            jet2
+        );
+	
+	rho rhoInf;
+        rhoInf 1.0;
+        CofR (0.0 0 0);
+        liftDir (0 1 0);
+        dragDir (1 0 0);
+        pitchAxis (0 0 1);
+        magUInf 1.0;
+        lRef 0.1;           
+        Aref 0.001;         
+    }
+
+    
+    preCICE_Adapter
+    {
+        type preciceAdapterFunctionObject;
+        libs ("libpreciceAdapterFunctionObject.so");
+    }
+}
+
+
+// ************************************************************************* //

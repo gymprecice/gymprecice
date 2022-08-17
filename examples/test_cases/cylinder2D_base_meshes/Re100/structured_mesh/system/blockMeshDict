@@ -1,0 +1,327 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2112                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+scale   1;
+
+// Geometric parameters
+xLength 2.2;
+yLength 0.41;
+
+xCylinder 0.2;
+yCylinder 0.2;
+
+rInner  0.05;
+rOuter  0.1;
+
+rInner45 #eval{ sqrt(0.5) * $rInner};
+rOuter45 #eval{ sqrt(0.5) * $rOuter};
+
+midAngle 22.5;
+xInnerMidArc1 #eval{ cos(degToRad($midAngle)) * $rInner};
+yInnerMidArc1 #eval{ sin(degToRad($midAngle)) * $rInner};
+xOuterMidArc1 #eval{ cos(degToRad($midAngle)) * $rOuter};
+yOuterMidArc1 #eval{ sin(degToRad($midAngle)) * $rOuter};
+xInnerMidArc2 #eval{ cos(degToRad($midAngle + 45)) * $rInner};
+yInnerMidArc2 #eval{ sin(degToRad($midAngle + 45)) * $rInner};
+xOuterMidArc2 #eval{ cos(degToRad($midAngle + 45)) * $rOuter};
+yOuterMidArc2 #eval{ sin(degToRad($midAngle + 45)) * $rOuter};
+
+thickness 0.01;
+
+// Divisions: Radial, quarter circumference, outer region and z-directions.
+nRadialOneEighth  30;
+nThetaOneEighth 15;
+
+xResolution 0.025;
+yResolution 0.005;
+
+nxRight #eval{ floor(($xLength-($xCylinder+$rOuter))/$xResolution)};
+nxLeft  #eval{ floor(1.25*($xCylinder)/$xResolution)};
+nyTop  #eval{ floor(($yLength-($yCylinder+$rOuter))/$yResolution)};
+nyBottom  #eval{ floor(($yCylinder-$rOuter)/$yResolution)};
+nz  1;
+
+
+
+// ----------------
+
+vertices #codeStream
+{
+    codeInclude
+    #{
+        #include "pointField.H"
+    #};
+
+
+    code
+    #{
+        pointField points
+        ({
+            /* 0*/ {$xCylinder + $rInner, $yCylinder, 0},
+            /* 1*/ {$xCylinder + $rOuter, $yCylinder, 0},
+            /* 2*/ {$xLength, $yCylinder, 0},
+            /* 3*/ {$xLength, $yCylinder + $rOuter45, 0},
+            /* 4*/ {$xCylinder + $rOuter45, $yCylinder + $rOuter45, 0},
+            /* 5*/ {$xCylinder + $rInner45, $yCylinder + $rInner45, 0},
+            /* 6*/ {$xLength, $yLength, 0},
+            /* 7*/ {$xCylinder + $rOuter45, $yLength, 0},
+            /* 8*/ {$xCylinder, $yLength, 0},
+            /* 9*/ {$xCylinder, $yCylinder + $rOuter, 0},
+            /*10*/ {$xCylinder, $yCylinder + $rInner, 0},
+            /*11*/ {$xCylinder - $rInner, $yCylinder, 0},
+            /*12*/ {$xCylinder - $rOuter, $yCylinder, 0},
+            /*13*/ {0, $yCylinder, 0},
+            /*14*/ {0, $yCylinder + $rOuter45, 0},
+            /*15*/ {$xCylinder - $rOuter45, $yCylinder + $rOuter45, 0},
+            /*16*/ {$xCylinder - $rInner45, $yCylinder + $rInner45, 0},
+            /*17*/ {0, $yLength, 0},
+            /*18*/ {$xCylinder - $rOuter45, $yLength, 0},
+            /*19*/ {$xCylinder + $rInner45, $yCylinder - $rInner45, 0},
+            /*20*/ {$xCylinder + $rOuter45, $yCylinder - $rOuter45, 0},
+            /*21*/ {$xLength, $yCylinder - $rOuter45, 0},
+            /*22*/ {$xLength, 0, 0},
+            /*23*/ {$xCylinder + $rOuter45, 0, 0},
+            /*24*/ {$xCylinder, 0, 0},
+            /*25*/ {$xCylinder, $yCylinder - $rOuter, 0},
+            /*26*/ {$xCylinder, $yCylinder - $rInner, 0},
+            /*27*/ {$xCylinder - $rInner45, $yCylinder - $rInner45, 0},
+            /*28*/ {$xCylinder - $rOuter45, $yCylinder - $rOuter45, 0},
+            /*29*/ {0, $yCylinder - $rOuter45, 0},
+            /*30*/ {0, 0, 0},
+            /*31*/ {$xCylinder - $rOuter45, 0, 0}
+        });
+
+        // Duplicate z points for thickness
+        const label sz = points.size();
+        points.resize(2*sz);
+        for (label i = 0; i < sz; ++i)
+        {
+            const point& pt = points[i];
+            points[i + sz] = point(pt.x(), pt.y(), $thickness);
+        }
+
+        os  << points;
+    #};
+};
+
+radialGradingRatio 10;
+xRightGradingRatio 12;
+xLeftGradingRatio 0.2;
+yBottomGradingRatio 0.4;
+yTopGradingRatio 2.5;
+
+blocks
+(
+    /* block0 */    hex (5 4 9 10 37 36 41 42)    ($nRadialOneEighth  $nThetaOneEighth $nz) simpleGrading ($radialGradingRatio 1 1)   
+    /* block1 */    hex (0 1 4 5 32 33 36 37)     ($nRadialOneEighth  $nThetaOneEighth $nz) simpleGrading ($radialGradingRatio 1 1)  
+    /* block2 */    hex (1 2 3 4 33 34 35 36)     ($nxRight  $nThetaOneEighth $nz) simpleGrading ($xRightGradingRatio 1 1) 
+    /* block3 */    hex (4 3 6 7 36 35 38 39)     ($nxRight  $nyTop  $nz) simpleGrading ($xRightGradingRatio $yTopGradingRatio 1) 
+    /* block4 */    hex (9 4 7 8 41 36 39 40)     ($nThetaOneEighth $nyTop  $nz) simpleGrading (1 $yTopGradingRatio 1) 
+    /* block5 */    hex (10 9 15 16 42 41 47 48)  ($nRadialOneEighth  $nThetaOneEighth $nz) simpleGrading ($radialGradingRatio 1 1) 
+    /* block6 */    hex (16 15 12 11 48 47 44 43) ($nRadialOneEighth  $nThetaOneEighth $nz) simpleGrading ($radialGradingRatio 1 1) 
+    /* block7 */    hex (13 12 15 14 45 44 47 46) ($nxLeft  $nThetaOneEighth $nz) simpleGrading ($xLeftGradingRatio 1 1) 
+    /* block8 */    hex (14 15 18 17 46 47 50 49) ($nxLeft  $nyTop  $nz) simpleGrading ($xLeftGradingRatio $yTopGradingRatio 1) 
+    /* block9 */    hex (15 9 8 18 47 41 40 50)   ($nThetaOneEighth $nyTop  $nz) simpleGrading (1 $yTopGradingRatio 1) 
+    /* block10 */   hex (26 25 20 19 58 57 52 51)    ($nRadialOneEighth  $nThetaOneEighth $nz) simpleGrading ($radialGradingRatio 1 1) 
+    /* block11 */   hex (19 20 1 0 51 52 33 32)     ($nRadialOneEighth  $nThetaOneEighth $nz) simpleGrading ($radialGradingRatio 1 1) 
+    /* block12 */   hex (20 21 2 1 52 53 34 33)     ($nxRight  $nThetaOneEighth $nz) simpleGrading ($xRightGradingRatio 1 1) 
+    /* block13 */   hex (23 22 21 20 55 54 53 52)     ($nxRight  $nyBottom  $nz) simpleGrading ($xRightGradingRatio $yBottomGradingRatio 1) 
+    /* block14 */   hex (24 23 20 25 56 55 52 57)     ($nThetaOneEighth $nyBottom  $nz) simpleGrading (1 $yBottomGradingRatio 1) 
+    /* block15 */   hex (27 28 25 26 59 60 57 58)  ($nRadialOneEighth  $nThetaOneEighth $nz) simpleGrading ($radialGradingRatio 1 1) 
+    /* block16 */   hex (11 12 28 27 43 44 60 59) ($nRadialOneEighth  $nThetaOneEighth $nz) simpleGrading ($radialGradingRatio 1 1) 
+    /* block17 */   hex (29 28 12 13 61 60 44 45) ($nxLeft  $nThetaOneEighth $nz) simpleGrading ($xLeftGradingRatio 1 1) 
+    /* block18 */   hex (30 31 28 29 62 63 60 61) ($nxLeft  $nyBottom  $nz) simpleGrading ($xLeftGradingRatio $yBottomGradingRatio 1) 
+    /* block19 */   hex (31 24 25 28 63 56 57 60)   ($nThetaOneEighth $nyBottom  $nz) simpleGrading (1 $yBottomGradingRatio 1) 
+);
+
+edges
+(
+    // Inner cylinder
+    arc  0  5 (#eval{$xCylinder+$xInnerMidArc1} #eval{$yCylinder+$yInnerMidArc1} 0)
+    arc  5 10 (#eval{$xCylinder+$xInnerMidArc2} #eval{$yCylinder+$yInnerMidArc2} 0)
+    arc  1  4 (#eval{$xCylinder+$xOuterMidArc1} #eval{$yCylinder+$yOuterMidArc1} 0)
+    arc  4  9 (#eval{$xCylinder+$xOuterMidArc2} #eval{$yCylinder+$yOuterMidArc2} 0)
+    
+    arc 32 37 (#eval{$xCylinder+$xInnerMidArc1} #eval{$yCylinder+$yInnerMidArc1} $thickness)
+    arc 37 42 (#eval{$xCylinder+$xInnerMidArc2} #eval{$yCylinder+$yInnerMidArc2} $thickness)
+    arc 33 36 (#eval{$xCylinder+$xOuterMidArc1} #eval{$yCylinder+$yOuterMidArc1} $thickness)
+    arc 36 41 (#eval{$xCylinder+$xOuterMidArc2} #eval{$yCylinder+$yOuterMidArc2} $thickness)
+    
+    // Intermediate cylinder
+    arc 11 16 (#eval{$xCylinder-$xInnerMidArc1} #eval{$yCylinder+$yInnerMidArc1} 0)
+    arc 16 10 (#eval{$xCylinder-$xInnerMidArc2} #eval{$yCylinder+$yInnerMidArc2} 0)
+    arc 12 15 (#eval{$xCylinder-$xOuterMidArc1} #eval{$yCylinder+$yOuterMidArc1} 0)
+    arc 15  9 (#eval{$xCylinder-$xOuterMidArc2} #eval{$yCylinder+$yOuterMidArc2} 0)
+    
+    arc 43 48 (#eval{$xCylinder-$xInnerMidArc1} #eval{$yCylinder+$yInnerMidArc1} $thickness)
+    arc 48 42 (#eval{$xCylinder-$xInnerMidArc2} #eval{$yCylinder+$yInnerMidArc2} $thickness)
+    arc 44 47 (#eval{$xCylinder-$xOuterMidArc1} #eval{$yCylinder+$yOuterMidArc1} $thickness)
+    arc 47 41 (#eval{$xCylinder-$xOuterMidArc2} #eval{$yCylinder+$yOuterMidArc2} $thickness)
+
+
+    // Inner cylinder
+    arc  0  19 (#eval{$xCylinder+$xInnerMidArc1} #eval{$yCylinder-$yInnerMidArc1} 0)
+    arc  19 26 (#eval{$xCylinder+$xInnerMidArc2} #eval{$yCylinder-$yInnerMidArc2} 0)
+    arc  1  20 (#eval{$xCylinder+$xOuterMidArc1} #eval{$yCylinder-$yOuterMidArc1} 0)
+    arc  20 25 (#eval{$xCylinder+$xOuterMidArc2} #eval{$yCylinder-$yOuterMidArc2} 0)
+    
+    arc 32 51 (#eval{$xCylinder+$xInnerMidArc1} #eval{$yCylinder-$yInnerMidArc1} $thickness)
+    arc 51 58 (#eval{$xCylinder+$xInnerMidArc2} #eval{$yCylinder-$yInnerMidArc2} $thickness)
+    arc 33 52 (#eval{$xCylinder+$xOuterMidArc1} #eval{$yCylinder-$yOuterMidArc1} $thickness)
+    arc 52 57 (#eval{$xCylinder+$xOuterMidArc2} #eval{$yCylinder-$yOuterMidArc2} $thickness)
+    
+    // Intermediate cylinder
+    arc 11 27 (#eval{$xCylinder-$xInnerMidArc1} #eval{$yCylinder-$yInnerMidArc1} 0)
+    arc 27 26 (#eval{$xCylinder-$xInnerMidArc2} #eval{$yCylinder-$yInnerMidArc2} 0)
+    arc 12 28 (#eval{$xCylinder-$xOuterMidArc1} #eval{$yCylinder-$yOuterMidArc1} 0)
+    arc 28  25 (#eval{$xCylinder-$xOuterMidArc2} #eval{$yCylinder-$yOuterMidArc2} 0)
+    
+    arc 43 59 (#eval{$xCylinder-$xInnerMidArc1} #eval{$yCylinder-$yInnerMidArc1} $thickness)
+    arc 59 58 (#eval{$xCylinder-$xInnerMidArc2} #eval{$yCylinder-$yInnerMidArc2} $thickness)
+    arc 44 60 (#eval{$xCylinder-$xOuterMidArc1} #eval{$yCylinder-$yOuterMidArc1} $thickness)
+    arc 60 57 (#eval{$xCylinder-$xOuterMidArc2} #eval{$yCylinder-$yOuterMidArc2} $thickness)
+    
+);
+
+boundary
+(
+    
+    top
+    {
+        type patch;
+        faces
+        (
+            (7 8 40 39)
+            (6 7 39 38)
+            (8 18 50 40)
+            (18 17 49 50)
+        );
+    }
+
+    bottom
+    {
+        type patch;
+        faces
+        (
+            (24 23 55 56)
+            (23 22 54 55)
+            (31 24 56 63)
+            (30 31 63 62)
+        );
+    }
+    
+    inlet
+    {
+        type patch;
+        faces
+        (
+            (14 13 45 46)
+            (17 14 46 49)
+            (13 29 61 45)
+            (29 30 62 61)
+        );
+    }
+
+    outlet
+    {
+        type patch;
+        faces
+        (
+            (2 3 35 34)
+            (3 6 38 35)
+            (21 2 34 53)
+            (22 21 53 54)
+        );
+    }
+    cylinder_wall
+    {
+        type patch;
+        faces
+        (
+            (10 5 37 42)
+            (5 0 32 37)
+            (16 10 42 48)
+            (11 16 48 43)
+            (19 26 58 51)
+            (0 19 51 32)
+            (26 27 59 58)
+            (27 11 43 59)
+        );
+    }
+
+    front
+    {
+        type empty;
+        faces
+        (
+            (32 37 36 33)
+            (37 42 41 36)
+            (42 48 47 41)
+            (48 43 44 47)
+            (32 33 52 51)
+            (51 52 57 58)
+            (58 57 60 59)
+            (59 60 44 43)
+            (46 49 50 47)
+            (50 40 41 47)
+            (40 39 36 41)
+            (39 38 35 36)
+            (46 47 44 45)
+            (36 35 34 33)
+            (45 44 60 61)
+            (33 34 53 52)
+            (61 60 63 62)
+            (60 57 56 63)
+            (57 52 55 56)
+            (52 53 54 55)
+        );
+    }  
+
+    back
+    {
+        type empty;
+        faces
+        (
+            (0 5 4 1) 
+            (5 10 9 4)
+            (10 16 15 9)
+            (16 11 12 15)
+            (0 1 20 19)
+            (19 20 25 26)
+            (26 25 28 27)
+            (27 28 12 11)
+            (14 17 18 15)
+            (18 8 9 15)
+            (8 7 4 9)
+            (7 6 3 4)
+            (14 15 12 13)
+            (4 3 2 1)
+            (13 12 28 29)
+            (1 2 21 20)
+            (29 28 31 30)
+            (28 25 24 31)
+            (25 20 23 24)
+            (20 21 22 23)
+        );
+    }  
+);
+
+mergePatchPairs
+(
+);
+
+
+// ************************************************************************* //
