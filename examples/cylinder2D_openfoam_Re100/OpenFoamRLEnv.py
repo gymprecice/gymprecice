@@ -22,6 +22,7 @@ from utils import get_cfg_data, parse_probe_lines, make_parallel_config, load_fi
 import utils
 import xmltodict
 import copy
+import pandas as pd
 
 from os.path import join
 import os
@@ -384,7 +385,6 @@ class OpenFoamRLEnv(gym.Env):
             for write_var in write_var_list:
                 self.__write_ids[write_var] = self.__interface.get_data_id(write_var, self.__mesh_id[mesh_name])
 
-            # print(mesh_name, self.__vertex_ids[mesh_name], self.__read_ids, self.__write_ids)
 
     def _read(self):
         if self.__interface.is_read_data_available():
@@ -728,11 +728,22 @@ class OpenFoamRLEnv(gym.Env):
 
     def setup_reward(self):
         """ Problem specific function """
-        print(f'********** {self.__time_window}*******')
+        
         reward_dict = self._get_reward_dict()
-        # now we print all of the reward to a list
-        rewards_list = []
-        # we should be filtering here some of the columns only
-        # for field_ in reward_dict.keys():
-        #     rewards_list.append([field_, reward_dict[field_]])
-        return rewards_list
+        # list container to store 'force-based' reward per trajectory
+        reward_list = []
+        
+        for p_idx in range(self.__options['n_parallel_env']):
+            Cd = []
+            Cl = []
+            dict_name = f'forces_{p_idx}'
+            data = reward_dict[dict_name]
+            for row in data:
+                Cd.append(row[2][0])
+                Cl.append(abs(row[2][2]))
+            print(f'{Cd[0]} {Cl[0]}')
+            print(f'{Cd[-1]} {Cl[-1]}')
+            
+            reward_list.append(-np.mean(Cd) - 0.2*np.mean(Cl))  
+
+        return reward_list
