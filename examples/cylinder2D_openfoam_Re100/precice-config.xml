@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<precice-configuration>
+  <log>
+    <sink
+      filter="%Severity% > debug and %Rank% = 0"
+      format="---[precice] %ColorizedSeverity% %Message%"
+      enabled="true" />
+  </log>
+
+  <solver-interface dimensions="3">
+    <data:scalar name="Pressure" />
+    <data:vector name="Velocity" />
+
+    <mesh name="Fluid-Mesh">
+      <use-data name="Pressure" />
+      <use-data name="Velocity" />
+    </mesh>
+
+    <mesh name="RL-Mesh">
+      <use-data name="Pressure" />
+      <use-data name="Velocity" />
+    </mesh>
+
+    <participant name="Fluid">
+      <use-mesh name="Fluid-Mesh" provide="yes" />
+      <use-mesh name="RL-Mesh" from="RL-Gym" />
+      <write-data name="Pressure" mesh="Fluid-Mesh" />
+      <read-data name="Velocity" mesh="Fluid-Mesh" />
+      <mapping:nearest-neighbor
+        direction="read"
+        from="RL-Mesh"
+        to="Fluid-Mesh"
+        constraint="consistent" />
+      <mapping:nearest-neighbor
+        direction="write"
+        from="Fluid-Mesh"
+        to="RL-Mesh"
+        constraint="conservative" />
+    </participant>
+
+    <participant name="RL-Gym">
+      <use-mesh name="RL-Mesh" provide="yes" />
+      <use-mesh name="Fluid-Mesh" from="Fluid"/>
+      <read-data name="Pressure" mesh="RL-Mesh" />
+      <write-data name="Velocity" mesh="RL-Mesh" />
+    </participant>
+
+    <m2n:sockets from="RL-Gym" to="Fluid" exchange-directory="/data/ms2137/rl_play/examples/cylinder2D_openfoam/"/>
+
+    <coupling-scheme:parallel-explicit>
+      <max-time value="0.5" />
+      <time-window-size value="0.1" valid-digits="8" />
+      <participants first="Fluid" second="RL-Gym"/>
+      <exchange data="Velocity" mesh="RL-Mesh" from="RL-Gym" to="Fluid" initialize="False"/>
+      <exchange data="Pressure" mesh="RL-Mesh" from="Fluid" to="RL-Gym"/>
+    </coupling-scheme:parallel-explicit>
+  </solver-interface>
+</precice-configuration>
