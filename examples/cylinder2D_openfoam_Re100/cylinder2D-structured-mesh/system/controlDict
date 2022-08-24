@@ -114,6 +114,47 @@ functions
         );
     }
 
+    probes
+    {
+        type            probes;
+        libs            (sampling);
+
+        // Name of the directory for probe data
+        name            probes;
+
+        // Write at same frequency as fields
+        writeControl    timeStep;
+        //writeInterval   1;
+
+        // Fields to be probed
+        fields          (p);
+
+        // Optional: do not recalculate cells if mesh moves
+        fixedLocations  true;
+
+        // Optional: interpolation scheme to use (default is cell)
+        interpolationScheme cellPoint;
+
+        probeLocations
+        (
+            (0.0 -0.05 0.005)
+            (0.0 0.05 0.005)
+            (0.075 -0.1 0.005)
+            (0.075 0.0 0.005)
+            (0.075 0.1 0.005)
+            (0.15 -0.1 0.005)
+            (0.15 0.0 0.005)
+            (0.15 0.1 0.005)
+            (0.3 -0.1 0.005)
+            (0.3 0.0 0.005)
+            (0.3 0.1 0.005)
+        );
+
+        // Optional: filter out points that haven't been found. Default
+        //           is to include them (with value -VGREAT)
+        includeOutOfBounds  true;
+    }
+
     
     preCICE_Adapter
     {

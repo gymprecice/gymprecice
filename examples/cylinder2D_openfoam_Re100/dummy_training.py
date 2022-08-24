@@ -46,7 +46,7 @@ if __name__ == '__main__':
     foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log} 2>&1"
 
     # reset options
-    n_parallel_env = 4
+    n_parallel_env = 18
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -58,13 +58,13 @@ if __name__ == '__main__':
             'size': 12,  # number of forces
             'output_file': '/postProcessing/forces/0/coefficient.dat',  # depends on the type of the probe/patchProbe/etc
         },
-        # 'p': {
-        #     'use': 'reward',  # goes into observation or rewards
-        #     'type': 'probe',  # forces|probe|?
-        #     'datatype': 'scaler',  # scaler vs field
-        #     'size': 3,  # number of probes
-        #     'output_file': '/postProcessing/patchProbes/0/p',  # depends on the type of the probe/patchProbe/etc
-        # },
+        'p': {
+            'use': 'observation',  # goes into observation or rewards
+            'type': 'probe',  # forces|probe|?
+            'datatype': 'scaler',  # scaler vs field
+            'size': 11,  # number of probes
+            'output_file': '/postProcessing/probes/0/p',  # depends on the type of the probe/patchProbe/etc
+        },
         # 'U': {
         #     'use': 'observation',  # goes into observation or rewards
         #     'type': 'probe',  # forces|probe|?
@@ -121,16 +121,14 @@ if __name__ == '__main__':
                 # # TODO: check why env seed is not set correctly. for now np.random is reproducible
                 # action = abs(0.000 * np.random.randn(action_ref.shape[0],))
                 # action_list.append(action)
-                action_list.append([-0.00001*p_idx*10, 0.00001*p_idx*10])
-            
-
+                action_list.append(0.0001)
             
             observation, reward, done, _ = env.step(action_list)
             print('Debug data from outer loop')
             print(f"observation:")
             for obs_item in observation:
                 print(obs_item)
-            print(f"reward: {reward}")
+            print(f"reward: {reward}\n")
 
             counter += 1
             if done:

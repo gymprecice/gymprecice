@@ -385,23 +385,23 @@ class OpenFoamRLEnv(gym.Env):
             for write_var in write_var_list:
                 self.__write_ids[write_var] = self.__interface.get_data_id(write_var, self.__mesh_id[mesh_name])
 
-
     def _read(self):
         if self.__interface.is_read_data_available():
-            for mesh_name in self.__mesh_list:
-                try:
-                    read_var_list = self.__mesh_variables[mesh_name]['read']
-                except Exception as e:
-                    read_var_list = []
-                for read_var in read_var_list:
-                    if read_var in self.vector_variables:
-                        self.__precice_read_data[read_var] = self.__interface.read_block_vector_data(
-                            self.__read_ids[read_var], self.__vertex_ids[mesh_name])
-                    else:
-                        self.__precice_read_data[read_var] = self.__interface.read_block_scalar_data(
-                            self.__read_ids[read_var], self.__vertex_ids[mesh_name])
-                    print(f"(RL-Gym), avg-{read_var} using {mesh_name} read = {self.__precice_read_data[read_var].mean():.4f}")
-                    print("-------------------------------------------")
+            pass
+            # for mesh_name in self.__mesh_list:
+            #     try:
+            #         read_var_list = self.__mesh_variables[mesh_name]['read']
+            #     except Exception as e:
+            #         read_var_list = []
+            #     for read_var in read_var_list:
+            #         if read_var in self.vector_variables:
+            #             self.__precice_read_data[read_var] = self.__interface.read_block_vector_data(
+            #                 self.__read_ids[read_var], self.__vertex_ids[mesh_name])
+            #         else:
+            #             self.__precice_read_data[read_var] = self.__interface.read_block_scalar_data(
+            #                 self.__read_ids[read_var], self.__vertex_ids[mesh_name])
+            #         print(f"(RL-Gym), avg-{read_var} using {mesh_name} read = {self.__precice_read_data[read_var].mean():.4f}")
+            #         print("-------------------------------------------")
 
     def _write(self):
         for mesh_name in self.__mesh_list:
@@ -487,17 +487,7 @@ class OpenFoamRLEnv(gym.Env):
             # read precice after reading the files to avoid a nasty bug because of slow reading from files
             self._read_probes_rewards_files()
             self._read()
-               
-            # while True:
-                
-            #     if self.__interface.is_time_window_complete():
-            #         self.__time_window += 1
-            #         self._read_probes_rewards_files()
-            #     else:
-            #         continue
-
         
-
     def define_env_obs_act(self):
         # TODO: this should be problem specific
         # 1) action space need to be generalized here
@@ -515,15 +505,40 @@ class OpenFoamRLEnv(gym.Env):
     def _get_observations_dict(self):
         if not self.__is_initialized:
             raise Exception("Call reset before interacting with the environment.")
-        obs_dict = {}
+        # obs_dict = {}
+        # for field_ in self.__options['postprocessing_data'].keys():
+        #     field_info = self.__options['postprocessing_data'][field_]
+        #     if field_info['use'] == "observation" and \
+        #             field_ in self.__probes_rewards_data.keys() and \
+        #             len(self.__probes_rewards_data[field_]) > 0:
+        #         # get the last n_parallel_env of the list as it orders by processor index
+        #         obs_dict[field_] = self.__probes_rewards_data[field_][-self.__options['n_parallel_env']:]
+
+        # return obs_dict
+
+        # get the data within a time_window for computing reward
+        time_bound = [(self.__time_window - 1) * self.__precice_dt, self.__time_window * self.__precice_dt]
+
         for field_ in self.__options['postprocessing_data'].keys():
             field_info = self.__options['postprocessing_data'][field_]
             if field_info['use'] == "observation" and \
                     field_ in self.__probes_rewards_data.keys() and \
                     len(self.__probes_rewards_data[field_]) > 0:
-                # get the last n_parallel_env of the list as it orders by processor index
-                obs_dict[field_] = self.__probes_rewards_data[field_][-self.__options['n_parallel_env']:]
+                
+                    obs_dict = {}
+                    full_data = self.__probes_rewards_data[field_]
 
+                    data_per_trj = []
+                    env_idx = 0
+                    for data in full_data:
+                        time_stamp = data[0]
+                        if time_stamp > time_bound[0]:
+                            data_per_trj.append(data)
+                            if math.isclose(time_stamp, time_bound[1]):
+                                obs_dict[f'{field_}_{env_idx}'] = data_per_trj
+                                data_per_trj = []
+                                env_idx += 1
+                                continue
         return obs_dict
 
     def _get_reward_dict(self):
@@ -578,7 +593,7 @@ class OpenFoamRLEnv(gym.Env):
 
                 #data = np.loadtxt(temp_filename  , unpack=True, usecols=[0, 1, 3])
                 time_idx = 0
-                utils.wait_for_file(temp_filename, sleep_time=0.1)
+                utils.wait_for_file(temp_filename, sleep_time=0.2)
                 while not math.isclose(time_idx, self.__t): # read till the end of time-window
                     line_text = self.__postprocessing_filehandler_dict[temp_filename].readline()
                     if line_text == "":
@@ -590,7 +605,7 @@ class OpenFoamRLEnv(gym.Env):
                         if is_comment:
                             time_idx = 0
                             continue
-                        print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
+                        #print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
 
                         if field_ not in self.__probes_rewards_data.keys():
                             self.__probes_rewards_data[field_] = []
@@ -618,11 +633,12 @@ class OpenFoamRLEnv(gym.Env):
         w = [math.radians(x) for x in w]
         origin = np.array([0, 0, 0.005])
         radius = 0.05
+        patch_flow_rate = [-action, action]
 
         U = []
 
         for idx, patch_name in enumerate(patch_data.keys()):
-            print(f"Prescribed action: FlowRate = {action[idx]:.6f} [m/s3] on {patch_name}")
+            print(f"Prescribed action: FlowRate = {patch_flow_rate[idx]:.6f} [m/s3] on {patch_name}")
             patch_ctr = np.array([radius * math.cos(theta0[idx]), radius * math.sin(theta0[idx]), origin[2]])
             magSf = patch_data[patch_name]['magSf']
             Sf = patch_data[patch_name]['Sf']
@@ -630,7 +646,7 @@ class OpenFoamRLEnv(gym.Env):
             nf = patch_data[patch_name]['nf']
             w_patch = w[idx]
             # convert volumetric flow rate to a sinusoidal profile on the interface
-            avg_U = action[idx] / np.sum(magSf)
+            avg_U = patch_flow_rate[idx] / np.sum(magSf)
 
             d = (patch_ctr - origin) / (np.sqrt((patch_ctr - origin).dot((patch_ctr - origin))))
 
@@ -645,7 +661,7 @@ class OpenFoamRLEnv(gym.Env):
                 Q_calc += U_patch[i].dot(Sf[i])
 
             # correct velocity profile to enforce mass conservation
-            Q_err = action[idx] - Q_calc
+            Q_err = patch_flow_rate[idx] - Q_calc
             U_err = Q_err / np.sum(magSf) * nf
             U_patch += U_err
 
@@ -654,7 +670,7 @@ class OpenFoamRLEnv(gym.Env):
             for i, Uf in enumerate(U_patch):
                 Q_final += Uf.dot(Sf[i])
 
-            if abs(Q_final - action[idx]) < 1e-12:
+            if math.isclose(Q_final, patch_flow_rate[idx]):
                 print(f"Set flow rate = {Q_final:.6f} [m/s3] on the {patch_name} interface")
                 U.append(U_patch)
             else:
@@ -703,7 +719,7 @@ class OpenFoamRLEnv(gym.Env):
         print(f'size of the grid is {self.__n}')
 
         self.action_space = spaces.Box(
-            low=0, high=0.0001, shape=(2, ), dtype=np.float64)
+            low=0, high=0.00001, shape=(1, ), dtype=np.float64)
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(self.__n,), dtype=np.float64)
 
@@ -720,19 +736,33 @@ class OpenFoamRLEnv(gym.Env):
     def setup_observations(self):
         obs_dict = self._get_observations_dict()
         # now we print all of the observations to a list
+        # obs_list = []
+        # # we should be filtering here some of the columns only
+        # for field_ in obs_dict.keys():
+        #     obs_list.append([field_, obs_dict[field_]])
+        # return obs_list
+
+        # list container to store 'pressure' probes
         obs_list = []
-        # we should be filtering here some of the columns only
-        for field_ in obs_dict.keys():
-            obs_list.append([field_, obs_dict[field_]])
+        print("\n---------------------------------------")
+        print("probes avg-pressure for:")
+        for p_idx in range(self.__options['n_parallel_env']):
+            dict_name = f'p_{p_idx}'
+            data = obs_dict[dict_name][-1]
+            obs_list.append(data[2])
+            print(f'Trajectory#{p_idx}:')
+            print(f'Time: {data[0]} --> p_avg: {np.mean(data[2])}')
         return obs_list
 
     def setup_reward(self):
         """ Problem specific function """
-        
+
         reward_dict = self._get_reward_dict()
         # list container to store 'force-based' reward per trajectory
         reward_list = []
         
+        print("\n---------------------------------------")
+        print("Cd and Cl data for:")
         for p_idx in range(self.__options['n_parallel_env']):
             Cd = []
             Cl = []
@@ -741,9 +771,12 @@ class OpenFoamRLEnv(gym.Env):
             for row in data:
                 Cd.append(row[2][0])
                 Cl.append(abs(row[2][2]))
-            print(f'{Cd[0]} {Cl[0]}')
-            print(f'{Cd[-1]} {Cl[-1]}')
+
+            print(f'Trajectory#{p_idx}:')
+            print(f'Time: {data[0][0]} --> Cd: {Cd[0]},  Cl: {Cl[0]}')
+            print(f'Time: {data[-1][0]} --> Cd: {Cd[-1]},  Cl: {Cl[-1]}')
             
             reward_list.append(-np.mean(Cd) - 0.2*np.mean(Cl))  
-
+        print("---------------------------------------\n")
+        
         return reward_list
