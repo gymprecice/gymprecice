@@ -257,14 +257,16 @@ class OpenFoamRLEnv(gym.Env):
         self.__probes_rewards_data = {}
         self.__precice_read_data = {}
 
-        self._read_observations()  # read observation from probe files
+        # self._read_observations()  # read observation from probe files
+        self._read_probes_rewards_files()
+
         obs_list = self.setup_observations()
         if return_info:
             return obs_list, {}
         return obs_list
 
     def step(self, action):
-
+        t0 = time.time()
         if not self.__is_initialized:
             raise Exception("Call reset before interacting with the environment.")
 
@@ -280,15 +282,20 @@ class OpenFoamRLEnv(gym.Env):
             actions_dict = self.setup_action_to_write_data(conv_action, p_idx)
             self.__write_data.update(actions_dict)
 
+        t1 = time.time()
+
         # print('inside step function --- just before advance===========================')
         # print(self.__write_data)
         self._advance()  # run fluid solver to complete the next time-window
-        
-        self._read_observations()  # read observation from probe files
-        obs_list = self.setup_observations()
-       
-        reward = self.setup_reward()
+        t2 = time.time()
 
+        # self._read_observations()  # read observation from probe files
+        self._read_probes_rewards_files()
+        t3 = time.time()
+        obs_list = self.setup_observations()
+        reward = self.setup_reward()
+        t4 = time.time()
+        print(f'Inside step function run times, write data: {t1-t0}, advance: {t2-t1}, read data: {t3-t2}, process read data: {t4-t3}')
         done = not self.__interface.is_coupling_ongoing()
         # delete precice object upon done (a workaround to get precice reset)
         if done:
@@ -351,7 +358,6 @@ class OpenFoamRLEnv(gym.Env):
 
     def _advance(self):
         self._write()
-       
         self.__interface.advance(self.__precice_dt)
         # increase the time before reading the probes/forces for internal consistency checks
         if self.__interface.is_time_window_complete():
@@ -482,11 +488,11 @@ class OpenFoamRLEnv(gym.Env):
                 # self._kill_subprocess(subproc) #  not necessary, poll/wait should do the job!
         return []
 
-    def _read_observations(self):
-        if not self.__options['is_dummy_run']:
-            # read precice after reading the files to avoid a nasty bug because of slow reading from files
-            self._read_probes_rewards_files()
-            self._read()
+    # def _read_observations(self):
+    #     if not self.__options['is_dummy_run']:
+    #         # read precice after reading the files to avoid a nasty bug because of slow reading from files
+    #         self._read_probes_rewards_files()
+    #         self._read()
 
     def define_env_obs_act(self):
         # TODO: this should be problem specific
@@ -502,28 +508,18 @@ class OpenFoamRLEnv(gym.Env):
 
         self.__n = int(self.__n / self.__options['n_parallel_env'])  # TODO: ????
 
-    def _get_observations_dict(self):
+    def _get_probes_rewards_dict(self, type_str, n_lookback):
         if not self.__is_initialized:
             raise Exception("Call reset before interacting with the environment.")
-        # obs_dict = {}
-        # for field_ in self.__options['postprocessing_data'].keys():
-        #     field_info = self.__options['postprocessing_data'][field_]
-        #     if field_info['use'] == "observation" and \
-        #             field_ in self.__probes_rewards_data.keys() and \
-        #             len(self.__probes_rewards_data[field_]) > 0:
-        #         # get the last n_parallel_env of the list as it orders by processor index
-        #         obs_dict[field_] = self.__probes_rewards_data[field_][-self.__options['n_parallel_env']:]
-
-        # return obs_dict
 
         # get the data within a time_window for computing reward
-        time_bound = [(self.__time_window - 1) * self.__precice_dt, self.__time_window * self.__precice_dt]
-        obs_dict = {}
+        time_bound = [(self.__time_window - n_lookback) * self.__precice_dt, self.__time_window * self.__precice_dt]
+        data_dict = {}
         for field_ in self.__options['postprocessing_data'].keys():
             for p_idx in range(self.__options['n_parallel_env']):
                 p_field_ = f'{field_}_{p_idx}'
                 field_info = self.__options['postprocessing_data'][field_]
-                if field_info['use'] == "observation" and \
+                if field_info['use'] == type_str and \
                         p_field_ in self.__probes_rewards_data.keys() and \
                         len(self.__probes_rewards_data[p_field_]) > 0:
                     full_data = self.__probes_rewards_data[p_field_]
@@ -535,43 +531,15 @@ class OpenFoamRLEnv(gym.Env):
                         else:
                             data_per_trj.append(data)
                         if math.isclose(time_stamp, time_bound[1]):
-                            obs_dict[p_field_] = data_per_trj
+                            data_dict[p_field_] = data_per_trj
                             break
-        return obs_dict
+        return data_dict
 
-    def _get_reward_dict(self):
-        # reward_dict = {}
-        # for field_ in self.__options['postprocessing_data'].keys():
-        #     field_info = self.__options['postprocessing_data'][field_]
-        #     if field_info['use'] == "reward" and \
-        #             field_ in self.__probes_rewards_data.keys() and \
-        #             len(self.__probes_rewards_data[field_]) > 0:
-        #         # get the last n_env rows
-        #         reward_dict[field_] = self.__probes_rewards_data[field_][-self.__options['n_parallel_env']:]
+    def _get_observations_dict(self, n_lookback=1):
+        return self._get_probes_rewards_dict("observation", n_lookback)
 
-        # get the data within a time_window for computing reward
-        time_bound = [(self.__time_window - 1) * self.__precice_dt, self.__time_window * self.__precice_dt]
-        reward_dict = {}
-        # print(self.__options['postprocessing_data'].keys())
-        for field_ in self.__options['postprocessing_data'].keys():
-            for p_idx in range(self.__options['n_parallel_env']):
-                p_field_ = f'{field_}_{p_idx}'
-                field_info = self.__options['postprocessing_data'][field_]
-                if field_info['use'] == "reward" and \
-                        p_field_ in self.__probes_rewards_data.keys() and \
-                        len(self.__probes_rewards_data[p_field_]) > 0:
-                    full_data = self.__probes_rewards_data[p_field_]
-                    data_per_trj = []
-                    for data in full_data:
-                        time_stamp = data[0]
-                        if time_stamp <= time_bound[0]:
-                            continue
-                        else:
-                            data_per_trj.append(data)
-                        if math.isclose(time_stamp, time_bound[1]):
-                            reward_dict[p_field_] = data_per_trj
-                            break
-        return reward_dict
+    def _get_reward_dict(self, n_lookback=1):
+        return self._get_probes_rewards_dict("reward", n_lookback)
 
     def _read_probes_rewards_files(self):
         # sequential read of a single line (last line) of the file at each RL-Gym step
@@ -762,32 +730,58 @@ class OpenFoamRLEnv(gym.Env):
         print("probes avg-pressure for:")
         for p_idx in range(self.__options['n_parallel_env']):
             dict_name = f'p_{p_idx}'
-            data = obs_dict[dict_name][-1]
-            obs_list.append(data[2])
-            print(f'Trajectory#{p_idx}:')
-            print(f'Time: {data[0]} --> p_avg: {np.mean(data[2])}')
+            # data = obs_dict[dict_name][-1]
+            # obs_list.append(data[2])
+            pressures = [[[x[0]] + x[2]] for x in obs_dict[dict_name]]
+            pressures = np.array(pressures).squeeze()  # first column is time and the rest are the probes
+            obs_list.append(pressures)
+
+            # print(f'Trajectory#{p_idx}:')
+            # print(f'Time: {data[0]} --> p_avg: {np.mean(data[2])}')
         return obs_list
 
     def setup_reward(self):
         """ Problem specific function """
-        reward_dict = self._get_reward_dict()
+
+        lookback_time = 0.04
+        n_lookback = 2  # how many precice timesteps to cover the lookback time
+
+        reward_dict = self._get_reward_dict(n_lookback=n_lookback)
         # list container to store 'force-based' reward per trajectory
         reward_list = []
 
         print("\n---------------------------------------")
         print("Cd and Cl data for:")
         for p_idx in range(self.__options['n_parallel_env']):
-            Cd = []
-            Cl = []
+
             var_name = f'forces_{p_idx}'
             data_list = reward_dict[var_name]
-            for row in data_list:
-                Cd.append(row[2][0])
-                Cl.append(abs(row[2][2]))
+
+            Cd = np.array([[x[0], x[2][0]] for x in data_list]).squeeze()
+            Cl = np.array([[x[0], x[2][2]] for x in data_list]).squeeze()
+
             print(f'Trajectory#{p_idx}:')
-            print(f'Time: {data_list[0][0]} --> Cd: {Cd[0]}, Cl: {Cl[0]}')
-            print(f'Time: {data_list[-1][0]} --> Cd: {Cd[-1]}, Cl: {Cl[-1]}')
-            reward_list.append(-np.mean(Cd) - 0.2 * np.mean(Cl))
+            print(f'Time: {Cd[0, 0]} --> Cd: {Cd[0, 1]}, Cl: {Cl[0, 1]}')
+            print(f'Time: {Cd[-1, 0]} --> Cd: {Cd[-1, 1]}, Cl: {Cl[-1, 1]}')
+
+            last_time = Cd[-1, 0]
+            start_time = last_time - lookback_time
+            # average is in-correct because if we might be using adaptive time-stepping
+            Cd_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cd[:, 0], Cd[:, 1])
+            Cl_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cl[:, 0], Cl[:, 1])
+
+            reward_list.append(-np.mean(Cd_uniform) - 0.2 * np.mean(Cl_uniform))
+
+            # Cd = []
+            # Cl = []
+            # for row in data_list:
+            #     Cd.append(row[2][0])
+            #     Cl.append(abs(row[2][2]))
+
+            # print(f'Trajectory#{p_idx}:')
+            # print(f'Time: {data_list[0][0]} --> Cd: {Cd[0]}, Cl: {Cl[0]}')
+            # print(f'Time: {data_list[-1][0]} --> Cd: {Cd[-1]}, Cl: {Cl[-1]}')
+            # reward_list.append(-np.mean(Cd) - 0.2 * np.mean(Cl))
         print("---------------------------------------\n")
 
         return reward_list
