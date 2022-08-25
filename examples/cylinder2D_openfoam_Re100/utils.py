@@ -60,7 +60,7 @@ def parse_probe_lines(line_string):
     float_list = [float(x) for x in float_list]
 
     if line_string.count("(") > 0:
-        if verbose_mode: 
+        if verbose_mode:
             print("vector variable")
         num_probes = line_string.count("(")
         assert num_probes == line_string.count(")"), f'corrupt file, number of ( and ) should be equal:" \

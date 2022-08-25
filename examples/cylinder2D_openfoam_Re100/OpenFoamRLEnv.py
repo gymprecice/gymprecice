@@ -223,7 +223,7 @@ class OpenFoamRLEnv(gym.Env):
         for p_idx in range(self.__options['n_parallel_env']):
             p_case_path = case_path + f'_{p_idx}'
             self._check_subprocess(self.__solver_run[p_idx], shell_cmd, run_cmd, p_case_path, cmd_type='run')
-       
+
         # initiate precice interface and read single mesh data
         self._init_precice()
         self._set_precice_data()
@@ -243,22 +243,21 @@ class OpenFoamRLEnv(gym.Env):
             self.__interface.mark_action_fulfilled(action_write_initial_data())
 
         t0 = time.time()
-        self.__interface.initialize_data() # if initialize="True" --> push solver one time-window forward
-            
+        self.__interface.initialize_data()  # if initialize="True" --> push solver one time-window forward
+
         print(f"RL-gym self.__interface.initialize_data() done in {time.time()-t0} seconds")
         # this results in reading data ahead of time when this is participant 2
-        if self.__interface.is_read_data_available(): 
+        if self.__interface.is_read_data_available():
             self._read()
 
         self.__is_initialized = True
         self.__is_first_reset = False
-        self.__t =  self.__precice_dt
+        self.__t = self.__precice_dt
         self.__probes_rewards_data = {}
         self.__precice_read_data = {}
 
         self._read_observations()  # read observation from probe files
         obs_list = self.setup_observations()
-
         if return_info:
             return obs_list, {}
         return obs_list
@@ -487,7 +486,7 @@ class OpenFoamRLEnv(gym.Env):
             # read precice after reading the files to avoid a nasty bug because of slow reading from files
             self._read_probes_rewards_files()
             self._read()
-        
+
     def define_env_obs_act(self):
         # TODO: this should be problem specific
         # 1) action space need to be generalized here
@@ -518,27 +517,25 @@ class OpenFoamRLEnv(gym.Env):
 
         # get the data within a time_window for computing reward
         time_bound = [(self.__time_window - 1) * self.__precice_dt, self.__time_window * self.__precice_dt]
-
+        obs_dict = {}
         for field_ in self.__options['postprocessing_data'].keys():
-            field_info = self.__options['postprocessing_data'][field_]
-            if field_info['use'] == "observation" and \
-                    field_ in self.__probes_rewards_data.keys() and \
-                    len(self.__probes_rewards_data[field_]) > 0:
-                
-                    obs_dict = {}
-                    full_data = self.__probes_rewards_data[field_]
-
+            for p_idx in range(self.__options['n_parallel_env']):
+                p_field_ = f'{field_}_{p_idx}'
+                field_info = self.__options['postprocessing_data'][field_]
+                if field_info['use'] == "observation" and \
+                        p_field_ in self.__probes_rewards_data.keys() and \
+                        len(self.__probes_rewards_data[p_field_]) > 0:
+                    full_data = self.__probes_rewards_data[p_field_]
                     data_per_trj = []
-                    env_idx = 0
                     for data in full_data:
                         time_stamp = data[0]
-                        if time_stamp > time_bound[0]:
+                        if time_stamp <= time_bound[0]:
+                            continue
+                        else:
                             data_per_trj.append(data)
-                            if math.isclose(time_stamp, time_bound[1]):
-                                obs_dict[f'{field_}_{env_idx}'] = data_per_trj
-                                data_per_trj = []
-                                env_idx += 1
-                                continue
+                        if math.isclose(time_stamp, time_bound[1]):
+                            obs_dict[p_field_] = data_per_trj
+                            break
         return obs_dict
 
     def _get_reward_dict(self):
@@ -553,68 +550,71 @@ class OpenFoamRLEnv(gym.Env):
 
         # get the data within a time_window for computing reward
         time_bound = [(self.__time_window - 1) * self.__precice_dt, self.__time_window * self.__precice_dt]
-
+        reward_dict = {}
+        # print(self.__options['postprocessing_data'].keys())
         for field_ in self.__options['postprocessing_data'].keys():
-            field_info = self.__options['postprocessing_data'][field_]
-            if field_info['use'] == "reward" and \
-                    field_ in self.__probes_rewards_data.keys() and \
-                    len(self.__probes_rewards_data[field_]) > 0:
-                
-                    reward_dict = {}
-                    full_data = self.__probes_rewards_data[field_]
-
+            for p_idx in range(self.__options['n_parallel_env']):
+                p_field_ = f'{field_}_{p_idx}'
+                field_info = self.__options['postprocessing_data'][field_]
+                if field_info['use'] == "reward" and \
+                        p_field_ in self.__probes_rewards_data.keys() and \
+                        len(self.__probes_rewards_data[p_field_]) > 0:
+                    full_data = self.__probes_rewards_data[p_field_]
                     data_per_trj = []
-                    env_idx = 0
                     for data in full_data:
                         time_stamp = data[0]
-                        if time_stamp > time_bound[0]:
+                        if time_stamp <= time_bound[0]:
+                            continue
+                        else:
                             data_per_trj.append(data)
-                            if math.isclose(time_stamp, time_bound[1]):
-                                reward_dict[f'{field_}_{env_idx}'] = data_per_trj
-                                data_per_trj = []
-                                env_idx += 1
-                                continue
+                        if math.isclose(time_stamp, time_bound[1]):
+                            reward_dict[p_field_] = data_per_trj
+                            break
         return reward_dict
-    
+
     def _read_probes_rewards_files(self):
         # sequential read of a single line (last line) of the file at each RL-Gym step
-        
+
         for p_idx in range(self.__options['n_parallel_env']):
             p_case_path = self.__options['case_path'] + f'_{p_idx}'
             for field_ in self.__options['postprocessing_data'].keys():
 
                 temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
                 print(f'reading filename: {temp_filename}')
-               
+
                 if temp_filename not in self.__postprocessing_filehandler_dict.keys():
                     # file_object = open(temp_filename, 'r')
                     file_object = open_file(temp_filename)
                     self.__postprocessing_filehandler_dict[temp_filename] = file_object
 
-                #data = np.loadtxt(temp_filename  , unpack=True, usecols=[0, 1, 3])
+                # data = np.loadtxt(temp_filename  , unpack=True, usecols=[0, 1, 3])
                 time_idx = 0
-                utils.wait_for_file(temp_filename, sleep_time=0.2)
-                while not math.isclose(time_idx, self.__t): # read till the end of time-window
+                utils.wait_for_file(temp_filename, sleep_time=0.1)
+                while not math.isclose(time_idx, self.__t):  # read till the end of time-window
                     line_text = self.__postprocessing_filehandler_dict[temp_filename].readline()
                     if line_text == "":
-                        break
-                    #assert len(line_text) > 0, 'read a single line but it is of length 0 !!'
+                        continue
+                    # assert len(line_text) > 0, 'read a single line but it is of length 0 !!'
                     line_text = line_text.strip()
                     if len(line_text) > 0:
-                        is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text)
+                        try:
+                            is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text)
+                            # print(is_comment, time_idx, n_probes, probe_data)
+                        except Exception as e:
+                            continue
                         if is_comment:
                             time_idx = 0
                             continue
-                        #print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
-
-                        if field_ not in self.__probes_rewards_data.keys():
-                            self.__probes_rewards_data[field_] = []
-                        self.__probes_rewards_data[field_].append([time_idx, n_probes, probe_data])
-                    #assert np.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"
+                        # print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
+                        p_field_ = f'{field_}_{p_idx}'
+                        if p_field_ not in self.__probes_rewards_data.keys():
+                            self.__probes_rewards_data[p_field_] = []
+                        self.__probes_rewards_data[p_field_].append([time_idx, n_probes, probe_data])
+                    # assert np.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"
                     # only read one line and return
-                    #break
+                    # break
                 assert math.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"    
-    
+
     def _close_postprocessing_files(self):
         for filename_ in self.__postprocessing_filehandler_dict.keys():
             file_object = self.__postprocessing_filehandler_dict[filename_]
@@ -756,27 +756,24 @@ class OpenFoamRLEnv(gym.Env):
 
     def setup_reward(self):
         """ Problem specific function """
-
         reward_dict = self._get_reward_dict()
         # list container to store 'force-based' reward per trajectory
         reward_list = []
-        
+
         print("\n---------------------------------------")
         print("Cd and Cl data for:")
         for p_idx in range(self.__options['n_parallel_env']):
             Cd = []
             Cl = []
-            dict_name = f'forces_{p_idx}'
-            data = reward_dict[dict_name]
-            for row in data:
+            var_name = f'forces_{p_idx}'
+            data_list = reward_dict[var_name]
+            for row in data_list:
                 Cd.append(row[2][0])
                 Cl.append(abs(row[2][2]))
-
             print(f'Trajectory#{p_idx}:')
-            print(f'Time: {data[0][0]} --> Cd: {Cd[0]},  Cl: {Cl[0]}')
-            print(f'Time: {data[-1][0]} --> Cd: {Cd[-1]},  Cl: {Cl[-1]}')
-            
-            reward_list.append(-np.mean(Cd) - 0.2*np.mean(Cl))  
+            print(f'Time: {data_list[0][0]} --> Cd: {Cd[0]}, Cl: {Cl[0]}')
+            print(f'Time: {data_list[-1][0]} --> Cd: {Cd[-1]}, Cl: {Cl[-1]}')
+            reward_list.append(-np.mean(Cd) - 0.2 * np.mean(Cl))
         print("---------------------------------------\n")
-        
+
         return reward_list

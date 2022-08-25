@@ -46,7 +46,7 @@ if __name__ == '__main__':
     foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log} 2>&1"
 
     # reset options
-    n_parallel_env = 18
+    n_parallel_env = 4
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -103,8 +103,6 @@ if __name__ == '__main__':
     # good scalability regardless of the number of parallel environments
     print(f"Run time of defining OpenFoamRLEnv is {time.time()-t0} seconds")
 
-    
-
     for epoch in range(2):  # epochs
         cnt = 0.000001
         t01 = time.time()
@@ -122,7 +120,7 @@ if __name__ == '__main__':
                 # action = abs(0.000 * np.random.randn(action_ref.shape[0],))
                 # action_list.append(action)
                 action_list.append(0.0001)
-            
+
             observation, reward, done, _ = env.step(action_list)
             print('Debug data from outer loop')
             print(f"observation:")
