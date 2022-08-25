@@ -19,6 +19,7 @@ from mesh_parser import FoamMesh
 import time
 import psutil
 from utils import get_cfg_data, parse_probe_lines, make_parallel_config, load_file, parallel_precice_dict, find_interface_patches, open_file, get_coupling_data
+from utils import robust_readline
 import utils
 import xmltodict
 import copy
@@ -589,30 +590,43 @@ class OpenFoamRLEnv(gym.Env):
 
                 # data = np.loadtxt(temp_filename  , unpack=True, usecols=[0, 1, 3])
                 time_idx = 0
-                utils.wait_for_file(temp_filename, sleep_time=0.1)
-                while not math.isclose(time_idx, self.__t):  # read till the end of time-window
-                    line_text = self.__postprocessing_filehandler_dict[temp_filename].readline()
-                    if line_text == "":
-                        continue
-                    # assert len(line_text) > 0, 'read a single line but it is of length 0 !!'
-                    line_text = line_text.strip()
-                    if len(line_text) > 0:
-                        try:
-                            is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text)
-                            # print(is_comment, time_idx, n_probes, probe_data)
-                        except Exception as e:
-                            continue
-                        if is_comment:
-                            time_idx = 0
-                            continue
-                        # print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
-                        p_field_ = f'{field_}_{p_idx}'
-                        if p_field_ not in self.__probes_rewards_data.keys():
-                            self.__probes_rewards_data[p_field_] = []
-                        self.__probes_rewards_data[p_field_].append([time_idx, n_probes, probe_data])
-                    # assert np.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"
-                    # only read one line and return
-                    # break
+                # utils.wait_for_file(temp_filename, sleep_time=0.1)
+                n_fields_expected = self.__options['postprocessing_data'][field_]['size']
+
+                while not math.isclose(time_idx, self.__t):  # read till the end of time-window                    
+
+                    while True:
+                        is_comment, time_idx, n_probes, probe_data = \
+                            robust_readline(self.__postprocessing_filehandler_dict[temp_filename], n_fields_expected, sleep_time=0.01)
+                        if not is_comment:
+                            break
+
+                    # print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
+                    p_field_ = f'{field_}_{p_idx}'
+                    if p_field_ not in self.__probes_rewards_data.keys():
+                        self.__probes_rewards_data[p_field_] = []
+                    self.__probes_rewards_data[p_field_].append([time_idx, n_probes, probe_data])
+
+                    # line_text = self.__postprocessing_filehandler_dict[temp_filename].readline()
+                    # if line_text == "":
+                    #     continue
+                    # # assert len(line_text) > 0, 'read a single line but it is of length 0 !!'
+                    # line_text = line_text.strip()
+                    # if len(line_text) > 0:
+                    #     try:
+                    #         is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text)
+                    #         # print(is_comment, time_idx, n_probes, probe_data)
+                    #     except Exception as e:
+                    #         continue
+                    #     if is_comment:
+                    #         time_idx = 0
+                    #         continue
+                    #     # print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
+                    #     p_field_ = f'{field_}_{p_idx}'
+                    #     if p_field_ not in self.__probes_rewards_data.keys():
+                    #         self.__probes_rewards_data[p_field_] = []
+                    #     self.__probes_rewards_data[p_field_].append([time_idx, n_probes, probe_data])
+
                 assert math.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"    
 
     def _close_postprocessing_files(self):

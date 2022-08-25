@@ -11,6 +11,7 @@ import time
 
 verbose_mode = False
 
+
 def fix_randseeds(seed=1234):
     try:
         random.seed(seed)
@@ -35,6 +36,27 @@ def load_file(foldername, filename):
         foam_text = filehandle.readlines()
     foam_text = '\n'.join(foam_text)
     return foam_text
+
+
+def robust_readline(filehandler, n_expected, sleep_time=0.01):
+    file_pos = filehandler.tell()
+
+    line_text = filehandler.readline()
+    if line_text == "":
+        return True, None, None, None
+    line_text = line_text.strip()
+    if len(line_text) > 0:
+        is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text)
+    if is_comment:
+        return is_comment, time_idx, n_probes, probe_data
+    if n_probes != n_expected:
+        print(f'Reading a line expected number of fields vs read: {n_expected}, {n_probes} -- wait for a bit')
+        print(line_text)
+        filehandler.seek(file_pos)
+        time.sleep(sleep_time)
+        return True, None, None, None
+    else:
+        return is_comment, time_idx, n_probes, probe_data
 
 
 def parse_probe_lines(line_string):
@@ -551,7 +573,7 @@ def augment_str(match_obj, leading_string, trailing_string, idx):
         matched_str = matched_str.replace(trailing_string, "")
         matched_str = matched_str.strip()
         modified_str = leading_string + " " + matched_str + f'_{idx}' + " " + trailing_string
-        if verbose_mode: 
+        if verbose_mode:
             print(modified_str)
         return modified_str
 
@@ -632,6 +654,7 @@ def find_interface_patches(precicedict_str):
         local_list = [patch_name for patch_name in re.split(r"\s+", matched_str)]
         patch_list += local_list
     return patch_list
+
 
 def wait_for_file(file_object, sleep_time=0.1):
     print(f'wait till the data is available for {file_object}')
