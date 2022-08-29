@@ -40,31 +40,25 @@ def load_file(foldername, filename):
 
 def robust_readline(filehandler, n_expected, sleep_time=0.01):
     file_pos = filehandler.tell()
-
     line_text = filehandler.readline()
-    if line_text == "":
-        return True, None, None, None
-    line_text = line_text.strip()
-    if len(line_text) > 0:
-        is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text)
-    if is_comment:
-        return is_comment, time_idx, n_probes, probe_data
-    if n_probes != n_expected:
-        print(f'Reading a line expected number of fields vs read: {n_expected}, {n_probes} -- wait for a bit')
-        print(line_text)
+    is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text.strip())
+    if not is_comment and n_probes != n_expected:
+        # print(f'Reading a line expected number of fields vs read: {n_expected}, {n_probes} -- wait for a bit')
+        # print(line_text)
         filehandler.seek(file_pos)
         time.sleep(sleep_time)
-        return True, None, None, None
-    else:
-        return is_comment, time_idx, n_probes, probe_data
+    return is_comment, time_idx, n_probes, probe_data
 
 
 def parse_probe_lines(line_string):
+    if len(line_string) == 0:
+        # print('line of length zero')
+        return False, None, 0, None
     if line_string[0] == "#":
-        if verbose_mode: 
+        if verbose_mode:
             print(f"comment line: {line_string}")
         is_comment = True
-        return is_comment, None, None, None
+        return is_comment, None, 0, None
 
     is_comment = False
     numeric_const_pattern = r"""
