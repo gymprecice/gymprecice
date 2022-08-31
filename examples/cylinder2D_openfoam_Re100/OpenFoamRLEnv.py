@@ -94,6 +94,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__probes_rewards_data = {}
         self.__postprocessing_filehandler_dict = {}
         self.__precice_read_data = {}
+        self.setup_env_obs_act()
 
     def __del__(self):
         # close all the open files
@@ -228,7 +229,6 @@ class OpenFoamRLEnv(gym.Env):
         # initiate precice interface and read single mesh data
         self._init_precice()
         self._set_precice_data()
-        self.setup_env_obs_act()
 
         if self.__interface.is_action_required(action_write_initial_data()):
             # what is the action for this case no action have been provided
@@ -522,23 +522,28 @@ class OpenFoamRLEnv(gym.Env):
                 if field_info['use'] == type_str and \
                         p_field_ in self.__probes_rewards_data.keys() and \
                         len(self.__probes_rewards_data[p_field_]) > 0:
-                    full_data = self.__probes_rewards_data[p_field_]
+                    # avoid the starting again and again from t0 by working in reverse order
+                    full_data = self.__probes_rewards_data[p_field_][::-1]
                     data_per_trj = []
                     for data in full_data:
                         time_stamp = data[0]
-                        if time_stamp <= time_bound[0]:
+                        if time_stamp > time_bound[1]:
                             continue
                         else:
                             data_per_trj.append(data)
-                        if math.isclose(time_stamp, time_bound[1]):
-                            data_dict[p_field_] = data_per_trj
+
+                        if math.isclose(time_stamp, time_bound[0]):
                             break
+                    data_dict[p_field_] = data_per_trj[::-1]
+                    # print(f"_get_probes_rewards_dict: {p_field_}")
+                    # print(data_dict[p_field_])
+
         return data_dict
 
-    def _get_observations_dict(self, n_lookback=1):
+    def _get_observations_dict(self, n_lookback):
         return self._get_probes_rewards_dict("observation", n_lookback)
 
-    def _get_reward_dict(self, n_lookback=1):
+    def _get_reward_dict(self, n_lookback):
         return self._get_probes_rewards_dict("reward", n_lookback)
 
     def _read_probes_rewards_files(self):
@@ -561,12 +566,12 @@ class OpenFoamRLEnv(gym.Env):
                 # utils.wait_for_file(temp_filename, sleep_time=0.1)
                 n_fields_expected = self.__options['postprocessing_data'][field_]['size']
 
-                while not math.isclose(time_idx, self.__t):  # read till the end of time-window                    
+                while not math.isclose(time_idx, self.__t):  # read till the end of time-window             
 
                     while True:
                         is_comment, time_idx, n_probes, probe_data = \
                             robust_readline(self.__postprocessing_filehandler_dict[temp_filename], n_fields_expected, sleep_time=0.01)
-                        if not is_comment:
+                        if not is_comment and n_fields_expected == n_probes:
                             break
 
                     # print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
@@ -608,6 +613,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__postprocessing_filehandler_dict = {}
 
     def setup_patch_field_to_write(self, action, patch_data):
+        action = action[0]
         # TODO: this should be problem specific
         theta0 = [90, 270]
         w = [10, 10]
@@ -616,11 +622,10 @@ class OpenFoamRLEnv(gym.Env):
         origin = np.array([0, 0, 0.005])
         radius = 0.05
         patch_flow_rate = [-action, action]
-
         U = []
 
         for idx, patch_name in enumerate(patch_data.keys()):
-            print(f"Prescribed action: FlowRate = {patch_flow_rate[idx]:.6f} [m/s3] on {patch_name}")
+            print(f"Prescribed action: FlowRate = {patch_flow_rate[idx]:.7f} [m/s3] on {patch_name}")
             patch_ctr = np.array([radius * math.cos(theta0[idx]), radius * math.sin(theta0[idx]), origin[2]])
             magSf = patch_data[patch_name]['magSf']
             Sf = patch_data[patch_name]['Sf']
@@ -653,7 +658,7 @@ class OpenFoamRLEnv(gym.Env):
                 Q_final += Uf.dot(Sf[i])
 
             if math.isclose(Q_final, patch_flow_rate[idx]):
-                print(f"Set flow rate = {Q_final:.6f} [m/s3] on the {patch_name} interface")
+                print(f"Set flow rate = {Q_final:.7f} [m/s3] on the {patch_name} interface")
                 U.append(U_patch)
             else:
                 raise Exception('estimated velocity profile violates mass conservation')
@@ -694,16 +699,16 @@ class OpenFoamRLEnv(gym.Env):
         # 4) where is rewards -- it is communicated? or read from online file?
 
         self.__n = 0
-        for mesh_name in self.__mesh_list:
-            self.__n += self.__vertex_coords[mesh_name].shape[0]
-        # TODO: this should work even if RL-Gym have more than one mesh (not tested)
-        self.__n = int(self.__n / self.__options['n_parallel_env'])
-        print(f'size of the grid is {self.__n}')
+        # for mesh_name in self.__mesh_list:
+        #     self.__n += self.__vertex_coords[mesh_name].shape[0]
+        # # TODO: this should work even if RL-Gym have more than one mesh (not tested)
+        # self.__n = int(self.__n / self.__options['n_parallel_env'])
+        # print(f'size of the grid is {self.__n}')
 
         self.action_space = spaces.Box(
             low=0, high=0.00001, shape=(1, ), dtype=np.float64)
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.__n,), dtype=np.float64)
+            low=-np.inf, high=np.inf, shape=(11,), dtype=np.float64)
 
     def setup_action_to_write_data(self, action, p_idx=0):
         """ Problem specific function """
@@ -716,7 +721,7 @@ class OpenFoamRLEnv(gym.Env):
         return [-0.00001, 0.00001]
 
     def setup_observations(self):
-        obs_dict = self._get_observations_dict()
+        obs_dict = self._get_observations_dict(n_lookback=1)
         # now we print all of the observations to a list
         # obs_list = []
         # # we should be filtering here some of the columns only
@@ -734,17 +739,17 @@ class OpenFoamRLEnv(gym.Env):
             # obs_list.append(data[2])
             pressures = [[[x[0]] + x[2]] for x in obs_dict[dict_name]]
             pressures = np.array(pressures).squeeze()  # first column is time and the rest are the probes
-            obs_list.append(pressures)
+            obs_list.append(pressures[-1, 1:])  # only the last timestep and remove the timestamp
 
-            # print(f'Trajectory#{p_idx}:')
-            # print(f'Time: {data[0]} --> p_avg: {np.mean(data[2])}')
+            print(f'Trajectory#{p_idx}:')
+            print(f'Time: {pressures[-1, 0]} --> p_avg: {np.mean(pressures[-1, 1:])}')
         return obs_list
 
     def setup_reward(self):
         """ Problem specific function """
 
-        lookback_time = 0.04
-        n_lookback = 2  # how many precice timesteps to cover the lookback time
+        lookback_time = 0.335  # 1/2.9850746268656714
+        n_lookback = 14  # how many precice timesteps to cover the lookback time
 
         reward_dict = self._get_reward_dict(n_lookback=n_lookback)
         # list container to store 'force-based' reward per trajectory
@@ -769,8 +774,9 @@ class OpenFoamRLEnv(gym.Env):
             # average is in-correct because if we might be using adaptive time-stepping
             Cd_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cd[:, 0], Cd[:, 1])
             Cl_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cl[:, 0], Cl[:, 1])
-
-            reward_list.append(-np.mean(Cd_uniform) - 0.2 * np.mean(Cl_uniform))
+            reward_value = np.mean(Cd_uniform) + 0.2 * np.mean(Cl_uniform)
+            # reward_value = np.mean(Cd[:, 1]) + 0.2 * np.mean(Cl[:, 1])
+            reward_list.append(-reward_value)
 
             # Cd = []
             # Cl = []

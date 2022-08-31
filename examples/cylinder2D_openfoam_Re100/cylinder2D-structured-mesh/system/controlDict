@@ -28,8 +28,11 @@ endTime         1000;
 
 deltaT          1e-3;
 
-writeControl   none;//adjustableRunTime;
 
+// writeControl    runTime;
+// writeInterval   5e-3;
+
+writeControl   none; //adjustableRunTime;
 writeInterval   0.1;
 
 purgeWrite      0;

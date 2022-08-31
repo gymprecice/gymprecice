@@ -1,4 +1,3 @@
-from pickle import TRUE
 import gym
 from OpenFoamRLEnv import OpenFoamRLEnv
 from utils import fix_randseeds
@@ -46,7 +45,7 @@ if __name__ == '__main__':
     foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log} 2>&1"
 
     # reset options
-    n_parallel_env = 4
+    n_parallel_env = 1
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -103,7 +102,7 @@ if __name__ == '__main__':
     # good scalability regardless of the number of parallel environments
     print(f"Run time of defining OpenFoamRLEnv is {time.time()-t0} seconds")
 
-    for epoch in range(2):  # epochs
+    for epoch in range(3):  # epochs
         cnt = 0.000001
         t01 = time.time()
         observation, _ = env.reset(return_info=True, seed=options['rand_seed'], options=options)
@@ -119,7 +118,7 @@ if __name__ == '__main__':
                 # # TODO: check why env seed is not set correctly. for now np.random is reproducible
                 # action = abs(0.000 * np.random.randn(action_ref.shape[0],))
                 # action_list.append(action)
-                action_list.append(0.0001)
+                action_list.append([0.0001])
 
             observation, reward, done, _ = env.step(action_list)
             print('Debug data from outer loop')
