@@ -138,7 +138,8 @@ preruncleanfoam() {
             *.log \
             *.foam \
 	        system/*.msh \
-            *.OpenFOAM
+            *.OpenFOAM \
+            ./postProcessing/*/*[1-9]* 
 }
 
 preprocessUnstructuredFoam() {

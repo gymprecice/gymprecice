@@ -44,7 +44,7 @@ def make_env():
     foam_prerun_cmd = f" && {foam_prerun_cmd} > {foam_prerun_log} 2>&1"
 
     # reset options
-    n_trajectories = 1
+    n_trajectories = 10
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
     postprocessing_data = {
@@ -54,7 +54,7 @@ def make_env():
             'datatype': 'scaler',  # scaler vs field
             'size': 12,  # number of forces
             'prerun_output_file': '/postProcessing/forces/0/coefficient.dat',  # depends on the type of the probe/patchProbe/etc
-            'output_file': '/postProcessing/forces/0/coefficient.dat',  # depends on the type of the probe/patchProbe/etc
+            'output_file': '/postProcessing/forces/0.01/coefficient.dat',  # depends on the type of the probe/patchProbe/etc
         },
         'p': {
             'use': 'observation',  # goes into observation or rewards
@@ -62,7 +62,7 @@ def make_env():
             'datatype': 'scaler',  # scaler vs field
             'size': 11,  # number of probes
             'prerun_output_file': '/postProcessing/probes/0/p',  # depends on the type of the probe/patchProbe/etc
-            'output_file': '/postProcessing/probes/0/p',  # depends on the type of the probe/patchProbe/etc
+            'output_file': '/postProcessing/probes/0.01/p',  # depends on the type of the probe/patchProbe/etc
         },
         # 'U': {
         #     'use': 'observation',  # goes into observation or rewards
@@ -94,7 +94,7 @@ def make_env():
         "rand_seed": rand_seed,
         "postprocessing_data": postprocessing_data,
         "n_parallel_env": n_trajectories,
-        "prerun_needed": False,
+        "prerun_needed": True,
         "is_dummy_run": False
     }
 
@@ -117,8 +117,8 @@ if __name__ == '__main__':
     }
 
     train_params = {
-        'epochs': 2,
-        'batch_size': 3
+        'epochs': 3,
+        'batch_size': 20
     }
 
     print('\nUsing simplest formulation of policy gradient.\n')

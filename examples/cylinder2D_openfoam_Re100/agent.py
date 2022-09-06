@@ -72,12 +72,10 @@ class SimpleAgent():
                 batch_R.append(trajectory.reward)
                 obs=torch.as_tensor(traj_obs, dtype=torch.float32)
                 act=torch.as_tensor(traj_act)
-                a=get_policy(obs).log_prob(act)
                 batch_logp.append(get_policy(obs).log_prob(act).sum(0))
             
             logp = torch.cat(batch_logp)
             weights = torch.as_tensor(batch_R, dtype=torch.float32)
-            a = logp * weights
             return -(logp * weights).mean() 
 
         # make optimizer
@@ -152,7 +150,7 @@ class SimpleAgent():
             return batch_loss, batch_rets
 
         # training loop
-        with open('out.txt', 'w') as f:
+        with open('training_result.txt', 'w') as f:
             for i in range(epochs):
                 batch_loss, batch_rets = train_one_epoch()
                 print('epoch: %3d \t loss: %.3f \t reward: %.3f'%

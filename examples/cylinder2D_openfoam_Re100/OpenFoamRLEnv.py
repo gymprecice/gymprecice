@@ -308,10 +308,10 @@ class OpenFoamRLEnv(gym.Env):
 
     def step(self, action):
         t0 = time.time()
-        if not isinstance(action, list) and not isinstance(action, np.ndarray):
-            raise Exception("Action should be either a list or numpy array")
-        if isinstance(action, np.ndarray) and len(action.shape) == 2 and action.shape[0] == 1:
-            action = action[0, :]
+        # if not isinstance(action, list) and not isinstance(action, np.ndarray):
+        #     raise Exception("Action should be either a list or numpy array")
+        # if isinstance(action, np.ndarray) and len(action.shape) == 2 and action.shape[0] == 1:
+        #     action = action[0, :]
 
         if not self.__is_initialized:
             raise Exception("Call reset before interacting with the environment.")
