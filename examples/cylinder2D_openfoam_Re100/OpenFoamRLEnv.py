@@ -616,7 +616,8 @@ class OpenFoamRLEnv(gym.Env):
         if self.__time_window == 0:
             time_bound = [0, self.__prerun_t]
         else:
-            time_bound = [self.__t - (n_lookback * self.__precice_dt) , self.__t]
+            time_bound = [(self.__time_window - n_lookback) * self.__precice_dt + self.__prerun_t , self.__time_window * self.__precice_dt + self.__prerun_t]
+    
         data_dict = {}
         for field_ in self.__options['postprocessing_data'].keys():
             for p_idx in range(self.__options['n_parallel_env']):
@@ -630,13 +631,13 @@ class OpenFoamRLEnv(gym.Env):
                     data_per_trj = []
                     for data in full_data:
                         time_stamp = data[0]
-                        if math.isclose(time_stamp, time_bound[0]):
+                        if time_stamp <= time_bound[0]:
                             break
 
-                        if time_stamp > time_bound[1]:
-                            continue
-                        else:
-                            data_per_trj.append(data)
+                        # if time_stamp > time_bound[1]:
+                        #     continue
+                        # else:
+                        data_per_trj.append(data)
 
 
                     data_dict[p_field_] = data_per_trj[::-1]
