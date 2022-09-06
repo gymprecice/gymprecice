@@ -26,6 +26,27 @@ preprocessfoam() {
     fi
 }
 
+prerunfoam() {
+    set -e
+    . "${WM_PROJECT_DIR}/bin/tools/RunFunctions"
+    # soft cleaning removed the sybmolic links to case folder
+    # create real files for reach run
+    touch case.foam
+    touch case.OpenFOAM
+
+    
+    cp ./system/controlDict_prerun ./system/controlDict
+
+    if [ "${1-}" = "-parallel" ]; then
+        echo "-- OpenFoam solver $(getApplication) ... parallel pre-run"
+        runParallel $(getApplication)
+    else
+        echo "-- OpenFoam solver $(getApplication) ... serial pre-run"
+        runApplication $(getApplication)
+    fi
+    cp ./system/controlDict_run ./system/controlDict
+}
+
 runfoam() {
     set -e
     . "${WM_PROJECT_DIR}/bin/tools/RunFunctions"
@@ -88,6 +109,30 @@ softcleanfoam() {
             ./precice-*-watchintegral-*.log \
             ./core \
             ./postProcessing \
+            log.* \
+            *.json \
+            *.log \
+            *.foam \
+	        system/*.msh \
+            *.OpenFOAM
+}
+
+preruncleanfoam() {
+    set -e
+    . "${WM_PROJECT_DIR}/bin/tools/CleanFunctions" 
+    cleanAdiosOutput
+    cleanAuxiliary
+    cleanDynamicCode
+    cleanOptimisation
+    rm -rfv ./preCICE-output/ \
+            ./precice-*-iterations.log \
+            ./precice-*-convergence.log \
+            ./precice-*-events.json \
+            ./precice-*-events-summary.log \
+            ./precice-postProcessingInfo.log \
+            ./precice-*-watchpoint-*.log \
+            ./precice-*-watchintegral-*.log \
+            ./core \
             log.* \
             *.json \
             *.log \

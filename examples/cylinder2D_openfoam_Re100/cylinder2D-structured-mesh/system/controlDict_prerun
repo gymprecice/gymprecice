@@ -18,24 +18,18 @@ libs ("libCustomisedMeshTools.so" "libCustomisedBCs.so");
 
 application     pimpleFoam;
 
-startFrom       latestTime;
-
-startTime       0;
+startTime       latestTime;
 
 stopAt          endTime;
 
-endTime         1000;
+endTime         0.01;
 
-deltaT          1e-3;
+deltaT          5e-4;
 
+writeControl   timeStep; //none; //adjustableRunTime;
+writeInterval   1;
 
-// writeControl    runTime;
-// writeInterval   5e-3;
-
-writeControl   none; //adjustableRunTime;
-writeInterval   0.1;
-
-purgeWrite      0;
+purgeWrite      1;
 
 writeFormat     ascii;
 
@@ -47,7 +41,7 @@ timePrecision   8;
 
 runTimeModifiable false;
 
-adjustTimeStep true;
+adjustTimeStep false; //true;
 maxCo 0.99;
 
 functions
@@ -59,7 +53,7 @@ functions
         writeControl    timeStep;
         writeInterval   1;
         log false;
-
+        
         patches
         (
             cylinder_wall
@@ -158,10 +152,14 @@ functions
         includeOutOfBounds  true;
     }
 
-    
+   /* 
     preCICE_Adapter
     {
         type preciceAdapterFunctionObject;
         libs ("libpreciceAdapterFunctionObject.so");
     }
+    */
 }
+
+
+// ************************************************************************* //

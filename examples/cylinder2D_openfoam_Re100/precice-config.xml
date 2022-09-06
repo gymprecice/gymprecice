@@ -51,7 +51,7 @@
       <max-time value="0.1" />
       <time-window-size value="0.025" valid-digits="8" />
       <participants first="RL-Gym" second="Fluid"/>
-      <exchange data="Velocity" mesh="RL-Mesh" from="RL-Gym" to="Fluid" initialize="False"/>
+      <exchange data="Velocity" mesh="RL-Mesh" from="RL-Gym" to="Fluid" initialize="True"/>
       <exchange data="Pressure" mesh="RL-Mesh" from="Fluid" to="RL-Gym"/>
     </coupling-scheme:parallel-explicit>
   </solver-interface>
