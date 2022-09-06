@@ -45,7 +45,7 @@ if __name__ == '__main__':
     foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log} 2>&1"
 
     # reset options
-    n_parallel_env = 1
+    n_parallel_env = 4
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -105,7 +105,8 @@ if __name__ == '__main__':
     for epoch in range(3):  # epochs
         cnt = 0.000001
         t01 = time.time()
-        observation, _ = env.reset(return_info=True, seed=options['rand_seed'], options=options)
+        observation, _ = env.reset(return_info=True, seed=options['rand_seed'])
+        print(f'observations from reset {observation.shape}')
         print(f"Run time of defining env.reset is {time.time()-t01} seconds")
 
         t02 = time.time()
@@ -118,20 +119,26 @@ if __name__ == '__main__':
                 # # TODO: check why env seed is not set correctly. for now np.random is reproducible
                 # action = abs(0.000 * np.random.randn(action_ref.shape[0],))
                 # action_list.append(action)
-                action_list.append([0.0001])
+                action_list.append(0.0001)
 
-            observation, reward, done, _ = env.step(action_list)
+            observations, rewards, dones, _ = env.step(action_list)
+            print(f'step function output {observation.shape}, {rewards.shape}, {dones.shape}')
+
             print('Debug data from outer loop')
-            print(f"observation:")
-            for obs_item in observation:
-                print(obs_item)
-            print(f"reward: {reward}\n")
-
+            print(f"observation: {observations}\n")
+            print(f"reward: {rewards}\n")
             counter += 1
+
+            if isinstance(dones, bool) or isinstance(dones, np.bool_):
+                done = dones
+            else:
+                done = dones[0]
+                assert np.unique(dones)[0] == done
+
             if done:
                 print(f"Epoch # {epoch+1}: \"done\" after {counter} steps")
                 print("-------------------------------------")
                 break
         print(f'Finished epoch in {time.time()-t02} seconds')
-    
+
     print(f"Total run time is {time.time()-t0} seconds")

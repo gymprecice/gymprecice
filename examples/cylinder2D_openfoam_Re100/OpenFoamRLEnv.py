@@ -69,7 +69,7 @@ class OpenFoamRLEnv(gym.Env):
         scaler_variables, vector_variables, mesh_list, mesh_variables = \
             get_cfg_data('', self.__options['precice_cfg'])
 
-       
+
         print(scaler_variables, vector_variables, mesh_list, mesh_variables)
         # select only RL-Gym meshes
         mesh_list = [x for x in mesh_list if 'rl' in x.lower()]
@@ -201,7 +201,7 @@ class OpenFoamRLEnv(gym.Env):
         return run_folder_list
 
     # gym methods:
-    def reset(self, *, seed=None, return_info=True, options=None):
+    def reset(self, *, seed=None, return_info=False):
         super().reset(seed=seed)
 
         # get the solver-launch options
@@ -291,13 +291,28 @@ class OpenFoamRLEnv(gym.Env):
             self._read_probes_rewards_files()
             self.__prerun_t = self.__precice_dt
 
+
         obs_list = self.setup_observations(n_lookback=0)
+
+        # obs_np = self.setup_observations()
+
+        # if self.__options['n_parallel_env'] == 1:
+        #     obs_np = obs_np[0]
+        # if return_info:
+        #     return obs_np, {}
+        # return obs_np
+
         if return_info:
             return obs_list, {}
         return obs_list
 
     def step(self, action):
         t0 = time.time()
+        if not isinstance(action, list) and not isinstance(action, np.ndarray):
+            raise Exception("Action should be either a list or numpy array")
+        if isinstance(action, np.ndarray) and len(action.shape) == 2 and action.shape[0] == 1:
+            action = action[0, :]
+
         if not self.__is_initialized:
             raise Exception("Call reset before interacting with the environment.")
 
@@ -334,6 +349,38 @@ class OpenFoamRLEnv(gym.Env):
         # self._read_observations()  # read observation from probe files
         self._read_probes_rewards_files()
         t3 = time.time()
+
+
+        # observations = self.setup_observations()
+        # rewards = self.setup_reward()
+
+        # t4 = time.time()
+        # print(f'Inside step function run times, write data: {t1-t0}, advance: {t2-t1}, read data: {t3-t2}, process read data: {t4-t3}')
+        # done = not self.__interface.is_coupling_ongoing()
+        # # delete precice object upon done (a workaround to get precice reset)
+
+        # if done:
+        #     self.__interface.finalize()
+        #     del self.__interface
+        #     print("preCICE finalized...\n")
+        #     # we need to check here that solver run is finalized
+        #     self.__solver_run = self._finalize_subprocess(self.__solver_run)
+
+        #     # reset pointers
+        #     self.__interface = None
+        #     self.__solver_full_reset = False
+        #     dones = [True] * rewards.shape[0]
+        # else:
+        #     dones = [False] * rewards.shape[0]
+
+        # if self.__options['n_parallel_env'] == 1:
+        #     observations = observations[0]
+        #     rewards = rewards[0]
+        #     dones = dones[0]
+
+        # return observations, rewards, dones, {}
+
+
         obs_list = self.setup_observations()
         reward = self.setup_reward()
         t4 = time.time()
@@ -352,6 +399,10 @@ class OpenFoamRLEnv(gym.Env):
             self.__solver_full_reset = False
 
         return obs_list, reward, done, {}
+
+
+
+
 
     def render(self, mode='human'):
         """ not implemented """
@@ -840,8 +891,15 @@ class OpenFoamRLEnv(gym.Env):
 
             print(f'Trajectory#{p_idx}:')
             print(f'Time: {pressures[-1, 0]} --> p_avg: {np.mean(pressures[-1, 1:])}')
+
            
         return np.array(obs_list).tolist() # list of list
+
+        # check the function _flatten_obs in stable_baseline3 for more general approach
+        # https://stable-baselines3.readthedocs.io/en/master/_modules/stable_baselines3/common/vec_env/subproc_vec_env.html#SubprocVecEnv.reset
+
+        #return np.stack(obs_list)
+
 
     def setup_reward(self,n_lookback=1, lookback_time=0.025):
         """ Problem specific function """
@@ -888,4 +946,8 @@ class OpenFoamRLEnv(gym.Env):
             # reward_list.append(-np.mean(Cd) - 0.2 * np.mean(Cl))
         print("---------------------------------------\n")
 
+
         return np.array(reward_list).squeeze() # numpy array
+
+        #return np.array(reward_list)
+
