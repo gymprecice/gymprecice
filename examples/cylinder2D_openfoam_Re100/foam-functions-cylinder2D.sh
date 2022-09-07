@@ -34,8 +34,8 @@ prerunfoam() {
     touch case.foam
     touch case.OpenFOAM
 
-    
     cp ./system/controlDict_prerun ./system/controlDict
+    sed -i "s/^\s\{0,\}endTime.*/endTime ${1};/g" ./system/controlDict
 
     if [ "${1-}" = "-parallel" ]; then
         echo "-- OpenFoam solver $(getApplication) ... parallel pre-run"

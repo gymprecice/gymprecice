@@ -52,12 +52,14 @@ class OpenFoamRLEnv(gym.Env):
         self.__options = copy.deepcopy(options)
 
         # gym env attributes:
-        self.__is_initialized = False
-        self.__prerun_needed = None
+        self.__is_reset = False
+        #self.__prerun_needed = None
+        self.__prerun_needed = self.__options.get("prerun_needed", False)
         self.__is_first_reset = True  # if True, gym env reset has been called at least once
         # action_ and observation_space will be set in _set_precice_data
         self.action_space = None
         self.observation_space = None
+        self.__is_data_initialized = None
 
         self.__patch_data = None
 
@@ -138,7 +140,8 @@ class OpenFoamRLEnv(gym.Env):
         self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
         self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
         if prerun_needed:
-             self._launch_subprocess(shell_cmd, prerun_cmd, case_path, cmd_type='prerun')
+            print("Wait: non-controlled OF is running ...")
+            self._launch_subprocess(shell_cmd, prerun_cmd, case_path, cmd_type='prerun')
 
         # Create an empty folder for the RL_Gym to run OpenFoam
         cwd = Path.cwd()
@@ -213,7 +216,7 @@ class OpenFoamRLEnv(gym.Env):
         prerunclean_cmd = self.__options.get("prerunclean_cmd", "")
         run_cmd = self.__options.get("run_cmd", "")
         self.__solver_full_reset = self.__options.get("solver_full_reset", self.__solver_full_reset)
-        self.__prerun_needed = self.__options.get("prerun_needed", False)
+
 
         
         self.__max_time = self.__init_max_time
@@ -270,13 +273,16 @@ class OpenFoamRLEnv(gym.Env):
         if not self.__prerun_needed:
             self.__interface.initialize_data()  # if initialize="True" --> push solver one time-window forward
             self.__t = self.__precice_dt
+            self.__is_data_initialized = True
+        else:
+            self.__is_data_initialized = False
 
         print(f"RL-gym self.__interface.initialize_data() done in {time.time()-t0} seconds")
         # this results in reading data ahead of time when this is participant 2
         if self.__interface.is_read_data_available():
             self._read()
 
-        self.__is_initialized = True
+        self.__is_reset = True
         self.__is_first_reset = False
        
         self.__probes_rewards_data = {}
@@ -313,7 +319,7 @@ class OpenFoamRLEnv(gym.Env):
         # if isinstance(action, np.ndarray) and len(action.shape) == 2 and action.shape[0] == 1:
         #     action = action[0, :]
 
-        if not self.__is_initialized:
+        if not self.__is_reset:
             raise Exception("Call reset before interacting with the environment.")
 
         if self.__interface.is_action_required(
@@ -339,9 +345,9 @@ class OpenFoamRLEnv(gym.Env):
         # print('inside step function --- just before advance===========================')
         # print(self.__write_data)
 
-        if self.__prerun_needed:
+        if not self.__is_data_initialized:
             self._initialize()
-            self.__prerun_needed = False
+            self.__is_data_initialized = True
         else:
             self._advance()  # run fluid solver to complete the next time-window
         t2 = time.time()
@@ -397,12 +403,9 @@ class OpenFoamRLEnv(gym.Env):
             # reset pointers
             self.__interface = None
             self.__solver_full_reset = False
+            self.__is_reset = False
 
         return obs_list, reward, done, {}
-
-
-
-
 
     def render(self, mode='human'):
         """ not implemented """
@@ -609,7 +612,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__n = int(self.__n / self.__options['n_parallel_env'])  # TODO: ????
 
     def _get_probes_rewards_dict(self, type_str, n_lookback):
-        if not self.__is_initialized:
+        if not self.__is_reset:
             raise Exception("Call reset before interacting with the environment.")
 
         # get the data within a time_window for computing reward
@@ -658,8 +661,14 @@ class OpenFoamRLEnv(gym.Env):
         for p_idx in range(self.__options['n_parallel_env']):
             p_case_path = self.__options['case_path'] + f'_{p_idx}'
             for field_ in self.__options['postprocessing_data'].keys():
-
-                temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
+                temp_filename = ""
+                if self.__prerun_needed:
+                    filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
+                    filename_split = filename.split('/')
+                    filename_split[-2] = str(self.__prerun_t)
+                    temp_filename = '/'.join(filename_split)
+                else:
+                    temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
                 print(f'reading filename: {temp_filename}')
 
                 if temp_filename not in self.__postprocessing_filehandler_dict.keys():
@@ -714,7 +723,7 @@ class OpenFoamRLEnv(gym.Env):
             p_case_path = self.__options['case_path'] + f'_{p_idx}'
             for field_ in self.__options['postprocessing_data'].keys():
 
-                temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['prerun_output_file']}"
+                temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
                 print(f'reading filename: {temp_filename}')
 
                 if temp_filename not in self.__postprocessing_filehandler_dict.keys():

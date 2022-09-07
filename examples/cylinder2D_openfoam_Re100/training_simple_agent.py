@@ -27,6 +27,7 @@ def make_env():
     foam_prerunclean_log = "foam_prerun_clean.log"
     foam_run_log = "foam_run.log"
     foam_prerun_log = "foam_prerun.log"
+    foam_prerun_time = 0.35 
 
     parallel_run = False
     if parallel_run:
@@ -41,10 +42,10 @@ def make_env():
     foam_prerunclean_cmd = f" && {foam_prerunclean_cmd} > {foam_prerunclean_log} 2>&1"
     foam_preprocess_cmd = f" && {foam_preprocess_cmd} > {foam_preprocess_log} 2>&1"
     foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log} 2>&1"
-    foam_prerun_cmd = f" && {foam_prerun_cmd} > {foam_prerun_log} 2>&1"
+    foam_prerun_cmd = f" && {foam_prerun_cmd} {foam_prerun_time} > {foam_prerun_log} 2>&1"
 
     # reset options
-    n_trajectories = 10
+    n_trajectories = 5
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
     postprocessing_data = {
@@ -53,16 +54,14 @@ def make_env():
             'type': 'forces',  # forces|probe|?
             'datatype': 'scaler',  # scaler vs field
             'size': 12,  # number of forces
-            'prerun_output_file': '/postProcessing/forces/0/coefficient.dat',  # depends on the type of the probe/patchProbe/etc
-            'output_file': '/postProcessing/forces/0.01/coefficient.dat',  # depends on the type of the probe/patchProbe/etc
+            'output_file': '/postProcessing/forces/0/coefficient.dat',  # depends on the type of the probe/patchProbe/etc
         },
         'p': {
             'use': 'observation',  # goes into observation or rewards
             'type': 'probe',  # forces|probe|?
             'datatype': 'scaler',  # scaler vs field
             'size': 11,  # number of probes
-            'prerun_output_file': '/postProcessing/probes/0/p',  # depends on the type of the probe/patchProbe/etc
-            'output_file': '/postProcessing/probes/0.01/p',  # depends on the type of the probe/patchProbe/etc
+            'output_file': '/postProcessing/probes/0/p',  # depends on the type of the probe/patchProbe/etc
         },
         # 'U': {
         #     'use': 'observation',  # goes into observation or rewards
@@ -117,8 +116,8 @@ if __name__ == '__main__':
     }
 
     train_params = {
-        'epochs': 3,
-        'batch_size': 20
+        'epochs': 2,
+        'batch_size': 5 # no. of trajectories
     }
 
     print('\nUsing simplest formulation of policy gradient.\n')
