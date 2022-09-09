@@ -16,7 +16,9 @@ preprocessfoam() {
     runApplication renumberMesh -overwrite
 
     # set inlet velocity
-    cp -r 0.org 0
+    # cp -r 0.org 0
+    cp -r start_0 0
+
     runApplication setExprBoundaryFields
 
     if [ "${1-}" = "-parallel" ]; then

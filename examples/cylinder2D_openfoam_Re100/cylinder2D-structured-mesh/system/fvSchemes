@@ -17,7 +17,9 @@ FoamFile
 
 ddtSchemes
 {
-    default         CrankNicolson 0.5;
+   //default         CrankNicolson 0.5;
+   default         backward;
+
 }
 
 gradSchemes
@@ -33,7 +35,8 @@ divSchemes
 
 laplacianSchemes
 {
-    default         Gauss linear corrected;
+//    default         Gauss linear corrected;
+    default         Gauss linear limited 1;
 }
 
 interpolationSchemes
@@ -43,7 +46,9 @@ interpolationSchemes
 
 snGradSchemes
 {
-    default         corrected;
+//   default         corrected;
+   default         limited corrected 0.5;
+
 }
 
 fluxRequired

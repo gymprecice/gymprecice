@@ -60,13 +60,12 @@ class OpenFoamRLEnv(gym.Env):
 
         self.__patch_data = None
 
-        max_time, _ = get_coupling_data('', self.__options['precice_cfg']) 
+        max_time, _ = get_coupling_data('', self.__options['precice_cfg'])
         self.__max_time = float(max_time)
         self.run_folders = self._make_run_folders()
 
         scaler_variables, vector_variables, mesh_list, mesh_variables = \
             get_cfg_data('', self.__options['precice_cfg'])
-
 
         print(scaler_variables, vector_variables, mesh_list, mesh_variables)
         # select only RL-Gym meshes
@@ -265,11 +264,22 @@ class OpenFoamRLEnv(gym.Env):
         if self.__options['n_parallel_env'] == 1:
             obs_np = obs_np[0]
 
+        if self.__options['prerun']:
+            while self.__t < 0.335:
+                obs_np, reward, _, _ = self.step([0])
+                print(f'Preruns to fill in history for initial rewards: {reward}')
+
         if return_info:
             return obs_np, {}
         return obs_np
 
+    # this makes the environment 
     def step(self, action):
+        if self.__interface is None:
+            self.reset()
+        return self.step_base(action)
+
+    def step_base(self, action):
         t0 = time.time()
         if not isinstance(action, list) and not isinstance(action, np.ndarray):
             raise Exception("Action should be either a list or numpy array")
@@ -305,7 +315,7 @@ class OpenFoamRLEnv(gym.Env):
         rewards = self.setup_reward()
 
         t4 = time.time()
-        print(f'Inside step function run times, write data: {t1-t0}, advance: {t2-t1}, read data: {t3-t2}, process read data: {t4-t3}')
+        # print(f'Inside step function run times, write data: {t1-t0}, advance: {t2-t1}, read data: {t3-t2}, process read data: {t4-t3}')
         done = not self.__interface.is_coupling_ongoing()
         # delete precice object upon done (a workaround to get precice reset)
 
@@ -441,8 +451,8 @@ class OpenFoamRLEnv(gym.Env):
                 else:
                     self.__interface.write_block_scalar_data(
                         self.__write_ids[write_var], self.__vertex_ids[mesh_name], self.__write_data[write_var])
-                print(f"(RL-Gym), avg-{write_var} using {mesh_name} write = {self.__write_data[write_var].mean():.4f}")
-                print("-------------------------------------------")
+                # print(f"(RL-Gym), avg-{write_var} using {mesh_name} write = {self.__write_data[write_var].mean():.4e}")
+                # print("-------------------------------------------")
 
     def _launch_dummy_subprocess(self, process_idx, cwd):
         cmd_str = f'python -u fluid-solver.py'
@@ -643,7 +653,7 @@ class OpenFoamRLEnv(gym.Env):
         U = []
 
         for idx, patch_name in enumerate(patch_data.keys()):
-            print(f"Prescribed action: FlowRate = {patch_flow_rate[idx]:.7f} [m/s3] on {patch_name}")
+            # print(f"Prescribed action: FlowRate = {patch_flow_rate[idx]:.7e} [m/s3] on {patch_name}")
             patch_ctr = np.array([radius * math.cos(theta0[idx]), radius * math.sin(theta0[idx]), origin[2]])
             magSf = patch_data[patch_name]['magSf']
             Sf = patch_data[patch_name]['Sf']
@@ -676,7 +686,7 @@ class OpenFoamRLEnv(gym.Env):
                 Q_final += Uf.dot(Sf[i])
 
             if math.isclose(Q_final, patch_flow_rate[idx]):
-                print(f"Set flow rate = {Q_final:.7f} [m/s3] on the {patch_name} interface")
+                # print(f"Set flow rate = {Q_final:.7e} [m/s3] on the {patch_name} interface")
                 U.append(U_patch)
             else:
                 raise Exception('estimated velocity profile violates mass conservation')
@@ -724,7 +734,7 @@ class OpenFoamRLEnv(gym.Env):
         # print(f'size of the grid is {self.__n}')
 
         self.action_space = spaces.Box(
-            low=0, high=0.00001, shape=(1, ), dtype=np.float64)
+            low=-1e-4, high=1e-4, shape=(1, ), dtype=np.float64)
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(11,), dtype=np.float64)
 
@@ -736,7 +746,8 @@ class OpenFoamRLEnv(gym.Env):
 
     def setup_initial_action(self, p_idx):
         # should we setup this in side of the options?
-        return [-0.00001, 0.00001]
+        return [0, 0]
+        # return [-0.00001, 0.00001]
 
     def setup_observations(self):
         obs_dict = self._get_observations_dict(n_lookback=1)
@@ -755,8 +766,8 @@ class OpenFoamRLEnv(gym.Env):
             dict_name = f'p_{p_idx}'
             # data = obs_dict[dict_name][-1]
             # obs_list.append(data[2])
-            pressures = [[[x[0]] + x[2]] for x in obs_dict[dict_name]]
-            pressures = np.array(pressures).squeeze()  # first column is time and the rest are the probes
+            pressures = [[x[0]] + x[2] for x in obs_dict[dict_name]]
+            pressures = np.array(pressures)  # first column is time and the rest are the probes
             obs_list.append(pressures[-1, 1:])  # only the last timestep and remove the timestamp
 
             print(f'Trajectory#{p_idx}:')
@@ -769,33 +780,32 @@ class OpenFoamRLEnv(gym.Env):
     def setup_reward(self):
         """ Problem specific function """
 
-        lookback_time = 0.335  # 1/2.9850746268656714
-        n_lookback = 14  # how many precice timesteps to cover the lookback time
+        lookback_time = 0.335  # 1/2.9850746268656714  # this is for Re=100
+        n_lookback = int(0.335 // self.__precice_dt) + 1  # how many precice timesteps to cover the lookback time
 
         reward_dict = self._get_reward_dict(n_lookback=n_lookback)
         # list container to store 'force-based' reward per trajectory
         reward_list = []
 
-        print("\n---------------------------------------")
-        print("Cd and Cl data for:")
+        # print("\n---------------------------------------")
+        # print("Cd and Cl data for:")
         for p_idx in range(self.__options['n_parallel_env']):
 
             var_name = f'forces_{p_idx}'
             data_list = reward_dict[var_name]
 
-            Cd = np.array([[x[0], x[2][0]] for x in data_list]).squeeze()
-            Cl = np.array([[x[0], x[2][2]] for x in data_list]).squeeze()
-
-            print(f'Trajectory#{p_idx}:')
-            print(f'Time: {Cd[0, 0]} --> Cd: {Cd[0, 1]}, Cl: {Cl[0, 1]}')
-            print(f'Time: {Cd[-1, 0]} --> Cd: {Cd[-1, 1]}, Cl: {Cl[-1, 1]}')
+            Cd = np.array([[x[0], x[2][0]] for x in data_list])
+            Cl = np.array([[x[0], x[2][2]] for x in data_list])
+            # print(f'Trajectory#{p_idx}:')
+            # print(f'Time: {Cd[0, 0]} --> Cd: {Cd[0, 1]}, Cl: {Cl[0, 1]}')
+            # print(f'Time: {Cd[-1, 0]} --> Cd: {Cd[-1, 1]}, Cl: {Cl[-1, 1]}')
 
             last_time = Cd[-1, 0]
             start_time = last_time - lookback_time
             # average is in-correct because if we might be using adaptive time-stepping
             Cd_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cd[:, 0], Cd[:, 1])
             Cl_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cl[:, 0], Cl[:, 1])
-            reward_value = np.mean(Cd_uniform) + 0.2 * np.mean(Cl_uniform)
+            reward_value = np.mean(Cd_uniform) + 0.2 * np.abs(np.mean(Cl_uniform))
             # reward_value = np.mean(Cd[:, 1]) + 0.2 * np.mean(Cl[:, 1])
             reward_list.append(-reward_value)
 
@@ -809,6 +819,6 @@ class OpenFoamRLEnv(gym.Env):
             # print(f'Time: {data_list[0][0]} --> Cd: {Cd[0]}, Cl: {Cl[0]}')
             # print(f'Time: {data_list[-1][0]} --> Cd: {Cd[-1]}, Cl: {Cl[-1]}')
             # reward_list.append(-np.mean(Cd) - 0.2 * np.mean(Cl))
-        print("---------------------------------------\n")
+        # print("---------------------------------------\n")
 
         return np.array(reward_list)

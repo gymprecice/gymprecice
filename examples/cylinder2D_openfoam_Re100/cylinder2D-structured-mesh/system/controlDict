@@ -24,13 +24,13 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         1000;
+endTime         2;
 
-deltaT          1e-3;
+deltaT          5e-5;
 
 
-// writeControl    runTime;
-// writeInterval   5e-3;
+//writeControl    runTime;
+//writeInterval   5e-2;
 
 writeControl   none; //adjustableRunTime;
 writeInterval   0.1;
@@ -47,8 +47,8 @@ timePrecision   8;
 
 runTimeModifiable false;
 
-adjustTimeStep true;
-maxCo 0.99;
+//adjustTimeStep true;
+//maxCo 0.99;
 
 functions
 {
@@ -67,7 +67,7 @@ functions
             jet2
         );
 	
-	rho rhoInf;
+	    rho rhoInf;
         rhoInf 1.0;
         CofR (0.0 0 0);
         liftDir (0 1 0);
