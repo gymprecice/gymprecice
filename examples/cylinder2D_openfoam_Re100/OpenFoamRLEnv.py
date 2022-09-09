@@ -1,6 +1,3 @@
-# from cmath import inf
-from cmath import acos
-from signal import signal
 import subprocess
 import argparse
 from tkinter.messagebox import NO
@@ -24,6 +21,7 @@ import utils
 import xmltodict
 import copy
 import pandas as pd
+from scipy import signal
 
 from os.path import join
 import os
@@ -805,9 +803,15 @@ class OpenFoamRLEnv(gym.Env):
             # average is in-correct because if we might be using adaptive time-stepping
             Cd_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cd[:, 0], Cd[:, 1])
             Cl_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cl[:, 0], Cl[:, 1])
-            reward_value = np.mean(Cd_uniform) + 0.2 * np.abs(np.mean(Cl_uniform))
+            # reward_value = np.mean(Cd_uniform) + 0.2 * np.abs(np.mean(Cl_uniform))
+
+            # when using constast time stepping one can filter the signals
+            Cd_filtered = signal.savgol_filter(Cd_uniform, 49, 0)
+            Cl_filtered = signal.savgol_filter(Cl_uniform, 49, 0)
+            reward_value = 3.205 - np.mean(Cd_filtered) - 0.2 * np.abs(np.mean(Cl_filtered))
+
             # reward_value = np.mean(Cd[:, 1]) + 0.2 * np.mean(Cl[:, 1])
-            reward_list.append(-reward_value)
+            reward_list.append(reward_value)
 
             # Cd = []
             # Cl = []

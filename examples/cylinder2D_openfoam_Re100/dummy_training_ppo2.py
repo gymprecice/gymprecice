@@ -278,7 +278,7 @@ if __name__ == '__main__':
 
             # little bit inefficient communication modes but lets try
             while subcycle_counter < subcycle_max:
-                smoothing_fraction = (subcycle_counter / subcycle_max)**2
+                smoothing_fraction = (subcycle_counter / subcycle_max)
                 smoothed_action = (1 - smoothing_fraction) * prev_action + smoothing_fraction * action
                 # TRY NOT TO MODIFY: execute the game and log data.
                 next_obs, reward, done, info = envs.step(smoothed_action.cpu().numpy())
