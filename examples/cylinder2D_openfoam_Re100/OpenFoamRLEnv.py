@@ -941,9 +941,9 @@ class OpenFoamRLEnv(gym.Env):
             Cd_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cd[:, 0], Cd[:, 1])
             Cl_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cl[:, 0], Cl[:, 1])
 
-            reward_value = np.mean(Cd_uniform) - 0.2 * np.mean(abs(Cl_uniform))
+            reward_value = np.mean(Cd_uniform) + 0.2 * np.mean(abs(Cl_uniform))
             # reward_value = np.mean(Cd[:, 1]) + 0.2 * np.mean(Cl[:, 1])
-            reward_list.append(reward_value)
+            reward_list.append(-reward_value)
 
             # Cd = []
             # Cl = []
