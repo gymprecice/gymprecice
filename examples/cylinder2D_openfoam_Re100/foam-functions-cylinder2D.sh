@@ -9,10 +9,10 @@ preprocessfoam() {
     touch case.OpenFOAM
 
     # mesh creation
-    runApplication blockMesh
-    runApplication transformPoints -translate '(-0.2 -0.2 0)' 
-    runApplication topoSet
-    runApplication createPatch -overwrite
+    #runApplication blockMesh
+    #runApplication transformPoints -translate '(-0.2 -0.2 0)' 
+    #runApplication topoSet
+    #runApplication createPatch -overwrite
     runApplication renumberMesh -overwrite
 
     # set inlet velocity
@@ -67,8 +67,10 @@ runfoam() {
 cleanfoam() {
     set -e
     . "${WM_PROJECT_DIR}/bin/tools/CleanFunctions"
-    cleanCase
-    
+    cleanTimeDirectories
+    cleanAuxiliary
+    cleanDynamicCode
+    cleanOptimisation
     rm -rfv 0
     rm -rfv ./preCICE-output/ \
             ./precice-*-iterations.log \

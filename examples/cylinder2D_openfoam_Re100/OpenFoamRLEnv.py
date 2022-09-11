@@ -14,7 +14,7 @@ import os
 
 import gym
 from gym import spaces
-from mesh_parser import FoamMesh
+from mesh_parser import FoamMesh, is_integer
 
 import time
 import psutil
@@ -104,7 +104,7 @@ class OpenFoamRLEnv(gym.Env):
         
         #self.setup_env_obs_act()
         self.action_space = spaces.Box(
-            low=-0.00001, high=0.00001, shape=(1, ), dtype=np.float64)
+            low=-0.0001, high=0.0001, shape=(1, ), dtype=np.float64)
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(11,), dtype=np.float64)
 
@@ -665,7 +665,12 @@ class OpenFoamRLEnv(gym.Env):
                 if self.__prerun_needed:
                     filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
                     filename_split = filename.split('/')
-                    filename_split[-2] = str(self.__prerun_t)
+                    time_dir = ""
+                    if self.__prerun_t.is_integer():
+                        time_dir = str(int(self.__prerun_t))
+                    else:
+                        time_dir = str(self.__prerun_t)
+                    filename_split[-2] = time_dir
                     temp_filename = '/'.join(filename_split)
                 else:
                     temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
@@ -776,7 +781,7 @@ class OpenFoamRLEnv(gym.Env):
         w = [10, 10]
         theta0 = [math.radians(x) for x in theta0]
         w = [math.radians(x) for x in w]
-        origin = np.array([0, 0, 0.005])
+        origin = np.array([0, 0, 0.0223788])
         radius = 0.05
         patch_flow_rate = [-action, action]
         U = []

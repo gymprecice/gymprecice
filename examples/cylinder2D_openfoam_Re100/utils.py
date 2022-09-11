@@ -664,7 +664,7 @@ def wait_for_file(file_object, sleep_time=0.1):
             break
 
 
-def open_file(file_name, max_wait_time=0.1):
+def open_file(file_name, max_wait_time=1000000):
     # wait till the file is available
     max_attempts = int(max_wait_time / 1e-6)
     acceess_counter = 0

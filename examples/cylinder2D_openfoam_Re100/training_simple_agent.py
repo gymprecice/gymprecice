@@ -12,7 +12,7 @@ from agent import SimpleAgent
 def make_env():
     # shell options to run the solver (this can/should be placed in a
     # separate python script)
-    foam_case_path = "cylinder2D-structured-mesh"
+    foam_case_path = "env01"
     foam_shell_cmd = "foam-functions-cylinder2D.sh"
     foam_clean_cmd = "cleanfoam"
     foam_softclean_cmd = "softcleanfoam"
@@ -27,7 +27,7 @@ def make_env():
     foam_prerunclean_log = "foam_prerun_clean.log"
     foam_run_log = "foam_run.log"
     foam_prerun_log = "foam_prerun.log"
-    foam_prerun_time = 0.35 
+    foam_prerun_time = 0.35
 
     parallel_run = False
     if parallel_run:
@@ -45,7 +45,7 @@ def make_env():
     foam_prerun_cmd = f" && {foam_prerun_cmd} {foam_prerun_time} > {foam_prerun_log} 2>&1"
 
     # reset options
-    n_trajectories = 5
+    n_trajectories = 1
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
     postprocessing_data = {
@@ -93,7 +93,7 @@ def make_env():
         "rand_seed": rand_seed,
         "postprocessing_data": postprocessing_data,
         "n_parallel_env": n_trajectories,
-        "prerun_needed": True,
+        "prerun_needed": False,
         "is_dummy_run": False
     }
 
@@ -116,8 +116,8 @@ if __name__ == '__main__':
     }
 
     train_params = {
-        'epochs': 2,
-        'batch_size': 5 # no. of trajectories
+        'epochs': 1,
+        'batch_size': 1 # no. of trajectories
     }
 
     print('\nUsing simplest formulation of policy gradient.\n')

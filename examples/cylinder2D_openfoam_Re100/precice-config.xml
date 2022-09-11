@@ -48,8 +48,8 @@
     <m2n:sockets from="RL-Gym" to="Fluid" exchange-directory="/data/ms2137/rl_play/examples/cylinder2D_openfoam/"/>
 
     <coupling-scheme:parallel-explicit>
-      <max-time value="0.1" />
-      <time-window-size value="0.025" valid-digits="8" />
+      <max-time value="3" />
+      <time-window-size value="0.1" valid-digits="8" />
       <participants first="RL-Gym" second="Fluid"/>
       <exchange data="Velocity" mesh="RL-Mesh" from="RL-Gym" to="Fluid" initialize="True"/>
       <exchange data="Pressure" mesh="RL-Mesh" from="Fluid" to="RL-Gym"/>
