@@ -1,20 +1,18 @@
-from email import policy
-from tkinter.messagebox import NO
-from typing import Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Dict, List, Optional, Tuple, Type, Union
 from stable_baselines3.common.vec_env import VecEnv
 import collections
 import gym
 import torch
 from torch import nn
-from gym import spaces
-from functools import partial
+
+
 from utils import fix_randseeds
-import time
+
 from OpenFoamRLEnv import OpenFoamRLEnv
-from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
+from stable_baselines3.common.type_aliases import GymEnv, Schedule
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 from stable_baselines3.common.utils import obs_as_tensor, safe_mean
-from stable_baselines3.common.buffers import DictRolloutBuffer, RolloutBuffer
+from stable_baselines3.common.buffers import RolloutBuffer
 import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3 import PPO
@@ -22,17 +20,12 @@ from stable_baselines3.common.policies import ActorCriticPolicy, BasePolicy
 
 from stable_baselines3.common.torch_layers import (
     BaseFeaturesExtractor,
-    CombinedExtractor,
-    FlattenExtractor,
-    MlpExtractor,
-    NatureCNN,
-    create_mlp,
+    FlattenExtractor
 )
 
 from stable_baselines3.common.distributions import DiagGaussianDistribution, sum_independent_dims
 from torch.distributions.normal import Normal
 from stable_baselines3.common.type_aliases import Schedule
-from stable_baselines3.common.preprocessing import get_action_dim
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -40,13 +33,11 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
-
 class Agent(nn.Module):
     def __init__(self, env):
         super().__init__()
         self.n_actions = np.prod(env.action_space.shape)
         self.n_obs = np.prod(env.observation_space.shape)
-        # TODO: extract these from the env.spaces
         self.action_min = torch.from_numpy(env.action_space.low)
         self.action_max = torch.from_numpy(env.action_space.high)
 
@@ -93,36 +84,7 @@ class Agent(nn.Module):
 class CustomActorCriticPolicy(BasePolicy):
     """
     Customised policy class for our Agent(actor-critic) algorithm (has both policy and value prediction).
-
-    :param observation_space: Observation space
-    :param action_space: Action space
-    :param lr_schedule: Learning rate schedule (could be constant)
-    :param net_arch: The specification of the policy and value networks.
-    :param activation_fn: Activation function
-    :param ortho_init: Whether to use or not orthogonal initialization
-    :param use_sde: Whether to use State Dependent Exploration or not
-    :param log_std_init: Initial value for the log standard deviation
-    :param full_std: Whether to use (n_features x n_actions) parameters
-        for the std instead of only (n_features,) when using gSDE
-    :param sde_net_arch: Network architecture for extracting features
-        when using gSDE. If None, the latent features from the policy will be used.
-        Pass an empty list to use the states as features.
-    :param use_expln: Use ``expln()`` function instead of ``exp()`` to ensure
-        a positive standard deviation (cf paper). It allows to keep variance
-        above zero and prevent it from growing too fast. In practice, ``exp()`` is usually enough.
-    :param squash_output: Whether to squash the output using a tanh function,
-        this allows to ensure boundaries when using gSDE.
-    :param features_extractor_class: Features extractor to use.
-    :param features_extractor_kwargs: Keyword arguments
-        to pass to the features extractor.
-    :param normalize_images: Whether to normalize images or not,
-         dividing by 255.0 (True by default)
-    :param optimizer_class: The optimizer to use,
-        ``torch.optim.Adam`` by default
-    :param optimizer_kwargs: Additional keyword arguments,
-        excluding the learning rate, to pass to the optimizer
     """
-
     def __init__(
         self,
         observation_space: gym.spaces.Space,
@@ -144,7 +106,6 @@ class CustomActorCriticPolicy(BasePolicy):
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         env=None
     ):
-
         if optimizer_kwargs is None:
             optimizer_kwargs = {}
             # Small values to avoid NaN in Adam optimizer
@@ -213,10 +174,8 @@ class CustomActorCriticPolicy(BasePolicy):
     def reset_noise(self, n_envs: int = 1) -> None:
         """
         Sample new weights for the exploration matrix.
-
-        :param n_envs:
         """
-        NotImplementedError
+        raise NotImplementedError
 
     def _build_mlp_extractor(self) -> None:
         """
@@ -228,9 +187,6 @@ class CustomActorCriticPolicy(BasePolicy):
     def _build(self, lr_schedule: Schedule) -> None:
         """
         Create the networks and the optimizer.
-
-        :param lr_schedule: Learning rate schedule
-            lr_schedule(1) is the initial learning rate
         """
         self._build_mlp_extractor()
 
@@ -241,10 +197,6 @@ class CustomActorCriticPolicy(BasePolicy):
         """
         Get actions ans values from actor-critic according to the current policy,
         given the observations 
-
-        :param obs: Observation
-        :param deterministic: Whether to sample or use deterministic actions
-        :return: action, value and log probability of the action
         """
         features = self.extract_features(obs)
         actions, log_prob, _, values = self.mlp_extractor.get_action_and_value(features)
@@ -254,10 +206,6 @@ class CustomActorCriticPolicy(BasePolicy):
     def _predict(self, observation: torch.Tensor, deterministic: bool = False) -> torch.Tensor:
         """
         Get the action according to the policy for a given observation.
-
-        :param observation:
-        :param deterministic: Whether to use stochastic or deterministic actions
-        :return: Taken action according to the policy
         """
         actions, _, _, _ = self.mlp_extractor.get_action_and_value(observation)
         return actions
@@ -266,11 +214,6 @@ class CustomActorCriticPolicy(BasePolicy):
         """
         Evaluate actions according to the current policy,
         given the observations.
-
-        :param obs:
-        :param actions:
-        :return: estimated value, log likelihood of taking those actions
-            and entropy of the action distribution.
         """
         features = self.extract_features(obs)
         _, log_prob, entropy, values = self.mlp_extractor.get_action_and_value(features, actions)        
@@ -279,9 +222,6 @@ class CustomActorCriticPolicy(BasePolicy):
     def predict_values(self, obs: torch.Tensor) -> torch.Tensor:
         """
         Get the estimated values according to the current policy given the observations.
-
-        :param obs:
-        :return: the estimated values.
         """
         features = self.extract_features(obs)
         values = self.mlp_extractor.get_value(features)
@@ -353,14 +293,6 @@ class CustomPPO(PPO):
         Collect experiences using the current policy and fill a ``RolloutBuffer``.
         The term rollout here refers to the model-free notion and should not
         be used with the concept of rollout used in model-based RL or planning.
-
-        :param env: The training environment
-        :param callback: Callback that will be called at each step
-            (and at the beginning and end of the rollout)
-        :param rollout_buffer: Buffer to fill with rollouts
-        :param n_steps: Number of experiences to collect per environment
-        :return: True if function returned with at least `n_rollout_steps`
-            collected, False if callback terminated rollout prematurely.
         """
         assert self._last_obs is not None, "No previous observation was provided"
         # Switch to eval mode (this affects batch norm / dropout)
@@ -394,8 +326,8 @@ class CustomPPO(PPO):
 
             # smooth the action and step 
             subcycle_counter = 0
-            subcycle_max = 5
-            prev_actions = rollout_buffer.to_torch(rollout_buffer.actions[-1])
+            subcycle_max = 50
+            prev_actions = rollout_buffer.to_torch(rollout_buffer.actions[n_steps-1])
             new_obs = rewards = dones = infos = None
             # little bit inefficient communication modes but lets try
             while subcycle_counter < subcycle_max:
@@ -403,7 +335,7 @@ class CustomPPO(PPO):
                 smoothed_action = (1 - smoothing_fraction) * prev_actions + smoothing_fraction * clipped_actions
                 # TRY NOT TO MODIFY: execute the game and log data.
                 new_obs, rewards, dones, infos = env.step(smoothed_action.cpu().numpy())
-                print(f'PPO will took the following action {clipped_actions} vs previous action {prev_actions} at subcycle {subcycle_counter} out of {subcycle_max}, reward {rewards}')
+                #print(f'PPO will took the following action {smoothed_action} vs previous action {prev_actions} at subcycle {subcycle_counter} out of {subcycle_max}, reward {rewards}')
                 subcycle_counter += 1
 
             self.num_timesteps += env.num_envs
@@ -454,7 +386,7 @@ if __name__ == '__main__':
 
     # shell options to run the solver (this can/should be placed in a
     # separate python script)
-    foam_case_path = "env01_4"
+    foam_case_path = "env01_3"
     foam_shell_cmd = "foam-functions-cylinder2D.sh"
     foam_clean_cmd = "cleanfoam"
     foam_softclean_cmd = "softcleanfoam"
@@ -469,7 +401,7 @@ if __name__ == '__main__':
     foam_prerunclean_log = "foam_prerun_clean.log"
     foam_run_log = "foam_run.log"
     foam_prerun_log = "foam_prerun.log"
-    foam_prerun_time = 0.0335
+    foam_prerun_time = 0.335
 
     parallel_run = False
     if parallel_run:
@@ -523,8 +455,7 @@ if __name__ == '__main__':
         "postprocessing_data": postprocessing_data,
         "n_parallel_env": n_parallel_env,
         "is_dummy_run": False,
-        "prerun": True,
-        "is_dummy_run": False
+        "prerun": True
     }
 
     # create the environment
