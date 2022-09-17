@@ -85,7 +85,6 @@ class CustomActorCriticPolicy(BasePolicy):
     """
     Customised policy class for our Agent(actor-critic) algorithm (has both policy and value prediction).
     """
-
     def __init__(
         self,
         observation_space: gym.spaces.Space,
@@ -328,16 +327,25 @@ class CustomPPO(PPO):
             # smooth the action and step 
             subcycle_counter = 0
             subcycle_max = 50
-            prev_actions = rollout_buffer.to_torch(rollout_buffer.actions[n_steps-1])
-            new_obs = rewards = dones = infos = None
+            
+            prev_actions = new_obs = rewards = dones = infos = None
+            # avoid carrying prev_actions across episode
+            if self._last_episode_starts[0]: # TODO: valid only if all n_parallel-envs reset at the same time
+                prev_actions = rollout_buffer.to_torch(rollout_buffer.actions[-1])
+            else:
+                prev_actions = rollout_buffer.to_torch(rollout_buffer.actions[n_steps-1])
+
             # little bit inefficient communication modes but lets try
             while subcycle_counter < subcycle_max:
                 smoothing_fraction = (subcycle_counter / subcycle_max)
                 smoothed_action = (1 - smoothing_fraction) * prev_actions + smoothing_fraction * clipped_actions
                 # TRY NOT TO MODIFY: execute the game and log data.
                 new_obs, rewards, dones, infos = env.step(smoothed_action.cpu().numpy())
-                print(f'PPO will took the following action {clipped_actions} vs previous action {prev_actions} at subcycle {subcycle_counter} out of {subcycle_max}, reward {rewards}')
+                print(f'PPO will took the following action {smoothed_action} vs previous action {prev_actions} at subcycle {subcycle_counter} out of {subcycle_max}, reward {rewards}')
                 subcycle_counter += 1
+                # break the subcycle if episode ends
+                if dones[0]: # TODO: valid only if all n_parallel-envs reset at the same time
+                    break
 
             self.num_timesteps += env.num_envs
 
