@@ -4,10 +4,7 @@ import collections
 import gym
 import torch
 from torch import nn
-
-
 from utils import fix_randseeds
-
 from OpenFoamRLEnv import OpenFoamRLEnv
 from stable_baselines3.common.type_aliases import GymEnv, Schedule
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
@@ -16,14 +13,13 @@ from stable_baselines3.common.buffers import RolloutBuffer
 import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3 import PPO
-from stable_baselines3.common.policies import ActorCriticPolicy, BasePolicy
+from stable_baselines3.common.policies import BasePolicy
 
 from stable_baselines3.common.torch_layers import (
     BaseFeaturesExtractor,
     FlattenExtractor
 )
 
-from stable_baselines3.common.distributions import DiagGaussianDistribution, sum_independent_dims
 from torch.distributions.normal import Normal
 from stable_baselines3.common.type_aliases import Schedule
 
@@ -64,7 +60,6 @@ class Agent(nn.Module):
         return self.critic(x)
 
     def get_action_and_value(self, x, action=None):
-
         action_mean = self.actor_mean(x)
         action_logstd = self.actor_logstd.expand_as(action_mean)
         action_std = torch.exp(action_logstd)
@@ -175,7 +170,7 @@ class CustomActorCriticPolicy(BasePolicy):
         """
         Sample new weights for the exploration matrix.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def _build_mlp_extractor(self) -> None:
         """
@@ -230,11 +225,11 @@ class CustomActorCriticPolicy(BasePolicy):
 
 class CustomPPO(PPO):
     def __init__(
-        self, policy: Union[str, Type[ActorCriticPolicy]],
+        self, policy,
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 5e-4,
         n_steps: int = 160,
-        batch_size: int = 5,
+        batch_size: int = 16,
         n_epochs: int = 10,
         gamma: float = 0.99,
         gae_lambda: float = 0.95,
@@ -331,16 +326,16 @@ class CustomPPO(PPO):
             prev_actions = new_obs = rewards = dones = infos = None
             # avoid carrying prev_actions across episode
             if self._last_episode_starts[0]: # TODO: valid only if all n_parallel-envs reset at the same time
-                prev_actions = rollout_buffer.to_torch(rollout_buffer.actions[-1])
+                prev_actions = rollout_buffer.actions[-1]
             else:
-                prev_actions = rollout_buffer.to_torch(rollout_buffer.actions[n_steps-1])
+                prev_actions = rollout_buffer.actions[n_steps-1]
 
             # little bit inefficient communication modes but lets try
             while subcycle_counter < subcycle_max:
                 smoothing_fraction = (subcycle_counter / subcycle_max)
                 smoothed_action = (1 - smoothing_fraction) * prev_actions + smoothing_fraction * clipped_actions
                 # TRY NOT TO MODIFY: execute the game and log data.
-                new_obs, rewards, dones, infos = env.step(smoothed_action.cpu().numpy())
+                new_obs, rewards, dones, infos = env.step(smoothed_action)
                 print(f'PPO will took the following action {smoothed_action} vs previous action {prev_actions} at subcycle {subcycle_counter} out of {subcycle_max}, reward {rewards}')
                 subcycle_counter += 1
                 # break the subcycle if episode ends
@@ -395,7 +390,7 @@ if __name__ == '__main__':
 
     # shell options to run the solver (this can/should be placed in a
     # separate python script)
-    foam_case_path = "env01_3"
+    foam_case_path = "env01"
     foam_shell_cmd = "foam-functions-cylinder2D.sh"
     foam_clean_cmd = "cleanfoam"
     foam_softclean_cmd = "softcleanfoam"
