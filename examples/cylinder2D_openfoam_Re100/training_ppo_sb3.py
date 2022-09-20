@@ -391,7 +391,7 @@ if __name__ == '__main__':
 
     # shell options to run the solver (this can/should be placed in a
     # separate python script)
-    foam_case_path = "cylinder2D-unstructured-test"
+    foam_case_path = "cylinder2D-unstructured-mesh"
     foam_shell_cmd = "foam-functions-cylinder2D.sh"
     foam_clean_cmd = "cleanfoam"
     foam_softclean_cmd = "softcleanfoam"
@@ -452,6 +452,7 @@ if __name__ == '__main__':
         "n_parallel_env": n_parallel_env,
         "is_dummy_run": False,
         "prerun": True,
+        "prerun_available": True,
         "prerun_time": 0.335
     }
 

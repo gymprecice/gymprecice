@@ -158,14 +158,17 @@ class OpenFoamRLEnv(gym.Env):
         case_path = source_folder_str
 
         os.system(f'cp ./{shell_cmd} {run_folder_str}')
-        self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
-        self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
+        
+        if not prerun_available or not prerun:
+            self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
+            self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
         
         if not prerun_available and prerun:
             run_cmd_split = run_cmd.split(">")
             run_cmd_split[0] += " -prerun " + str(prerun_time) + " "
             run_cmd = '>'.join(run_cmd_split)
             self._launch_subprocess(shell_cmd, run_cmd, case_path, cmd_type='prerun')
+        
             
         # parse solver mesh data
         patch_list = find_interface_patches(load_file(join(source_folder_str, 'system'), 'preciceDict'))
