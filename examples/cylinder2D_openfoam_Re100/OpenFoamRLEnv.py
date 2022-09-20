@@ -127,15 +127,13 @@ class OpenFoamRLEnv(gym.Env):
         case_path = self.__options.get("case_path", "")
         clean_cmd = self.__options.get("clean_cmd", "")
         preprocess_cmd = self.__options.get("preprocess_cmd", "")
+        run_cmd = self.__options.get("run_cmd", "")
+
         prerun = self.__options.get("prerun", False)
         prerun_time = self.__options.get("prerun_time", 0.0)
-        prerun_cmd = self.__options.get("prerun_cmd", "")
+        prerun_available = self.__options.get("prerun_available", False)
 
-        self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
-        self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
-        if prerun:
-            print("Wait: non-controlled OF is running ...")
-            self._launch_subprocess(shell_cmd, prerun_cmd, case_path, cmd_type='prerun')
+        
 
         # Create an empty folder for the RL_Gym to run OpenFoam
         cwd = Path.cwd()
@@ -147,9 +145,28 @@ class OpenFoamRLEnv(gym.Env):
         except Exception as e:
             raise Exception(f'failed to create run folder: {e}')
 
-        case_path_str = self.__options['case_path']
-        source_folder_str = join(str(cwd), case_path_str)
+        case_path = self.__options['case_path']
+        source_folder_str = join(str(cwd), case_path)
+        run_folder_str = join(str(cwd), run_folder_name)
 
+         # copy base case to RL_gym folder
+        try:
+            os.system(f'cp -r {source_folder_str} {run_folder_str}')
+        except Exception as e:
+            raise Exception(f'Failed to copy base case to run folder: {e}')
+        source_folder_str = join(run_folder_str, case_path)
+        case_path = source_folder_str
+
+        os.system(f'cp ./{shell_cmd} {run_folder_str}')
+        self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
+        self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
+        
+        if not prerun_available and prerun:
+            run_cmd_split = run_cmd.split(">")
+            run_cmd_split[0] += " -prerun " + str(prerun_time) + " "
+            run_cmd = '>'.join(run_cmd_split)
+            self._launch_subprocess(shell_cmd, run_cmd, case_path, cmd_type='prerun')
+            
         # parse solver mesh data
         patch_list = find_interface_patches(load_file(join(source_folder_str, 'system'), 'preciceDict'))
         self.__patch_data = self.setup_mesh_data(case_path, patch_list)
@@ -159,7 +176,7 @@ class OpenFoamRLEnv(gym.Env):
         run_folder_list = []
 
         for idx_ in range(self.__options['n_parallel_env']):
-            dist_folder_str = str(run_folder) + '/' + case_path_str + f'_{idx_}'
+            dist_folder_str = str(run_folder) + '/' + 'env' + f'_{idx_}'
             run_folder_list.append(dist_folder_str)
             try:
                 os.system(f'cp -rs {source_folder_str} {dist_folder_str}')
@@ -185,7 +202,7 @@ class OpenFoamRLEnv(gym.Env):
             file_obj.write(xmltodict.unparse(parallel_tree, encoding='utf-8', pretty=True))
 
         os.chdir(str(run_folder))
-        os.system(f'cp ../{shell_cmd} .')
+        #os.system(f'cp ../{shell_cmd} .')
 
         # we don't want symbolic links to the paraview files
         # os.system(f'rm -f {dist_folder_str}/case.foam')
@@ -203,25 +220,24 @@ class OpenFoamRLEnv(gym.Env):
 
         # get the solver-launch options
         shell_cmd = self.__options.get("foam_shell_cmd", "")
-        case_path = self.__options.get("case_path", "")
-        clean_cmd = self.__options.get("clean_cmd", "")
         softclean_cmd = self.__options.get("softclean_cmd", "")
-        preprocess_cmd = self.__options.get("preprocess_cmd", "")
-        prerunclean_cmd = self.__options.get("prerunclean_cmd", "")
         run_cmd = self.__options.get("run_cmd", "")
         self.__solver_full_reset = self.__options.get("solver_full_reset", self.__solver_full_reset)
 
 
         
         self.__max_time = self.__init_max_time
+        case_path = 'env'
 
         for p_idx in range(self.__options['n_parallel_env']):
             p_case_path = case_path + f'_{p_idx}'
             # clean the log files
             if self.__prerun:
-                self._launch_subprocess(shell_cmd, prerunclean_cmd, p_case_path, cmd_type='prerunclean')
-            else:
-                self._launch_subprocess(shell_cmd, softclean_cmd, p_case_path, cmd_type='softclean')
+                softclean_cmd_split = softclean_cmd.split(">")
+                softclean_cmd_split[0] += " -prerun "
+                softclean_cmd = '>'.join(softclean_cmd_split)
+            
+            self._launch_subprocess(shell_cmd, softclean_cmd, p_case_path, cmd_type='softclean')
 
         if len(self.__postprocessing_filehandler_dict) > 0:
             self._close_postprocessing_files()
@@ -537,7 +553,7 @@ class OpenFoamRLEnv(gym.Env):
 
     def _launch_subprocess(self, shell_cmd, cmd, cwd, cmd_type):
         cmd_str = f'. ../{shell_cmd} {cmd}'  # here we have relative path
-        if cmd_type in ['clean', 'softclean', 'prerunclean']:
+        if cmd_type in ['clean', 'softclean']:
             print(cmd_type, cmd_str, cwd, os.getcwd())
             print("================")
             try:
@@ -659,9 +675,10 @@ class OpenFoamRLEnv(gym.Env):
 
     def _read_probes_rewards_files(self):
         # sequential read of a single line (last line) of the file at each RL-Gym step
-
+        case_path = 'env'
+        #case_path = self.__options['case_path']
         for p_idx in range(self.__options['n_parallel_env']):
-            p_case_path = self.__options['case_path'] + f'_{p_idx}'
+            p_case_path = case_path + f'_{p_idx}'
             for field_ in self.__options['postprocessing_data'].keys():
                 temp_filename = ""
                 if self.__prerun:
@@ -725,9 +742,11 @@ class OpenFoamRLEnv(gym.Env):
                 assert math.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"    
    
     def _read_prerun_probes_rewards_files(self):
+        case_path = 'env'
+        #case_path = self.__options['case_path']
 
         for p_idx in range(self.__options['n_parallel_env']):
-            p_case_path = self.__options['case_path'] + f'_{p_idx}'
+            p_case_path = case_path + f'_{p_idx}'
             for field_ in self.__options['postprocessing_data'].keys():
 
                 temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
@@ -916,7 +935,6 @@ class OpenFoamRLEnv(gym.Env):
         # https://stable-baselines3.readthedocs.io/en/master/_modules/stable_baselines3/common/vec_env/subproc_vec_env.html#SubprocVecEnv.reset
 
         return np.stack(obs_list)
-
 
     def setup_reward(self,n_lookback=1, lookback_time=0.025):
         """ Problem specific function """

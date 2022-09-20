@@ -334,6 +334,7 @@ class CustomPPO(PPO):
             while subcycle_counter < subcycle_max:
                 smoothing_fraction = (subcycle_counter / subcycle_max)
                 smoothed_action = (1 - smoothing_fraction) * prev_actions + smoothing_fraction * clipped_actions
+                
                 # TRY NOT TO MODIFY: execute the game and log data.
                 new_obs, rewards, dones, infos = env.step(smoothed_action)
                 print(f'PPO will took the following action {smoothed_action} vs previous action {prev_actions} at subcycle {subcycle_counter} out of {subcycle_max}, reward {rewards}')
@@ -390,22 +391,17 @@ if __name__ == '__main__':
 
     # shell options to run the solver (this can/should be placed in a
     # separate python script)
-    foam_case_path = "env01"
+    foam_case_path = "cylinder2D-unstructured-test"
     foam_shell_cmd = "foam-functions-cylinder2D.sh"
     foam_clean_cmd = "cleanfoam"
     foam_softclean_cmd = "softcleanfoam"
-    foam_prerunclean_cmd = "preruncleanfoam"
 
     foam_preprocess_cmd = "preprocessfoam" 
     foam_run_cmd = "runfoam"
-    foam_prerun_cmd = "prerunfoam"
     foam_preprocess_log = "foam_preprocess.log"
     foam_clean_log = "foam_clean.log"
     foam_softclean_log = "foam_softclean.log"
-    foam_prerunclean_log = "foam_prerun_clean.log"
     foam_run_log = "foam_run.log"
-    foam_prerun_log = "foam_prerun.log"
-    foam_prerun_time = 0.335
 
     parallel_run = False
     if parallel_run:
@@ -417,10 +413,8 @@ if __name__ == '__main__':
 
     foam_clean_cmd = f" && {foam_clean_cmd} > {foam_clean_log} 2>&1"
     foam_softclean_cmd = f" && {foam_softclean_cmd} > {foam_softclean_log} 2>&1"
-    foam_prerunclean_cmd = f" && {foam_prerunclean_cmd} > {foam_prerunclean_log} 2>&1"
     foam_preprocess_cmd = f" && {foam_preprocess_cmd} > {foam_preprocess_log} 2>&1"
     foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log} 2>&1"
-    foam_prerun_cmd = f" && {foam_prerun_cmd} {foam_prerun_time} > {foam_prerun_log} 2>&1"
 
   # reset options
     n_parallel_env = 1
@@ -450,16 +444,15 @@ if __name__ == '__main__':
         "foam_shell_cmd": foam_shell_cmd,
         "clean_cmd": foam_clean_cmd,
         "softclean_cmd": foam_softclean_cmd,
-        "prerunclean_cmd": foam_prerunclean_cmd,
         "preprocess_cmd": foam_preprocess_cmd,
-        "prerun_cmd": foam_prerun_cmd,
         "run_cmd": foam_run_cmd,
         "solver_full_reset": foam_full_reset,
         "rand_seed": rand_seed,
         "postprocessing_data": postprocessing_data,
         "n_parallel_env": n_parallel_env,
         "is_dummy_run": False,
-        "prerun": True
+        "prerun": True,
+        "prerun_time": 0.335
     }
 
     # create the environment
