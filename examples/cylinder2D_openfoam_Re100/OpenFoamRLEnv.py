@@ -107,14 +107,20 @@ class OpenFoamRLEnv(gym.Env):
         self._close_postprocessing_files()
         if self.__interface:
             try:
-                print('crashing the interface using negative timestep')
-                self.__interface.advance(-1)
+                #print('crashing the interface using negative timestep')
+                #self.__interface.advance(-1)
                 # another idea is to advance with random actions till the coupling finish and finalize
-                # self.__interface.finalize()
+                self.dummy_step()
             except Exception as e:
                 pass
-        # print('delete the interface')
-        # self.__interface.finalize()
+    
+    def dummy_step(self):
+        # advance with  actions equal to zero till the coupling finish and finalize
+        while True:
+            self.step([0.])
+    
+    def finalize(self):
+        self.__del__()
 
     def _make_run_folders(self):
         # 1- clean the case file
@@ -326,13 +332,13 @@ class OpenFoamRLEnv(gym.Env):
         # return obs_list
 
     # this makes the environment 
+    # def step(self, action):
+    #     if self.__interface is None:
+    #         self.reset()
+    #     return self.step_base(action)
+
+
     def step(self, action):
-        if self.__interface is None:
-            self.reset()
-        return self.step_base(action)
-
-
-    def step_base(self, action):
         t0 = time.time()
         if not isinstance(action, list) and not isinstance(action, np.ndarray):
             raise Exception("Action should be either a list or numpy array")

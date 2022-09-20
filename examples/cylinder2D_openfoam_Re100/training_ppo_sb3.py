@@ -465,4 +465,11 @@ if __name__ == '__main__':
     buffer_size = model.env.num_envs * model.n_steps
     total_timesteps = int(num_updates * buffer_size)
 
+    # train the model
     model.learn(total_timesteps)
+
+    # release _thread.locks 
+    env.finalize()
+
+    # save the model
+    model.save("model")
