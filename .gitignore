@@ -20,3 +20,4 @@ polyMesh/
 linux*/
 lnInclude/
 dynamicCode/
+rl_gym_run*/

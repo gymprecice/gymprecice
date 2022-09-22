@@ -901,7 +901,7 @@ class OpenFoamRLEnv(gym.Env):
         self.action_space = spaces.Box(
             low=-1e-4, high=1e-4, shape=(1, ), dtype=np.float64)
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(11,), dtype=np.float64)
+            low=-np.inf, high=np.inf, shape=(151,), dtype=np.float64)
 
     def setup_action_to_write_data(self, action, p_idx=0):
         """ Problem specific function """
@@ -948,7 +948,7 @@ class OpenFoamRLEnv(gym.Env):
     def setup_reward(self,n_lookback=1, lookback_time=0.025):
         """ Problem specific function """
 
-        lookback_time = self.__prerun_t  # 1/2.9850746268656714  # this is for Re=100
+        #lookback_time = self.__prerun_t  # 1/2.9850746268656714  # this is for Re=100
         n_lookback = int(lookback_time // self.__precice_dt) + 1  # how many precice timesteps to cover the lookback time
 
         reward_dict = self._get_reward_dict(n_lookback=n_lookback)

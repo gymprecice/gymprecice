@@ -23,7 +23,7 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime    0.335;
+endTime    0.005;
 
 deltaT          0.0005;
 
@@ -43,7 +43,7 @@ timeFormat      general;
 
 timePrecision   6;
 
-runTimeModifiable yes;
+runTimeModifiable no;
 
 adjustTimeStep  no;
 
@@ -55,7 +55,7 @@ functions
     #includeFunc probes
     #includeFunc flowRateJet1
     #includeFunc flowRateJet2
-//// #includeFunc preCICE_Adapter   
+// #includeFunc preCICE_Adapter        
 }
 
 

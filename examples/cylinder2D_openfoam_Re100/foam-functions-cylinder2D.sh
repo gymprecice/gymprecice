@@ -48,7 +48,7 @@ runfoam() {
 
     # turn off preCICE adapter for "prerun" 
     if [ "$pre_run" = "true" ]; then
-        sed  -i "s/\s\{0,\}\(#.*preCICE_Adapter.*\)/\/\/ \1 /g" ./system/controlDict
+        sed  -i "s/^\s\{0,\}\(\#.*preCICE_Adapter.*\)/\/\/ \1 /g" ./system/controlDict
         for arg in "$@"; do
             if [ "$arg" = "-prerun" ] || [ "$arg" = "-parallel" ]; then
                 shift

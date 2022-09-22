@@ -38,19 +38,19 @@ class Agent(nn.Module):
         self.action_max = torch.from_numpy(env.action_space.high)
 
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(self.n_obs, 64)),
+            layer_init(nn.Linear(self.n_obs, 512)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
+            layer_init(nn.Linear(512, 512)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 1), std=1.0),
+            layer_init(nn.Linear(512, 1), std=1.0),
         )
 
         self.actor_mean = nn.Sequential(
-            layer_init(nn.Linear(self.n_obs, 64)),
+            layer_init(nn.Linear(self.n_obs, 512)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
+            layer_init(nn.Linear(512, 512)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, self.n_actions), std=0.1),
+            layer_init(nn.Linear(512, self.n_actions), std=0.1),
             nn.Tanh()
         )
 
@@ -229,8 +229,8 @@ class CustomPPO(PPO):
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 1e-3,
         n_steps: int = 80,
-        batch_size: int = 20,
-        n_epochs: int = 4,
+        batch_size: int = 80,
+        n_epochs: int = 1,
         gamma: float = 0.99,
         gae_lambda: float = 0.97,
         clip_range: Union[float, Schedule] = 0.2,
@@ -333,21 +333,26 @@ class CustomPPO(PPO):
 
             # little bit inefficient communication modes but lets try
             while subcycle_counter < subcycle_max:
-                
+                ## non-linear smoothing
                 smoothed_action = clipped_actions + (prev_actions - clipped_actions) * (1.0 - exp_smoothing_factor)**(subcycle_counter)
                 
+                ## linear smoothing 
                 # smoothing_fraction = (subcycle_counter / subcycle_max)
                 # smoothed_action = (1 - smoothing_fraction) * prev_actions + smoothing_fraction * clipped_actions
 
+                ## linear smoothing - Paris et. al
                 # smoothing_fraction = 1 
                 # if subcycle_counter < 20:
                 #     smoothing_fraction = (subcycle_counter / 20)
                 # smoothed_action = (1 - smoothing_fraction) * prev_actions + smoothing_fraction * clipped_actions
                 
+                subcycle_counter += 1
+                
                 # TRY NOT TO MODIFY: execute the game and log data.
                 new_obs, rewards, dones, infos = env.step(smoothed_action)
-                print(f'PPO will took the following action {smoothed_action} vs previous action {prev_actions} at subcycle {subcycle_counter} out of {subcycle_max}, reward {rewards}')
-                subcycle_counter += 1
+                
+                #print(f'PPO will took the following action {smoothed_action} vs previous action {prev_actions} at subcycle {subcycle_counter} out of {subcycle_max}, reward {rewards}')
+                
                 # break the subcycle if episode ends
                 if dones[0]: # TODO: valid only if all n_parallel-envs reset at the same time
                     break
@@ -442,7 +447,7 @@ if __name__ == '__main__':
             'use': 'observation',  # goes into observation or rewards
             'type': 'probe',  # forces|probe|?
             'datatype': 'scaler',  # scaler vs field
-            'size': 11,  # number of probes
+            'size': 151,  # number of probes
             'output_file': '/postProcessing/probes/0/p',  # depends on the type of the probe/patchProbe/etc
         }
     }
@@ -461,7 +466,7 @@ if __name__ == '__main__':
         "n_parallel_env": n_parallel_env,
         "is_dummy_run": False,
         "prerun": True,
-        "prerun_available": True,
+        "prerun_available": False,
         "prerun_time": 0.335
     }
 
