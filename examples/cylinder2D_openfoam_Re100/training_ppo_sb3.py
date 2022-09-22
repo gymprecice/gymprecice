@@ -227,12 +227,12 @@ class CustomPPO(PPO):
     def __init__(
         self, policy,
         env: Union[GymEnv, str],
-        learning_rate: Union[float, Schedule] = 5e-4,
-        n_steps: int = 160,
-        batch_size: int = 16,
-        n_epochs: int = 10,
+        learning_rate: Union[float, Schedule] = 1e-3,
+        n_steps: int = 80,
+        batch_size: int = 20,
+        n_epochs: int = 4,
         gamma: float = 0.99,
-        gae_lambda: float = 0.95,
+        gae_lambda: float = 0.97,
         clip_range: Union[float, Schedule] = 0.2,
         clip_range_vf: Union[None, float, Schedule] = None,
         normalize_advantage: bool = True,
@@ -322,18 +322,27 @@ class CustomPPO(PPO):
             # smooth the action and step 
             subcycle_counter = 0
             subcycle_max = 50
+            exp_smoothing_factor = 0.1
             
             prev_actions = new_obs = rewards = dones = infos = None
             # avoid carrying prev_actions across episode
             if self._last_episode_starts[0]: # TODO: valid only if all n_parallel-envs reset at the same time
-                prev_actions = rollout_buffer.actions[-1]
+                prev_actions = np.clip(rollout_buffer.actions[-1], self.action_space.low, self.action_space.high)
             else:
-                prev_actions = rollout_buffer.actions[n_steps-1]
+                prev_actions = np.clip(rollout_buffer.actions[n_steps-1], self.action_space.low, self.action_space.high)
 
             # little bit inefficient communication modes but lets try
             while subcycle_counter < subcycle_max:
-                smoothing_fraction = (subcycle_counter / subcycle_max)
-                smoothed_action = (1 - smoothing_fraction) * prev_actions + smoothing_fraction * clipped_actions
+                
+                smoothed_action = clipped_actions + (prev_actions - clipped_actions) * (1.0 - exp_smoothing_factor)**(subcycle_counter)
+                
+                # smoothing_fraction = (subcycle_counter / subcycle_max)
+                # smoothed_action = (1 - smoothing_fraction) * prev_actions + smoothing_fraction * clipped_actions
+
+                # smoothing_fraction = 1 
+                # if subcycle_counter < 20:
+                #     smoothing_fraction = (subcycle_counter / 20)
+                # smoothed_action = (1 - smoothing_fraction) * prev_actions + smoothing_fraction * clipped_actions
                 
                 # TRY NOT TO MODIFY: execute the game and log data.
                 new_obs, rewards, dones, infos = env.step(smoothed_action)
@@ -461,7 +470,7 @@ if __name__ == '__main__':
 
     model = CustomPPO(CustomActorCriticPolicy, env, policy_kwargs={'env':env}, device="cpu", verbose=1)
 
-    num_updates = 100
+    num_updates = 1000
     buffer_size = model.env.num_envs * model.n_steps
     total_timesteps = int(num_updates * buffer_size)
 
