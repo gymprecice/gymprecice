@@ -19,8 +19,8 @@ solvers
     p
     {
         solver GAMG;
-        tolerance 1e-11;
-        relTol 0.0;
+        tolerance 1e-8;
+        relTol 0.001;
         smoother GaussSeidel;
         nPreSweeps 0;
         nPostSweeps 2;
@@ -36,40 +36,59 @@ solvers
         relTol 0;    
     }
 
-    "(U|k|omega|epsilon).*"
+    U
     {
         solver PBiCGStab;
         preconditioner DILU;
-        tolerance 1e-11;
-        relTol 0;      
-        minIter 3;
+        tolerance 1e-8;
+        relTol 0.001;    
+    }
+    
+    UFinal
+    {
+        $U;
+        relTol 0;    
     }
 }
 
 PIMPLE
 {
-    nOuterCorrectors 3;
+    nOuterCorrectors    100;
     nCorrectors 2;
-    nNonOrthogonalCorrectors 2;
+    nNonOrthogonalCorrectors 1;
 
     pRefCell        0;
     pRefValue       0;
+
+    residualControl
+    {
+        p
+        {
+                tolerance  1e-4;
+                relTol      0;
+        }
+        U
+        {
+                tolerance  1e-4;
+                relTol      0;
+        }
+    }
 }
 
 relaxationFactors
 {
-/*
+
     fields
-    {
-        p               0.3;
-    }
-    equations
-    {
-        U               0.7;
-        k               0.7;
-        omega           0.7;
-    }
-*/
+        {
+            p      0.3;
+            pFinal   1;
+        }
+        equations
+        {
+            "U"     0.7;
+            "(U)Final"   1;
+        }
+
 }
 
 // ************************************************************************* //

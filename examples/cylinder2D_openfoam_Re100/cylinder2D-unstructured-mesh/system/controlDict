@@ -23,9 +23,9 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime    0.005;
+endTime    0.335;
 
-deltaT          0.0005;
+deltaT          0.001;
 
 writeControl   timeStep;
 
@@ -51,6 +51,7 @@ maxCo           1;
 
 functions
 {
+    #includeFunc  solverInfo
     #includeFunc forces
     #includeFunc probes
     #includeFunc flowRateJet1
