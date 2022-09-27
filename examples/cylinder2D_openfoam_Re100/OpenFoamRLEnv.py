@@ -53,6 +53,7 @@ class OpenFoamRLEnv(gym.Env):
 
         # gym env attributes:
         self.__is_reset = False
+        self.__prerun_probes_loaded = None
         #self.__prerun = None
         self.__prerun = self.__options.get("prerun", False)
         self.__is_first_reset = True  # if True, gym env reset has been called at least once
@@ -62,6 +63,8 @@ class OpenFoamRLEnv(gym.Env):
         self.__is_data_initialized = None
 
         self.__patch_data = None
+
+        self.__prerun_t = None
 
         max_time, _ = get_coupling_data('', self.__options['precice_cfg']) 
         self.__init_max_time = float(max_time)
@@ -87,7 +90,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__interface = None  # preCICE interface
         self.__time_window = None
         self.__t = None
-        self.__prerun_t = None
+        
         self.__mesh_id = None
         self.__dim = None
         self.__vertex_ids = None
@@ -136,7 +139,7 @@ class OpenFoamRLEnv(gym.Env):
         run_cmd = self.__options.get("run_cmd", "")
 
         prerun = self.__options.get("prerun", False)
-        prerun_time = self.__options.get("prerun_time", 0.0)
+        self.__prerun_t = self.__options.get("prerun_time", 0.0)
         prerun_available = self.__options.get("prerun_available", False)
 
         
@@ -171,7 +174,7 @@ class OpenFoamRLEnv(gym.Env):
         
         if not prerun_available and prerun:
             run_cmd_split = run_cmd.split(">")
-            run_cmd_split[0] += " -prerun " + str(prerun_time) + " "
+            run_cmd_split[0] += " -prerun " + str(self.__prerun_t) + " "
             run_cmd = '>'.join(run_cmd_split)
             self._launch_subprocess(shell_cmd, run_cmd, case_path, cmd_type='prerun')
         
@@ -232,6 +235,7 @@ class OpenFoamRLEnv(gym.Env):
         softclean_cmd = self.__options.get("softclean_cmd", "")
         run_cmd = self.__options.get("run_cmd", "")
         self.__solver_full_reset = self.__options.get("solver_full_reset", self.__solver_full_reset)
+
 
 
         
@@ -295,6 +299,7 @@ class OpenFoamRLEnv(gym.Env):
             self.__is_data_initialized = True
         else:
             self.__is_data_initialized = False
+            self.__prerun_probes_loaded = False
 
         print(f"RL-gym self.__interface.initialize_data() done in {time.time()-t0} seconds")
         # this results in reading data ahead of time when this is participant 2
@@ -309,12 +314,12 @@ class OpenFoamRLEnv(gym.Env):
 
         # self._read_observations()  # read observation from probe files
         if self.__prerun:
-            self._read_prerun_probes_rewards_files()
             self.__t = self.__prerun_t
             self.__max_time += self.__prerun_t
         else:
-            self._read_probes_rewards_files()
             self.__prerun_t = self.__precice_dt
+        
+        self._read_probes_rewards_files()
 
 
         #obs_list = self.setup_observations(n_lookback=0)
@@ -690,7 +695,7 @@ class OpenFoamRLEnv(gym.Env):
             p_case_path = case_path + f'_{p_idx}'
             for field_ in self.__options['postprocessing_data'].keys():
                 temp_filename = ""
-                if self.__prerun:
+                if self.__prerun and self.__prerun_probes_loaded:
                     filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
                     filename_split = filename.split('/')
                     time_dir = ""
@@ -728,73 +733,22 @@ class OpenFoamRLEnv(gym.Env):
                         self.__probes_rewards_data[p_field_] = []
                     self.__probes_rewards_data[p_field_].append([time_idx, n_probes, probe_data])
 
-                    # line_text = self.__postprocessing_filehandler_dict[temp_filename].readline()
-                    # if line_text == "":
-                    #     continue
-                    # # assert len(line_text) > 0, 'read a single line but it is of length 0 !!'
-                    # line_text = line_text.strip()
-                    # if len(line_text) > 0:
-                    #     try:
-                    #         is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text)
-                    #         # print(is_comment, time_idx, n_probes, probe_data)
-                    #     except Exception as e:
-                    #         continue
-                    #     if is_comment:
-                    #         time_idx = 0
-                    #         continue
-                    #     # print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
-                    #     p_field_ = f'{field_}_{p_idx}'
-                    #     if p_field_ not in self.__probes_rewards_data.keys():
-                    #         self.__probes_rewards_data[p_field_] = []
-                    #     self.__probes_rewards_data[p_field_].append([time_idx, n_probes, probe_data])
-
-                assert math.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"    
-   
-    def _read_prerun_probes_rewards_files(self):
-        case_path = 'env'
-        #case_path = self.__options['case_path']
-
-        for p_idx in range(self.__options['n_parallel_env']):
-            p_case_path = case_path + f'_{p_idx}'
-            for field_ in self.__options['postprocessing_data'].keys():
-
-                temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
-                print(f'reading filename: {temp_filename}')
-
-                if temp_filename not in self.__postprocessing_filehandler_dict.keys():
-                    # file_object = open(temp_filename, 'r')
-                    file_object = open_file(temp_filename)
-                    self.__postprocessing_filehandler_dict[temp_filename] = file_object
-
-                # data = np.loadtxt(temp_filename  , unpack=True, usecols=[0, 1, 3])
-                time_idx = 0
-
-                while True:
-                    line_text = self.__postprocessing_filehandler_dict[temp_filename].readline()
-                    if line_text == "":
-                        break
-                    is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text.strip())
-                    if is_comment:
-                        continue
-                    
-                    # print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
-                    p_field_ = f'{field_}_{p_idx}'
-                    if p_field_ not in self.__probes_rewards_data.keys():
-                        self.__probes_rewards_data[p_field_] = []
-                    self.__probes_rewards_data[p_field_].append([time_idx, n_probes, probe_data])
-
-        first_key = list(self.__options['postprocessing_data'].keys())[0] + '_0'
-        self.__prerun_t = self.__probes_rewards_data[first_key][-1][0]
+                assert math.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"  
         
-                
-        for filename_ in self.__postprocessing_filehandler_dict.keys():
-            file_object = self.__postprocessing_filehandler_dict[filename_]
-            try:
-                file_object.close()
-            except Exception as e:
-                print(f"error in closing probes/forces file: {e}")
-                pass
-    
+        #first_key = list(self.__options['postprocessing_data'].keys())[0] + '_0'
+        #self.__prerun_t = self.__probes_rewards_data[first_key][-1][0]
+        
+        if self.__prerun and not self.__prerun_probes_loaded:       
+            for filename_ in self.__postprocessing_filehandler_dict.keys():
+                file_object = self.__postprocessing_filehandler_dict[filename_]
+                try:
+                    file_object.close()
+                except Exception as e:
+                    print(f"error in closing probes/forces file: {e}")
+                    pass
+            self.__prerun_probes_loaded = True
+
+
     def _close_postprocessing_files(self):
         for filename_ in self.__postprocessing_filehandler_dict.keys():
             file_object = self.__postprocessing_filehandler_dict[filename_]
@@ -948,8 +902,8 @@ class OpenFoamRLEnv(gym.Env):
     def setup_reward(self,n_lookback=1, lookback_time=0.025):
         """ Problem specific function """
 
-        #lookback_time = self.__prerun_t  # 1/2.9850746268656714  # this is for Re=100
-        n_lookback = int(lookback_time // self.__precice_dt) + 1  # how many precice timesteps to cover the lookback time
+        lookback_time = self.__prerun_t  # 1/2.9850746268656714  # this is for Re=100
+        n_lookback = int(lookback_time // self.__precice_dt)  # how many precice timesteps to cover the lookback time
 
         reward_dict = self._get_reward_dict(n_lookback=n_lookback)
         # list container to store 'force-based' reward per trajectory
