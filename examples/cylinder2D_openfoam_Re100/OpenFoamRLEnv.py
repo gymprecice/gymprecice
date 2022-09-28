@@ -1,9 +1,5 @@
-# from cmath import inf
 import subprocess
-import argparse
-from tkinter.messagebox import NO
 import numpy as np
-import math
 import precice
 from precice import action_write_initial_data, action_write_iteration_checkpoint
 from pathlib import Path
@@ -13,16 +9,13 @@ import os
 import gym
 from gym import spaces
 from mesh_parser import FoamMesh
-from gym.vector.utils.spaces import batch_space
 
 import time
 import psutil
 from utils import get_cfg_data, parse_probe_lines, make_parallel_config, load_file, parallel_precice_dict, find_interface_patches, open_file, get_coupling_data
 from utils import robust_readline
-import utils
 import xmltodict
 import copy
-import pandas as pd
 from scipy import signal
 
 from os.path import join
@@ -50,11 +43,9 @@ class OpenFoamRLEnv(gym.Env):
         super().__init__()
 
         self.__options = copy.deepcopy(options)
-
         # gym env attributes:
         self.__is_reset = False
         self.__prerun_probes_loaded = None
-        #self.__prerun = None
         self.__prerun = self.__options.get("prerun", False)
         self.__is_first_reset = True  # if True, gym env reset has been called at least once
         # action_ and observation_space will be set in _set_precice_data
@@ -64,6 +55,7 @@ class OpenFoamRLEnv(gym.Env):
 
         self.__patch_data = None
 
+        self.num_envs = self.__options['n_parallel_env']
         self.__prerun_t = None
 
         max_time, _ = get_coupling_data('', self.__options['precice_cfg']) 
@@ -73,7 +65,6 @@ class OpenFoamRLEnv(gym.Env):
 
         scaler_variables, vector_variables, mesh_list, mesh_variables = \
             get_cfg_data('', self.__options['precice_cfg'])
-
 
         print(scaler_variables, vector_variables, mesh_list, mesh_variables)
         # select only RL-Gym meshes
@@ -103,6 +94,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__probes_rewards_data = {}
         self.__postprocessing_filehandler_dict = {}
         self.__precice_read_data = {}
+
         self.setup_env_obs_act()
 
     def __del__(self):
@@ -110,17 +102,15 @@ class OpenFoamRLEnv(gym.Env):
         self._close_postprocessing_files()
         if self.__interface:
             try:
-                #print('crashing the interface using negative timestep')
-                #self.__interface.advance(-1)
-                # another idea is to advance with random actions till the coupling finish and finalize
                 self.dummy_step()
             except Exception as e:
                 pass
     
     def dummy_step(self):
         # advance with  actions equal to zero till the coupling finish and finalize
+        dummy_action = self.num_envs * [0.0 * self.action_space.sample()]
         while True:
-            self.step([0.])
+            self.step(dummy_action)
     
     def finalize(self):
         self.__del__()
@@ -186,9 +176,9 @@ class OpenFoamRLEnv(gym.Env):
         # Create a n_parallel case_folders as symbolic links
 
         run_folder_list = []
-
-        for idx_ in range(self.__options['n_parallel_env']):
-            dist_folder_str = str(run_folder) + '/' + 'env' + f'_{idx_}'
+        case_path_str = 'env'
+        for idx_ in range(self.num_envs):
+            dist_folder_str = str(run_folder) + '/' + case_path_str + f'_{idx_}'
             run_folder_list.append(dist_folder_str)
             try:
                 os.system(f'cp -rs {source_folder_str} {dist_folder_str}')
@@ -196,7 +186,6 @@ class OpenFoamRLEnv(gym.Env):
                 raise Exception(f'Failed to create symbolic links to foam case files: {e}')
 
             precicedict_str = load_file(dist_folder_str + "/system/", 'preciceDict')
-            # print(precicedict_str)
             new_string = parallel_precice_dict(precicedict_str, idx_)
             # print(new_string)
             # delete the symbolic link
@@ -207,21 +196,13 @@ class OpenFoamRLEnv(gym.Env):
                 file_obj.write(new_string)
 
         # Get a new version of precice-config.xml
-        parallel_tree = make_parallel_config(str(cwd) + '/', "precice-config.xml", self.__options['n_parallel_env'], run_folder_list, use_mapping=True)
+        parallel_tree = make_parallel_config(str(cwd) + '/', "precice-config.xml", self.num_envs, run_folder_list, use_mapping=True)
         precice_config_parallel_file = str(run_folder) + "/precice-config.xml"
 
         with open(precice_config_parallel_file, 'w') as file_obj:
             file_obj.write(xmltodict.unparse(parallel_tree, encoding='utf-8', pretty=True))
 
         os.chdir(str(run_folder))
-        #os.system(f'cp ../{shell_cmd} .')
-
-        # we don't want symbolic links to the paraview files
-        # os.system(f'rm -f {dist_folder_str}/case.foam')
-        # os.system(f'rm -f {dist_folder_str}/case.OpenFOAM')
-
-        # os.system(f'cp {source_folder_str}/case.foam {dist_folder_str}/case.foam')
-        # os.system(f'cp {source_folder_str}/case.OpenFOAM {dist_folder_str}/case.OpenFOAM')
 
         self.__options['precice_cfg'] = precice_config_parallel_file
         return run_folder_list
@@ -235,14 +216,11 @@ class OpenFoamRLEnv(gym.Env):
         softclean_cmd = self.__options.get("softclean_cmd", "")
         run_cmd = self.__options.get("run_cmd", "")
         self.__solver_full_reset = self.__options.get("solver_full_reset", self.__solver_full_reset)
-
-
-
         
         self.__max_time = self.__init_max_time
         case_path = 'env'
 
-        for p_idx in range(self.__options['n_parallel_env']):
+        for p_idx in range(self.num_envs):
             p_case_path = case_path + f'_{p_idx}'
             # clean the log files
             if self.__prerun:
@@ -259,7 +237,7 @@ class OpenFoamRLEnv(gym.Env):
         if len(self.__solver_run) > 0:
             raise Exception('solver_run pointer is not cleared -- should not reach here')
 
-        for p_idx in range(self.__options['n_parallel_env']):
+        for p_idx in range(self.num_envs):
             p_case_path = case_path + f'_{p_idx}'
             if self.__options['is_dummy_run']:
                 p_process = self._launch_dummy_subprocess(p_idx, p_case_path)
@@ -271,14 +249,13 @@ class OpenFoamRLEnv(gym.Env):
 
         # checking spawning after n_parallel calls to avoid sleeping $n times
         time.sleep(0.5)  # single wait time for all parallel runs
-        for p_idx in range(self.__options['n_parallel_env']):
+        for p_idx in range(self.num_envs):
             p_case_path = case_path + f'_{p_idx}'
             self._check_subprocess(self.__solver_run[p_idx], shell_cmd, run_cmd, p_case_path, cmd_type='run')
 
         # initiate precice interface and read single mesh data
         self._init_precice()
         self._set_precice_data()
-
         if self.__interface.is_action_required(action_write_initial_data()):
             # what is the action for this case no action have been provided
             # TODO: what is the first action before we can do this reliably
@@ -320,31 +297,16 @@ class OpenFoamRLEnv(gym.Env):
             self.__prerun_t = self.__precice_dt
         
         self._read_probes_rewards_files()
-
-
-        #obs_list = self.setup_observations(n_lookback=0)
-
         obs_np = self.setup_observations(n_lookback=0)
 
-        if self.__options['n_parallel_env'] == 1:
+        if self.num_envs == 1:
             obs_np = obs_np[0]
         if return_info:
             return obs_np, {}
         return obs_np
 
-        # if return_info:
-        #     return obs_list, {}
-        # return obs_list
-
     # this makes the environment 
-    # def step(self, action):
-    #     if self.__interface is None:
-    #         self.reset()
-    #     return self.step_base(action)
-
-
     def step(self, action):
-        t0 = time.time()
         if not isinstance(action, list) and not isinstance(action, np.ndarray):
             raise Exception("Action should be either a list or numpy array")
         if isinstance(action, np.ndarray) and len(action.shape) == 2 and action.shape[0] == 1:
@@ -359,40 +321,22 @@ class OpenFoamRLEnv(gym.Env):
                 action_write_iteration_checkpoint())
 
         self.__write_data = {}
-
-        # if self.__options['n_parallel_env'] > 1:
-        #     action = action.squeeze().tolist()
-        # else:
-        #     action = action[0]
-            
         # dummy random values to be sent to the solver
-        for p_idx in range(self.__options['n_parallel_env']):
+        for p_idx in range(self.num_envs):
             conv_action = self.setup_patch_field_to_write(action[p_idx], self.__patch_data)  # TODO: self.__patch_data to be moved into setup
             actions_dict = self.setup_action_to_write_data(conv_action, p_idx)
             self.__write_data.update(actions_dict)
-
-        t1 = time.time()
-
-        # print('inside step function --- just before advance===========================')
-        # print(self.__write_data)
 
         if not self.__is_data_initialized:
             self._initialize()
             self.__is_data_initialized = True
         else:
             self._advance()  # run fluid solver to complete the next time-window
-        t2 = time.time()
 
-        # self._read_observations()  # read observation from probe files
         self._read_probes_rewards_files()
-        t3 = time.time()
-
-
         observations = self.setup_observations()
-        rewards = self.setup_reward()
 
-        t4 = time.time()
-        # print(f'Inside step function run times, write data: {t1-t0}, advance: {t2-t1}, read data: {t3-t2}, process read data: {t4-t3}')
+        rewards = self.setup_reward()
         done = not self.__interface.is_coupling_ongoing()
         # delete precice object upon done (a workaround to get precice reset)
 
@@ -411,33 +355,12 @@ class OpenFoamRLEnv(gym.Env):
         else:
             dones = [False] * rewards.shape[0]
 
-        if self.__options['n_parallel_env'] == 1:
+        if self.num_envs == 1:
             observations = observations[0]
             rewards = rewards[0]
             dones = dones[0]
 
         return observations, rewards, dones, {}
-
-
-        # obs_list = self.setup_observations()
-        # reward = self.setup_reward()
-        # t4 = time.time()
-        # print(f'Inside step function run times, write data: {t1-t0}, advance: {t2-t1}, read data: {t3-t2}, process read data: {t4-t3}')
-        # done = not self.__interface.is_coupling_ongoing()
-        # # delete precice object upon done (a workaround to get precice reset)
-        # if done:
-        #     self.__interface.finalize()
-        #     del self.__interface
-        #     print("preCICE finalized...\n")
-        #     # we need to check here that solver run is finalized
-        #     self.__solver_run = self._finalize_subprocess(self.__solver_run)
-
-        #     # reset pointers
-        #     self.__interface = None
-        #     self.__solver_full_reset = False
-        #     self.__is_reset = False
-
-        # return obs_list, reward, done, {}
 
     def render(self, mode='human'):
         """ not implemented """
@@ -482,7 +405,7 @@ class OpenFoamRLEnv(gym.Env):
             self.__vertex_ids[mesh_name] = vertex_ids
             self.__vertex_coords[mesh_name] = vertex_coords
         # establish connection with the solver
-        self.__precice_dt = self.__interface.initialize() # if initialize="False" --> run solver to complete one time-window 
+        self.__precice_dt = self.__interface.initialize()  # if initialize="False" --> run solver to complete one time-window 
 
     def _advance(self):
         self._write()
@@ -493,7 +416,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__t += self.__precice_dt
 
         # dummy advance to finalize time-window and coupling status
-        if math.isclose(self.__t, self.__max_time):
+        if np.isclose(self.__t, self.__max_time):
             self.__interface.advance(self.__precice_dt)
     
     def _initialize(self):
@@ -557,8 +480,6 @@ class OpenFoamRLEnv(gym.Env):
                 else:
                     self.__interface.write_block_scalar_data(
                         self.__write_ids[write_var], self.__vertex_ids[mesh_name], self.__write_data[write_var])
-                # print(f"(RL-Gym), avg-{write_var} using {mesh_name} write = {self.__write_data[write_var].mean():.4e}")
-                # print("-------------------------------------------")
 
     def _launch_dummy_subprocess(self, process_idx, cwd):
         cmd_str = f'python -u fluid-solver.py'
@@ -618,9 +539,6 @@ class OpenFoamRLEnv(gym.Env):
                 if exit_signal != 0:
                     raise Exception("subprocess failed to complete its shell command: " + subproc.args)
                 print("subprocess successfully completed its shell command: " + subproc.args)
-
-                # # force to kill the subprocess if still around
-                # self._kill_subprocess(subproc) #  not necessary, poll/wait should do the job!
         return []
 
     # def _read_observations(self):
@@ -630,18 +548,12 @@ class OpenFoamRLEnv(gym.Env):
     #         self._read()
 
     def define_env_obs_act(self):
-        # TODO: this should be problem specific
-        # 1) action space need to be generalized here
-        # 2) action space is not equal to observation space
-        # 3) some of variables are scaler and other are vector
-        # 4) where is rewards -- it is communicated? or read from online file?
-
         self.__n = 0
         # TODO: hidden assumption rl_gym have one mesh
         for mesh_name in self.__mesh_list:
             self.__n += self.__vertex_coords[mesh_name].shape[0]
 
-        self.__n = int(self.__n / self.__options['n_parallel_env'])  # TODO: ????
+        self.__n = int(self.__n / self.num_envs)  # TODO: ????
 
     def _get_probes_rewards_dict(self, type_str, n_lookback):
         if not self.__is_reset:
@@ -655,7 +567,7 @@ class OpenFoamRLEnv(gym.Env):
     
         data_dict = {}
         for field_ in self.__options['postprocessing_data'].keys():
-            for p_idx in range(self.__options['n_parallel_env']):
+            for p_idx in range(self.num_envs):
                 p_field_ = f'{field_}_{p_idx}'
                 field_info = self.__options['postprocessing_data'][field_]
                 if field_info['use'] == type_str and \
@@ -668,17 +580,10 @@ class OpenFoamRLEnv(gym.Env):
                         time_stamp = data[0]
                         if time_stamp <= time_bound[0]:
                             break
-
-                        # if time_stamp > time_bound[1]:
-                        #     continue
-                        # else:
                         data_per_trj.append(data)
 
 
                     data_dict[p_field_] = data_per_trj[::-1]
-                    # print(f"_get_probes_rewards_dict: {p_field_}")
-                    # print(data_dict[p_field_])
-
         return data_dict
 
     def _get_observations_dict(self, n_lookback):
@@ -691,7 +596,7 @@ class OpenFoamRLEnv(gym.Env):
         # sequential read of a single line (last line) of the file at each RL-Gym step
         case_path = 'env'
         #case_path = self.__options['case_path']
-        for p_idx in range(self.__options['n_parallel_env']):
+        for p_idx in range(self.num_envs):
             p_case_path = case_path + f'_{p_idx}'
             for field_ in self.__options['postprocessing_data'].keys():
                 temp_filename = ""
@@ -719,8 +624,7 @@ class OpenFoamRLEnv(gym.Env):
                 # utils.wait_for_file(temp_filename, sleep_time=0.1)
                 n_fields_expected = self.__options['postprocessing_data'][field_]['size']
 
-                while not math.isclose(time_idx, self.__t):  # read till the end of time-window             
-
+                while not np.isclose(time_idx, self.__t):  # read till the end of time-window         
                     while True:
                         is_comment, time_idx, n_probes, probe_data = \
                             robust_readline(self.__postprocessing_filehandler_dict[temp_filename], n_fields_expected, sleep_time=0.01)
@@ -733,7 +637,7 @@ class OpenFoamRLEnv(gym.Env):
                         self.__probes_rewards_data[p_field_] = []
                     self.__probes_rewards_data[p_field_].append([time_idx, n_probes, probe_data])
 
-                assert math.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"  
+                assert np.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"  
         
         #first_key = list(self.__options['postprocessing_data'].keys())[0] + '_0'
         #self.__prerun_t = self.__probes_rewards_data[first_key][-1][0]
@@ -763,16 +667,17 @@ class OpenFoamRLEnv(gym.Env):
         # TODO: this should be problem specific
         theta0 = [90, 270]
         w = [10, 10]
-        theta0 = [math.radians(x) for x in theta0]
-        w = [math.radians(x) for x in w]
+        theta0 = [np.radians(x) for x in theta0]
+        w = [np.radians(x) for x in w]
         origin = np.array([0, 0, 0.0223788])
+        #origin = np.array([0, 0, 0.005])
         radius = 0.05
         patch_flow_rate = [-action, action]
         U = []
 
         for idx, patch_name in enumerate(patch_data.keys()):
-            print(f"Prescribed action: FlowRate = {patch_flow_rate[idx]} [m/s3] on {patch_name}")
-            patch_ctr = np.array([radius * math.cos(theta0[idx]), radius * math.sin(theta0[idx]), origin[2]])
+            # print(f"Prescribed action: FlowRate = {patch_flow_rate[idx]:.7e} [m/s3] on {patch_name}")
+            patch_ctr = np.array([radius * np.cos(theta0[idx]), radius * np.sin(theta0[idx]), origin[2]])
             magSf = patch_data[patch_name]['magSf']
             Sf = patch_data[patch_name]['Sf']
             Cf = patch_data[patch_name]['Cf']
@@ -789,8 +694,8 @@ class OpenFoamRLEnv(gym.Env):
             Q_calc = 0
             for i, c in enumerate(Cf):
                 r = (c - origin) / (np.sqrt((c - origin).dot((c - origin))))
-                theta = math.acos(np.dot(r, d))
-                U_patch[i] = avg_U * math.pi / 2 * math.cos(math.pi / w_patch * theta) * nf[i]
+                theta = np.arccos(np.dot(r, d))
+                U_patch[i] = avg_U * np.pi / 2 * np.cos(np.pi / w_patch * theta) * nf[i]
                 Q_calc += U_patch[i].dot(Sf[i])
 
             # correct velocity profile to enforce mass conservation
@@ -803,8 +708,8 @@ class OpenFoamRLEnv(gym.Env):
             for i, Uf in enumerate(U_patch):
                 Q_final += Uf.dot(Sf[i])
 
-            if math.isclose(Q_final, patch_flow_rate[idx]):
-                print(f"Set flow rate = {Q_final} [m/s3] on the {patch_name} interface")
+            if np.isclose(Q_final, patch_flow_rate[idx]):
+                # print(f"Set flow rate = {Q_final:.7e} [m/s3] on the {patch_name} interface")
                 U.append(U_patch)
             else:
                 raise Exception('estimated velocity profile violates mass conservation')
@@ -820,12 +725,6 @@ class OpenFoamRLEnv(gym.Env):
         foam_mesh = FoamMesh(case_path)
         print(f'Done to parsing FoamMesh in {time.time()-t0} seconds')
 
-        # nodes = foam_mesh.boundary_face_nodes(b'interface')
-        # self.__n = nodes.shape[0]
-        # self.__grid = nodes
-
-        # if len(self.__mesh_list) > 1:
-        #     raise Exception('currently this only works for single mesh used for both observations and actions')
         patch_data = {}
         for patch in patches:
             Cf = foam_mesh.boundary_face_centres(patch.encode())        
@@ -838,19 +737,7 @@ class OpenFoamRLEnv(gym.Env):
         return self.Cf
 
     def setup_env_obs_act(self):
-        pass 
-        # TODO: this should be problem specific
-        # 1) action space need to be generalized here
-        # 2) action space is not equal to observation space
-        # 3) some of variables are scaler and other are vector
-        # 4) where is rewards -- it is communicated? or read from online file?
-
-        #self.__n = 0
-        # for mesh_name in self.__mesh_list:
-        #     self.__n += self.__vertex_coords[mesh_name].shape[0]
-        # # TODO: this should work even if RL-Gym have more than one mesh (not tested)
-        # self.__n = int(self.__n / self.__options['n_parallel_env'])
-        # print(f'size of the grid is {self.__n}')
+        pass
 
         self.action_space = spaces.Box(
             low=-1e-4, high=1e-4, shape=(1, ), dtype=np.float64)
@@ -869,18 +756,9 @@ class OpenFoamRLEnv(gym.Env):
 
     def setup_observations(self, n_lookback=1):
         obs_dict = self._get_observations_dict(n_lookback)
-        # now we print all of the observations to a list
-        # obs_list = []
-        # # we should be filtering here some of the columns only
-        # for field_ in obs_dict.keys():
-        #     obs_list.append([field_, obs_dict[field_]])
-        # return obs_list
-
         # list container to store 'pressure' probes
         obs_list = []
-        print("\n---------------------------------------")
-        print("probes avg-pressure for:")
-        for p_idx in range(self.__options['n_parallel_env']):
+        for p_idx in range(self.num_envs):
             dict_name = f'p_{p_idx}'
             # data = obs_dict[dict_name][-1]
             # obs_list.append(data[2])
@@ -891,15 +769,11 @@ class OpenFoamRLEnv(gym.Env):
             print(f'Trajectory#{p_idx}:')
             print(f'Time: {pressures[-1, 0]} --> p_avg: {np.mean(pressures[-1, 1:])}')
 
-           
-        #return np.array(obs_list).tolist() # list of list
-
         # check the function _flatten_obs in stable_baseline3 for more general approach
         # https://stable-baselines3.readthedocs.io/en/master/_modules/stable_baselines3/common/vec_env/subproc_vec_env.html#SubprocVecEnv.reset
+        return np.stack(obs_list, axis=0)
 
-        return np.stack(obs_list)
-
-    def setup_reward(self,n_lookback=1, lookback_time=0.025):
+    def setup_reward(self):
         """ Problem specific function """
 
         lookback_time = self.__prerun_t  # 1/2.9850746268656714  # this is for Re=100
@@ -909,9 +783,7 @@ class OpenFoamRLEnv(gym.Env):
         # list container to store 'force-based' reward per trajectory
         reward_list = []
 
-        # print("\n---------------------------------------")
-        # print("Cd and Cl data for:")
-        for p_idx in range(self.__options['n_parallel_env']):
+        for p_idx in range(self.num_envs):
 
             var_name = f'forces_{p_idx}'
             data_list = reward_dict[var_name]
@@ -924,30 +796,16 @@ class OpenFoamRLEnv(gym.Env):
 
             last_time = Cd[-1, 0]
             start_time = last_time - lookback_time
-            # average is in-correct because if we might be using adaptive time-stepping
+            # average is not correct when using adaptive time-stepping
             Cd_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cd[:, 0], Cd[:, 1])
             Cl_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cl[:, 0], Cl[:, 1])
-
-            # when using constast time stepping one can filter the signals
+            # for constant time stepping one can filter the signals
             Cd_filtered = signal.savgol_filter(Cd_uniform, 49, 0)
             Cl_filtered = signal.savgol_filter(Cl_uniform, 49, 0)
             reward_value = 3.205 - np.mean(Cd_filtered) - 0.2 * np.abs(np.mean(Cl_filtered))
 
-
             # reward_value = np.mean(Cd[:, 1]) + 0.2 * np.mean(Cl[:, 1])
             reward_list.append(reward_value)
-
-            # Cd = []
-            # Cl = []
-            # for row in data_list:
-            #     Cd.append(row[2][0])
-            #     Cl.append(abs(row[2][2]))
-
-            # print(f'Trajectory#{p_idx}:')
-            # print(f'Time: {data_list[0][0]} --> Cd: {Cd[0]}, Cl: {Cl[0]}')
-            # print(f'Time: {data_list[-1][0]} --> Cd: {Cd[-1]}, Cl: {Cl[-1]}')
-            # reward_list.append(-np.mean(Cd) - 0.2 * np.mean(Cl))
-        # print("---------------------------------------\n")
 
         return np.array(reward_list)
 

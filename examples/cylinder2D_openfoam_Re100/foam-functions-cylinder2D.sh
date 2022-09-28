@@ -9,10 +9,10 @@ preprocessfoam() {
     touch case.OpenFOAM
 
     # mesh creation
-    #runApplication blockMesh
-    #runApplication transformPoints -translate '(-0.2 -0.2 0)' 
-    #runApplication topoSet
-    #runApplication createPatch -overwrite
+    # runApplication blockMesh
+    # runApplication transformPoints -translate '(-0.2 -0.2 0)' 
+    # runApplication topoSet
+    # runApplication createPatch -overwrite
 
     runApplication renumberMesh -overwrite
 
