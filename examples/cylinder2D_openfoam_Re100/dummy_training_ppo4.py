@@ -583,7 +583,7 @@ if __name__ == '__main__':
 
         # for CAPS
         nxtobs[0:-1, :] = obs[1:, :].detach().clone()
-        nxtobs[-1:, :] = obs[-1, :].detach().clone()
+        nxtobs[-1, :] = obs[-1, :].detach().clone()
 
         b_nxtobs = nxtobs.reshape((-1,) + envs.observation_space.shape)
 
