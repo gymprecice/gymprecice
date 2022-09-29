@@ -2,7 +2,6 @@ import argparse
 from collections import deque
 from typing import Optional
 import copy
-from urllib.parse import uses_relative
 import gym
 from OpenFoamRLEnv import OpenFoamRLEnv
 from utils import fix_randseeds
@@ -27,7 +26,7 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 
 
 class Agent(nn.Module):
-    def __init__(self, env, relative_action=False):
+    def __init__(self, env, relative_action):
         super().__init__()
         self.n_actions = np.prod(env.action_space.shape)
         self.n_obs = np.prod(env.observation_space.shape)
@@ -35,8 +34,8 @@ class Agent(nn.Module):
         self.action_max = torch.from_numpy(envs.action_space.high)
 
         if relative_action:
-            self.action_min /= 3
-            self.action_max /= 3
+            self.action_min = self.action_min / 3
+            self.action_max = self.action_max / 3
 
         self.critic = nn.Sequential(
             layer_init(nn.Linear(self.n_obs, 64)),
@@ -223,7 +222,6 @@ class WandBRewardRecoder(gym.Wrapper):
         self.episode_count = 0
         self.episode_returns: Optional[np.ndarray] = None
         self.episode_lengths: Optional[np.ndarray] = None
-        self.is_vector_env = getattr(env, "is_vector_env", False)
         self.wandb_context = wandb_context
 
     def reset(self, **kwargs):
@@ -244,7 +242,7 @@ class WandBRewardRecoder(gym.Wrapper):
 
         self.episode_returns += rewards
         self.episode_lengths += 1
-        if not self.is_vector_env:
+        if self.num_envs == 1:
             dones = [dones]
         dones = list(dones)
 
@@ -267,7 +265,7 @@ class WandBRewardRecoder(gym.Wrapper):
         return (
             observations,
             rewards,
-            dones if self.is_vector_env else dones[0],
+            dones if self.num_envs > 1 else dones[0],
             infos,
         )
 
@@ -297,7 +295,7 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-4,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=8,
+    parser.add_argument("--num-envs", type=int, default=4,
         help="the number of parallel game environments")
     parser.add_argument("--num-steps", type=int, default=80,
         help="the number of steps to run in each environment per policy rollout")
@@ -335,22 +333,19 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    run_method = 'standard'  # 'relative_update' # 'standard'
-
+    run_method = 'relative_update'  # 'caps_loss'  # 'relative_update' # 'standard'
     if run_method == 'standard':
         use_caps_loss = False
         use_relative_action = False
     elif run_method == 'caps_loss':
         use_caps_loss = True
         use_relative_action = False
-        caps_lambda = 1.0
+        caps_lambda = 10.0
     elif run_method == 'relative_update':
         use_caps_loss = False
         use_relative_action = True
     else:
         assert 0, 'not implemented'
-
-    use_wandb = True
 
     rand_seed = 12345
     fix_randseeds(rand_seed)
@@ -378,10 +373,10 @@ if __name__ == '__main__':
     # if True, then the preprocessing (here: blockMesh) happens per each epoch:
     foam_full_reset = False
 
-    foam_clean_cmd = f" && {foam_clean_cmd} > {foam_clean_log} 2>&1"
-    foam_softclean_cmd = f" && {foam_softclean_cmd} > {foam_softclean_log} 2>&1"
-    foam_preprocess_cmd = f" && {foam_preprocess_cmd} > {foam_preprocess_log} 2>&1"
-    foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log} 2>&1"
+    foam_clean_cmd = f" && {foam_clean_cmd}"  # > {foam_clean_log} 2>&1"
+    foam_softclean_cmd = f" && {foam_softclean_cmd}"  # > {foam_softclean_log} 2>&1"
+    foam_preprocess_cmd = f" && {foam_preprocess_cmd}"  # > {foam_preprocess_log} 2>&1"
+    foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log}"  # 2>&1"
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -430,8 +425,10 @@ if __name__ == '__main__':
         "n_parallel_env": args.num_envs,
         "is_dummy_run": False,
         "prerun": True,
+        "prerun_available": False,
+        "prerun_time": 0.335
     }
-
+    use_wandb = True
     if use_wandb:
         import wandb
         run_name = f'run_obs2_{run_method}_{int(time.time())}'

@@ -666,18 +666,17 @@ def wait_for_file(file_object, sleep_time=0.1):
 
 def open_file(file_name, max_wait_time=0.1):
     # wait till the file is available
-    max_attempts = int(max_wait_time / 1e-6)
-    acceess_counter = 0
+    wait_time = 1e-6
+    max_attempts = int(max_wait_time / wait_time)
+    access_counter = 0
     while True:
         try:
             file_object = open(file_name, 'r')
             break
         except IOError:
-            acceess_counter += 1
-            if acceess_counter < max_attempts:
-                continue
-            else:
-                # break after trying max_attempts
+            time.sleep(wait_time)
+            access_counter += 1
+            if access_counter >= max_attempts:
                 raise IOError(f'Could not access {file_name} after {max_attempts} attempts')
     return file_object
 
@@ -692,51 +691,49 @@ def get_coupling_data(foldername, filename, coupling_method='parallel-explicit')
         solver_interface[coupling_method] = solver_interface[coupling_method]
         max_time = solver_interface[coupling_method]['max-time']['@value']
         time_window_size = solver_interface[coupling_method]['time-window-size']['@value']
-    
     return max_time, time_window_size
 
+    # scaler_variables = []
+    # if 'data:scalar' in solver_interface.keys():
+    #     if isinstance(solver_interface['data:scalar'], dict):
+    #         solver_interface['data:scalar'] = [solver_interface['data:scalar']]
+    #     for item_ in solver_interface['data:scalar']:
+    #         scaler_variables.append(item_['@name'])
 
-    scaler_variables = []
-    if 'data:scalar' in solver_interface.keys():
-        if isinstance(solver_interface['data:scalar'], dict):
-            solver_interface['data:scalar'] = [solver_interface['data:scalar']]
-        for item_ in solver_interface['data:scalar']:
-            scaler_variables.append(item_['@name'])
+    # vector_variables = []
+    # if 'data:scalar' in solver_interface.keys():
+    #     if isinstance(solver_interface['data:vector'], dict):
+    #         solver_interface['data:vector'] = [solver_interface['data:vector']]
+    #     for item_ in solver_interface['data:vector']:
+    #         vector_variables.append(item_['@name'])
 
-    vector_variables = []
-    if 'data:scalar' in solver_interface.keys():
-        if isinstance(solver_interface['data:vector'], dict):
-            solver_interface['data:vector'] = [solver_interface['data:vector']]
-        for item_ in solver_interface['data:vector']:
-            vector_variables.append(item_['@name'])
+    # # we only have one rl-gym participant
+    # for item_ in xml_tree['precice-configuration']['solver-interface']['participant']:
+    #     if 'rl-gym' in item_['@name'].lower():
+    #         gym_participant = copy.deepcopy(item_)
+    #         if verbose_mode: 
+    #             print(gym_participant)
+    #         break
 
-    # we only have one rl-gym participant
-    for item_ in xml_tree['precice-configuration']['solver-interface']['participant']:
-        if 'rl-gym' in item_['@name'].lower():
-            gym_participant = copy.deepcopy(item_)
-            if verbose_mode: 
-                print(gym_participant)
-            break
+    # mesh_variables = {}
+    # if 'read-data' in gym_participant.keys():
+    #     if isinstance(gym_participant['read-data'], dict):
+    #         gym_participant['read-data'] = [gym_participant['read-data']]
+    #     for item_ in gym_participant['read-data']:
+    #         if item_['@mesh'] not in mesh_variables.keys():
+    #             mesh_variables[item_['@mesh']] = {"read": [], "write": []}
+    #         mesh_variables[item_['@mesh']]["read"].append(item_['@name'])
 
-    mesh_variables = {}
-    if 'read-data' in gym_participant.keys():
-        if isinstance(gym_participant['read-data'], dict):
-            gym_participant['read-data'] = [gym_participant['read-data']]
-        for item_ in gym_participant['read-data']:
-            if item_['@mesh'] not in mesh_variables.keys():
-                mesh_variables[item_['@mesh']] = {"read": [], "write": []}
-            mesh_variables[item_['@mesh']]["read"].append(item_['@name'])
+    # if 'write-data' in gym_participant.keys():
+    #     if isinstance(gym_participant['write-data'], dict):
+    #         gym_participant['write-data'] = [gym_participant['write-data']]
 
-    if 'write-data' in gym_participant.keys():
-        if isinstance(gym_participant['write-data'], dict):
-            gym_participant['write-data'] = [gym_participant['write-data']]
+    #     for item_ in gym_participant['write-data']:
+    #         if item_['@mesh'] not in mesh_variables.keys():
+    #             mesh_variables[item_['@mesh']] = {"read": [], "write": []}
+    #         mesh_variables[item_['@mesh']]["write"].append(item_['@name'])
 
-        for item_ in gym_participant['write-data']:
-            if item_['@mesh'] not in mesh_variables.keys():
-                mesh_variables[item_['@mesh']] = {"read": [], "write": []}
-            mesh_variables[item_['@mesh']]["write"].append(item_['@name'])
-
-    return scaler_variables, vector_variables, mesh_list, mesh_variables
+    # return scaler_variables, vector_variables, mesh_list, mesh_variables
 
 
 if __name__ == '__main__':
