@@ -30,8 +30,8 @@ class Agent(nn.Module):
         super().__init__()
         self.n_actions = np.prod(env.action_space.shape)
         self.n_obs = np.prod(env.observation_space.shape)
-        self.action_min = torch.from_numpy(envs.action_space.low)
-        self.action_max = torch.from_numpy(envs.action_space.high)
+        self.action_min = torch.from_numpy(np.copy(envs.action_space.low))
+        self.action_max = torch.from_numpy(np.copy(envs.action_space.high))
 
         if relative_action:
             self.action_min = self.action_min / 3
@@ -295,7 +295,7 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-4,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=4,
+    parser.add_argument("--num-envs", type=int, default=8,
         help="the number of parallel game environments")
     parser.add_argument("--num-steps", type=int, default=80,
         help="the number of steps to run in each environment per policy rollout")
@@ -426,8 +426,9 @@ if __name__ == '__main__':
         "is_dummy_run": False,
         "prerun": True,
         "prerun_available": False,
-        "prerun_time": 0.335
+        "prerun_time": 0.335,
     }
+
     use_wandb = True
     if use_wandb:
         import wandb
@@ -581,8 +582,8 @@ if __name__ == '__main__':
         b_values = values.reshape(-1)
 
         # for CAPS
-        nxtobs[0, :] = obs[0, :].detach().clone()
-        nxtobs[1:, :] = obs[:-1, :].detach().clone()
+        nxtobs[0:-1, :] = obs[1:, :].detach().clone()
+        nxtobs[-1:, :] = obs[-1, :].detach().clone()
 
         b_nxtobs = nxtobs.reshape((-1,) + envs.observation_space.shape)
 

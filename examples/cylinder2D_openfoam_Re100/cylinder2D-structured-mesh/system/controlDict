@@ -24,14 +24,14 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         2;
+endTime    2.00;
 
 deltaT          5e-4;
 
 //writeControl    runTime;
 //writeInterval   5e-2;
 
-writeControl   timeStep; //adjustableRunTime;
+writeControl   timeStep;
 writeInterval   1;
 
 purgeWrite      1;

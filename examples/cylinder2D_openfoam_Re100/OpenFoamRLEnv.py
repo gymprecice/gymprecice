@@ -237,10 +237,6 @@ class OpenFoamRLEnv(gym.Env):
         if len(self.__postprocessing_filehandler_dict) > 0:
             self._close_postprocessing_files()
 
-        # run open-foam solver
-        if len(self.__solver_run) > 0:
-            raise Exception('solver_run pointer is not cleared -- should not reach here')
-
         if self.__prerun_available:
             self.__t = self.__prerun_t
             self.__max_time += self.__prerun_t
@@ -250,6 +246,10 @@ class OpenFoamRLEnv(gym.Env):
                 self._close_postprocessing_files()
         else:
             self.__t = 0.0
+
+        # run open-foam solver
+        if len(self.__solver_run) > 0:
+            raise Exception('solver_run pointer is not cleared -- should not reach here')
 
         for p_idx in range(self.num_envs):
             p_case_path = self.case_path + f'_{p_idx}'
@@ -405,7 +405,7 @@ class OpenFoamRLEnv(gym.Env):
             self.__vertex_ids[mesh_name] = vertex_ids
             self.__vertex_coords[mesh_name] = vertex_coords
         # establish connection with the solver
-        self.__precice_dt = self.__interface.initialize()  # if initialize="False" --> run solver to complete one time-window 
+        self.__precice_dt = self.__interface.initialize()  # if initialize="False" --> run solver to complete one time-window
 
     def _advance(self):
         self._write()
@@ -553,7 +553,7 @@ class OpenFoamRLEnv(gym.Env):
             raise Exception("Call reset before interacting with the environment.")
 
         # get the data within a time_window for computing reward
-        time_bound = [(self.__time_window - n_lookback) * self.__precice_dt, self.__time_window * self.__precice_dt]
+        time_bound = [self.__t - n_lookback * self.__precice_dt, self.__t]
         data_dict = {}
         for field_ in self.__options['postprocessing_data'].keys():
             for p_idx in range(self.num_envs):
@@ -595,7 +595,9 @@ class OpenFoamRLEnv(gym.Env):
                     filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
                     filename_split = filename.split('/')
                     time_dir = ""
-                    if self.__prerun_t.is_integer():
+                    if isinstance(self.__prerun_t, int):
+                        time_dir = str(self.__prerun_t)
+                    elif isinstance(self.__prerun_t, float) and self.__prerun_t.is_integer():
                         time_dir = str(int(self.__prerun_t))
                     else:
                         time_dir = str(self.__prerun_t)
@@ -628,6 +630,7 @@ class OpenFoamRLEnv(gym.Env):
                     self.__probes_rewards_data[p_field_].append([time_idx, n_probes, probe_data])
 
                 assert np.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"
+            # print(self.__probes_rewards_data)
 
     def _close_postprocessing_files(self):
         for filename_ in self.__postprocessing_filehandler_dict.keys():
@@ -747,8 +750,7 @@ class OpenFoamRLEnv(gym.Env):
     def setup_reward(self):
         """ Problem specific function """
 
-        # lookback_time = 0.335  # 1/2.9850746268656714  # this is for Re=100
-        lookback_time = self.__prerun_t  # 1/2.9850746268656714  # this is for Re=100
+        lookback_time = self.__prerun_t  # 0.335 # 1/2.9850746268656714  # this is for Re=100
         n_lookback = int(lookback_time // self.__precice_dt) + 1  # how many precice timesteps to cover the lookback time
 
         reward_dict = self._get_reward_dict(n_lookback=n_lookback)
@@ -775,8 +777,5 @@ class OpenFoamRLEnv(gym.Env):
             Cd_filtered = sp.signal.savgol_filter(Cd_uniform, 49, 0)
             Cl_filtered = sp.signal.savgol_filter(Cl_uniform, 49, 0)
             reward_value = 3.205 - np.mean(Cd_filtered) - 0.2 * np.abs(np.mean(Cl_filtered))
-
-            # reward_value = np.mean(Cd[:, 1]) + 0.2 * np.mean(Cl[:, 1])
             reward_list.append(reward_value)
-
         return np.array(reward_list)
