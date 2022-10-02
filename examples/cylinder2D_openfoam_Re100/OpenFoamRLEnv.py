@@ -47,7 +47,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__is_reset = False
         self.__prerun_probes_loaded = None
         self.__prerun = self.__options.get("prerun", False)
-        self.__is_first_reset = True  # if True, gym env reset has been called at least once
+        #self.__is_first_reset = True  # if True, gym env reset has been called at least once
         # action_ and observation_space will be set in _set_precice_data
         self.action_space = None
         self.observation_space = None
@@ -220,13 +220,14 @@ class OpenFoamRLEnv(gym.Env):
         self.__max_time = self.__init_max_time
         case_path = 'env'
 
+        if self.__prerun:
+            softclean_cmd_split = softclean_cmd.split(">")
+            softclean_cmd_split[0] += " -prerun "
+            softclean_cmd = '>'.join(softclean_cmd_split)
+
         for p_idx in range(self.num_envs):
             p_case_path = case_path + f'_{p_idx}'
             # clean the log files
-            if self.__prerun:
-                softclean_cmd_split = softclean_cmd.split(">")
-                softclean_cmd_split[0] += " -prerun "
-                softclean_cmd = '>'.join(softclean_cmd_split)
             
             self._launch_subprocess(shell_cmd, softclean_cmd, p_case_path, cmd_type='softclean')
 
@@ -284,7 +285,7 @@ class OpenFoamRLEnv(gym.Env):
             self._read()
 
         self.__is_reset = True
-        self.__is_first_reset = False
+        #self.__is_first_reset = False
        
         self.__probes_rewards_data = {}
         self.__precice_read_data = {}
@@ -299,10 +300,10 @@ class OpenFoamRLEnv(gym.Env):
         self._read_probes_rewards_files()
         obs_np = self.setup_observations(n_lookback=0)
 
-        if self.num_envs == 1:
-            obs_np = obs_np[0]
+        #if self.num_envs == 1:
+        #    obs_np = obs_np[0]
         if return_info:
-            return obs_np, {}
+            return obs_np, [{}] * self.num_envs
         return obs_np
 
     # this makes the environment 
@@ -351,16 +352,18 @@ class OpenFoamRLEnv(gym.Env):
             self.__interface = None
             self.__solver_full_reset = False
             self.__is_reset = False
-            dones = [True] * rewards.shape[0]
-        else:
-            dones = [False] * rewards.shape[0]
+        #     dones = [True] * self.num_envs
+        # else:
+        #     dones = [False] * self.num_envs
 
-        if self.num_envs == 1:
-            observations = observations[0]
-            rewards = rewards[0]
-            dones = dones[0]
+        # if self.num_envs == 1:
+        #     observations = observations[0]
+        #     rewards = rewards[0]
+        #     dones = dones[0]
+        
+        infos = [{}] * self.num_envs
 
-        return observations, rewards, dones, {}
+        return observations, rewards, np.full((self.num_envs), done),  infos
 
     def render(self, mode='human'):
         """ not implemented """

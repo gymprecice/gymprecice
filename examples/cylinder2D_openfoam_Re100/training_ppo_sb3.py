@@ -1,7 +1,8 @@
-from typing import Dict, List, Optional, Tuple, Type, Union, NamedTuple
+from typing import Dict, List, Optional, Tuple, Type, Sequence, Union, NamedTuple
 from stable_baselines3.common.vec_env import VecEnv
 import collections
 import gym
+from copy import deepcopy
 import torch
 from torch import nn
 from utils import fix_randseeds
@@ -15,6 +16,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3 import PPO
 from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.buffers import BaseBuffer
+from collections import OrderedDict
 
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 
@@ -25,7 +27,9 @@ from stable_baselines3.common.type_aliases import (
     RolloutBufferSamples,
 )
 
-from stable_baselines3.common.vec_env import VecNormalize
+from stable_baselines3.common.vec_env import VecNormalize, VecEnvWrapper
+from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvIndices, VecEnvObs, VecEnvStepReturn
+from stable_baselines3.common.vec_env.util import copy_obs_dict, dict_to_obs, obs_space_info
 
 from collections import deque
 from gym import spaces
@@ -175,6 +179,106 @@ class ObservationRewardWrapper2(gym.Wrapper):
             return np.concatenate((self.obs_queue[0], self.obs_queue[-1]), axis=1)
         else:
             return np.concatenate((self.obs_queue[0], self.obs_queue[-1]), axis=0)
+
+
+class CustomVecEnv(VecEnv):
+    """
+    Creates a simple vectorized wrapper for OpenFoamRLEnv
+    :param env: env of type OpenFoamRLEnv
+        
+    """
+
+    def __init__(self, env):
+        self.env = env
+
+        VecEnv.__init__(self, self.env.num_envs, self.env.observation_space, self.env.action_space)
+        obs_space = self.env.observation_space
+        self.keys, shapes, dtypes = obs_space_info(obs_space)
+
+        self.buf_obs = OrderedDict([(k, np.zeros((self.num_envs,) + tuple(shapes[k]), dtype=dtypes[k])) for k in self.keys])
+        self.buf_dones = np.zeros((self.num_envs,), dtype=bool)
+        self.buf_rews = np.zeros((self.num_envs,), dtype=np.float32)
+        self.buf_infos = [{} for _ in range(self.num_envs)]
+        self.actions = None
+        self.metadata = self.env.metadata
+
+    def step_async(self, actions: np.ndarray) -> None:
+        self.actions = actions
+
+    def step_wait(self) -> VecEnvStepReturn:
+        obs, rews, dones, infos = self.env.step(self.actions)
+        
+        if self.envs_done(dones):
+            # save final observation where user can get it, then reset
+            for env_idx in range(self.num_envs):
+                self.buf_infos[env_idx]["terminal_observation"] = obs[env_idx]
+            obs = self.env.reset()
+
+        for env_idx in range(self.num_envs):
+            self.buf_rews[env_idx] = rews[env_idx]
+            self.buf_dones[env_idx] = dones[env_idx]
+            self.buf_infos[env_idx] = infos[env_idx]
+            self._save_obs(env_idx, obs[env_idx])
+        
+        return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
+
+    def seed(self, seed: Optional[int] = None) -> List[Union[None, int]]:
+        if seed is None:
+            seed = np.random.randint(0, 2**32 - 1)
+        seeds = []
+        for idx, env in enumerate(self.envs):
+            seeds.append(env.seed(seed + idx))
+        return seeds
+
+    def reset(self) -> VecEnvObs:
+        obs = self.env.reset()
+        for env_idx in range(self.num_envs):
+            self._save_obs(env_idx, obs[env_idx])
+        return self._obs_from_buf()
+
+    def close(self) -> None:
+        self.env.close()
+
+    def render(self, mode: str = "human") -> Optional[np.ndarray]:
+        """
+        Gym environment rendering.
+        """
+        raise NotImplementedError()
+       
+    def _save_obs(self, env_idx: int, obs: VecEnvObs) -> None:
+        for key in self.keys:
+            if key is None:
+                self.buf_obs[key][env_idx] = obs
+            else:
+                self.buf_obs[key][env_idx] = obs[key]
+
+    def _obs_from_buf(self) -> VecEnvObs:
+        return dict_to_obs(self.observation_space, copy_obs_dict(self.buf_obs))
+
+    def get_attr(self, attr_name: str, indices: VecEnvIndices = None) -> List[Any]:
+        """Return attribute from vectorized environment (see base class)."""
+        raise NotImplementedError()
+
+    def set_attr(self, attr_name: str, value: Any, indices: VecEnvIndices = None) -> None:
+        """Set attribute inside vectorized environments (see base class)."""
+        raise NotImplementedError()
+    
+    def env_method(self, method_name: str, *method_args, indices: VecEnvIndices = None, **method_kwargs) -> List[Any]:
+        """Call instance methods of vectorized environments."""
+        raise NotImplementedError()
+
+    def env_is_wrapped(self, wrapper_class: Type[gym.Wrapper], indices: VecEnvIndices = None) -> List[bool]:
+        """Check if worker environments are wrapped with a given wrapper"""
+        raise NotImplementedError()
+
+    def _get_target_envs(self, indices: VecEnvIndices) -> List[gym.Env]:
+        raise NotImplementedError()
+    
+    def envs_done(self, dones):
+        if dones.any():
+            assert dones.all(), "Not all envs are done!"
+            return True
+        return False
 
 
 class CustomRolloutBufferSamples(NamedTuple):
@@ -640,7 +744,7 @@ class CustomPPO(PPO):
             
             prev_actions = new_obs = rewards = dones = infos = None
             # avoid carrying prev_actions across episode
-            if self._last_episode_starts[0]: # TODO: valid only if all n_parallel-envs reset at the same time
+            if self._last_episode_starts.all():
                 prev_actions = np.clip(rollout_buffer.actions[-1], self.action_space.low, self.action_space.high)
             else:
                 prev_actions = np.clip(rollout_buffer.actions[n_steps-1], self.action_space.low, self.action_space.high)
@@ -683,7 +787,7 @@ class CustomPPO(PPO):
                 print(f'PPO will took the following action {action_t} vs agent current action {agent_current_action} at subcycle {subcycle_counter} out of {subcycle_max}, reward {rewards}')
                 
                 # break the subcycle if episode ends
-                if dones[0]:
+                if env.envs_done(dones):
                     action_t_1 = None
                     break
                 else:
@@ -847,10 +951,11 @@ class CustomPPO(PPO):
         explained_var = explained_variance(self.rollout_buffer.values.flatten(), self.rollout_buffer.returns.flatten())
         
         # Logs
+        if self.use_caps_loss:
+            self.logger.record("train/caps_loss", caps_loss.detach().numpy())
         self.logger.record("train/entropy_loss", np.mean(entropy_losses))
         self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
         self.logger.record("train/value_loss", np.mean(value_losses))
-        self.logger.record("train/caps_loss", caps_loss.detach().numpy())
         self.logger.record("train/approx_kl", np.mean(approx_kl_divs))
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
         self.logger.record("train/loss", loss.item())
@@ -917,7 +1022,7 @@ if __name__ == '__main__':
     foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log} 2>&1"
 
   # reset options
-    n_parallel_env = 1
+    n_envs = 2
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -949,7 +1054,7 @@ if __name__ == '__main__':
         "solver_full_reset": foam_full_reset,
         "rand_seed": rand_seed,
         "postprocessing_data": postprocessing_data,
-        "n_parallel_env": n_parallel_env,
+        "n_parallel_env": n_envs,
         "is_dummy_run": False,
         "prerun": True,
         "prerun_available": True,
@@ -958,11 +1063,11 @@ if __name__ == '__main__':
 
     # create the environment
     env = OpenFoamRLEnv(options)
-    
-    env = ObservationRewardWrapper2(env, use_relative_action, deque_size=50)
+    env = CustomVecEnv(env)
+    #env = ObservationRewardWrapper2(env, use_relative_action, deque_size=50)
 
     model = CustomPPO(CustomActorCriticPolicy, env, policy_kwargs={'env':env, 'use_relative_action':use_relative_action}, device="cpu", verbose=1,
-                        use_relative_action=use_relative_action, use_caps_loss=True, caps_lambda=1.0)
+                        use_relative_action=use_relative_action, use_caps_loss=use_caps_loss, caps_lambda=caps_lambda)
 
     num_updates = 1000
     buffer_size = model.env.num_envs * model.n_steps
