@@ -352,18 +352,11 @@ class OpenFoamRLEnv(gym.Env):
             self.__interface = None
             self.__solver_full_reset = False
             self.__is_reset = False
-        #     dones = [True] * self.num_envs
-        # else:
-        #     dones = [False] * self.num_envs
-
-        # if self.num_envs == 1:
-        #     observations = observations[0]
-        #     rewards = rewards[0]
-        #     dones = dones[0]
         
-        infos = [{}] * self.num_envs
+        infos = [{} for _ in range(self.num_envs)]
+        dones = np.full((self.num_envs), done)
 
-        return observations, rewards, np.full((self.num_envs), done),  infos
+        return observations, rewards, dones,  infos
 
     def render(self, mode='human'):
         """ not implemented """

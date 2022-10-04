@@ -17,6 +17,9 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.buffers import BaseBuffer
 from collections import OrderedDict
+import time
+from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
+from stable_baselines3.common.logger import configure
 
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 
@@ -181,6 +184,87 @@ class ObservationRewardWrapper2(gym.Wrapper):
             return np.concatenate((self.obs_queue[0], self.obs_queue[-1]), axis=0)
 
 
+class CustomMonitor(gym.Wrapper):
+    """
+    A monitor wrapper for Gym environments, it is used to know the episode reward, length, time and other data.
+
+    :param env: The environment
+    :param filename: the location to save a log file, can be None for no log
+    :param allow_early_resets: allows the reset of the environment before it is done
+    :param reset_keywords: extra keywords for the reset call,
+        if extra parameters are needed at reset
+    :param info_keywords: extra information to log, from the information return of env.step()
+    """
+
+    EXT = "monitor.csv"
+
+    def __init__(
+        self,
+        env: gym.Env,
+        filename: Optional[str] = None,
+        allow_early_resets: bool = True,
+        reset_keywords: Tuple[str, ...] = (),
+        info_keywords: Tuple[str, ...] = (),
+    ):
+        super().__init__(env=env)
+        self.t_start = time.time()
+        #self.results_writer = None
+        #self.reset_keywords = reset_keywords
+        #self.info_keywords = info_keywords
+        self.allow_early_resets = allow_early_resets
+        self.needs_reset = True
+        self.episode_returns: Optional[np.ndarray] = None
+        self.total_steps = 0
+        self.current_reset_info = {}  # extra info about the current episode, that was passed in during reset()
+        self.eps_infos = None
+
+    def reset(self, **kwargs):
+        """
+        Calls the Gym environment reset. Can only be called if the environment is over, or if allow_early_resets is True
+
+        :param kwargs: Extra keywords saved for the next episode. only if defined by reset_keywords
+        :return: the first observation of the environment
+        """
+        if not self.allow_early_resets and not self.needs_reset:
+            raise RuntimeError(
+                "Tried to reset an environment before done. If you want to allow early resets, "
+                "wrap your env with Monitor(env, path, allow_early_resets=True)"
+            )
+        self.eps_infos = []
+        self.episode_returns = np.zeros(self.num_envs, dtype=np.float32)
+        self.episode_lengths = np.zeros(self.num_envs, dtype=np.int32)
+        self.needs_reset = False
+        return self.env.reset(**kwargs)
+
+    def step(self, action: Union[np.ndarray, int]):
+        """
+        Step the environment with the given action
+
+        :param action: the action
+        :return: observation, reward, done, information
+        """
+        if self.needs_reset:
+            raise RuntimeError("Tried to step environment that needs reset")
+        observations, rewards, dones, infos = self.env.step(action)
+        self.episode_returns += rewards
+        self.episode_lengths += 1
+        if dones[0]:
+            self.needs_reset = True
+            for env_idx in range(len(self.episode_returns)):
+                episode_return = self.episode_returns[env_idx]
+                episode_length = self.episode_lengths[env_idx]
+                ep_info = {"ep": self.total_steps, "ep_mean_rew": round(episode_return / episode_length, 6), "ep_len": episode_length, "ep_t": round(time.time() - self.t_start, 6)}
+                self.total_steps += 1
+                infos[env_idx]['episode'] = ep_info
+        return observations, rewards, dones, infos
+
+    def close(self) -> None:
+        """
+        Closes the environment
+        """
+        super().close()
+
+
 class CustomVecEnv(VecEnv):
     """
     Creates a simple vectorized wrapper for OpenFoamRLEnv
@@ -202,13 +286,23 @@ class CustomVecEnv(VecEnv):
         self.actions = None
         self.metadata = self.env.metadata
 
+    def step(self, actions: np.ndarray) -> VecEnvStepReturn:
+        """
+        Step the environments with the given action
+
+        :param actions: the action
+        :return: observation, reward, done, information
+        """
+        self.step_async(actions)
+        return self.step_wait()
+
     def step_async(self, actions: np.ndarray) -> None:
         self.actions = actions
 
     def step_wait(self) -> VecEnvStepReturn:
         obs, rews, dones, infos = self.env.step(self.actions)
         
-        if self.envs_done(dones):
+        if dones[0]:
             # save final observation where user can get it, then reset
             for env_idx in range(self.num_envs):
                 self.buf_infos[env_idx]["terminal_observation"] = obs[env_idx]
@@ -243,7 +337,7 @@ class CustomVecEnv(VecEnv):
         """
         Gym environment rendering.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
        
     def _save_obs(self, env_idx: int, obs: VecEnvObs) -> None:
         for key in self.keys:
@@ -257,28 +351,22 @@ class CustomVecEnv(VecEnv):
 
     def get_attr(self, attr_name: str, indices: VecEnvIndices = None) -> List[Any]:
         """Return attribute from vectorized environment (see base class)."""
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def set_attr(self, attr_name: str, value: Any, indices: VecEnvIndices = None) -> None:
         """Set attribute inside vectorized environments (see base class)."""
-        raise NotImplementedError()
+        raise NotImplementedError
     
     def env_method(self, method_name: str, *method_args, indices: VecEnvIndices = None, **method_kwargs) -> List[Any]:
         """Call instance methods of vectorized environments."""
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def env_is_wrapped(self, wrapper_class: Type[gym.Wrapper], indices: VecEnvIndices = None) -> List[bool]:
         """Check if worker environments are wrapped with a given wrapper"""
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _get_target_envs(self, indices: VecEnvIndices) -> List[gym.Env]:
-        raise NotImplementedError()
-    
-    def envs_done(self, dones):
-        if dones.any():
-            assert dones.all(), "Not all envs are done!"
-            return True
-        return False
+        raise NotImplementedError
 
 
 class CustomRolloutBufferSamples(NamedTuple):
@@ -564,7 +652,7 @@ class CustomActorCriticPolicy(BasePolicy):
         """
         Sample new weights for the exploration matrix.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _build_mlp_extractor(self) -> None:
         """
@@ -623,14 +711,14 @@ class CustomPPO(PPO):
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 5e-4,
         n_steps: int = 80,
-        batch_size: int = 10,
+        batch_size: int = 20,
         n_epochs: int = 10,
         gamma: float = 0.99,
         gae_lambda: float = 0.97,
         clip_range: Union[float, Schedule] = 0.2,
         clip_range_vf: Union[None, float, Schedule] = None,
         normalize_advantage: bool = True,
-        ent_coef: float = 0.0,
+        ent_coef: float = 0.01,
         vf_coef: float = 0.5,
         max_grad_norm: float = 0.5,
         use_sde: bool = False,
@@ -763,11 +851,11 @@ class CustomPPO(PPO):
                     action_fraction = (1 / subcycle_max)
                     action_t = action_t_1 + action_fraction * agent_current_action
                 else:  # this is valid for both standard and caps method
-                    # action_fraction = 1 / (subcycle_max - subcycle_counter)
-                    # action_t = action_t_1 + action_fraction * (agent_current_action - action_t_1)
+                    action_fraction = 1 / (subcycle_max - subcycle_counter)
+                    action_t = action_t_1 + action_fraction * (agent_current_action - action_t_1)
 
                     # non-linear smoothing
-                    action_t = agent_current_action + (agent_prev_action - agent_current_action) * (1.0 - exp_smoothing_factor)**(subcycle_counter)
+                    # action_t = agent_current_action + (agent_prev_action - agent_current_action) * (1.0 - exp_smoothing_factor)**(subcycle_counter)
                     
                     ## linear smoothing 
                     # smoothing_fraction = (subcycle_counter / subcycle_max)
@@ -779,15 +867,15 @@ class CustomPPO(PPO):
                     #     smoothing_fraction = (subcycle_counter / 20)
                     # action_t = (1 - smoothing_fraction) * agent_prev_action + smoothing_fraction * agent_current_action
 
-                #clipped_action_t = np.clip(action_t, self.action_space.low, self.action_space.high)
-                new_obs, rewards, dones, infos = env.step(action_t)
+                clipped_action_t = np.clip(action_t, self.action_space.low, self.action_space.high)
+                new_obs, rewards, dones, infos = env.step(clipped_action_t)
 
                 subcycle_counter += 1
                 
-                print(f'PPO will took the following action {action_t} vs agent current action {agent_current_action} at subcycle {subcycle_counter} out of {subcycle_max}, reward {rewards}')
+                # print(f'PPO will took the following action {clipped_action_t} vs agent current action {agent_current_action} at subcycle {subcycle_counter} out of {subcycle_max}, reward {rewards}')
                 
                 # break the subcycle if episode ends
-                if env.envs_done(dones):
+                if dones[0]:
                     action_t_1 = None
                     break
                 else:
@@ -800,7 +888,7 @@ class CustomPPO(PPO):
             if callback.on_step() is False:
                 return False
 
-            self._update_info_buffer(infos)
+            self._update_info_buffer(infos, dones)
             n_steps += 1
 
             if isinstance(self.action_space, gym.spaces.Discrete):
@@ -968,13 +1056,70 @@ class CustomPPO(PPO):
         if self.clip_range_vf is not None:
             self.logger.record("train/clip_range_vf", clip_range_vf)
 
+    def learn(
+        self,
+        total_timesteps: int,
+        callback: MaybeCallback = None,
+        log_interval: int = 1,
+        eval_env: Optional[GymEnv] = None,
+        eval_freq: int = -1,
+        n_eval_episodes: int = 5,
+        tb_log_name: str = "PPO",
+        eval_log_path: Optional[str] = None,
+        reset_num_timesteps: bool = True,
+    ) -> "PPO":
+        iteration = 0
+
+        total_timesteps, callback = self._setup_learn(
+            total_timesteps, eval_env, callback, eval_freq, n_eval_episodes, eval_log_path, reset_num_timesteps, tb_log_name
+        )
+
+        callback.on_training_start(locals(), globals())
+
+        while self.num_timesteps < total_timesteps:
+
+            continue_training = self.collect_rollouts(self.env, callback, self.rollout_buffer, n_rollout_steps=self.n_steps)
+
+            if continue_training is False:
+                break
+
+            iteration += 1
+            self._update_current_progress_remaining(self.num_timesteps, total_timesteps)
+
+            # Display training infos
+            if log_interval is not None and iteration % log_interval == 0:
+                fps = int((self.num_timesteps - self._num_timesteps_at_start) / (time.time() - self.start_time))
+                self.logger.record("time/iterations", iteration, exclude="tensorboard")
+                actions = self.rollout_buffer.actions.copy()
+                if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
+                    for env_idx in range(self.env.num_envs):
+                        ep_info = self.ep_info_buffer[-self.env.num_envs + env_idx]
+                        record = f"rollout/ep_{ep_info['ep']}_mean_rew"
+                        self.logger.record(record, ep_info['ep_mean_rew'])
+                        # record all episode actions
+                        ep_actions = [action[env_idx] for action in actions]
+                        for idx, action in enumerate(ep_actions):
+                            record = f"rollout/ep_{ep_info['ep']}_action_{idx}"
+                            self.logger.record(record, action[0])
+
+                self.logger.record("time/fps", fps)
+                self.logger.record("time/time_elapsed", int(time.time() - self.start_time), exclude="tensorboard")
+                self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
+                self.logger.dump(step=self.num_timesteps)
+
+            self.train()
+
+        callback.on_training_end()
+
+        return self
+
 
 if __name__ == '__main__':
     use_caps_loss = None
     use_relative_action = None
     caps_lambda = None
     
-    run_method = 'relative_update' #'caps_loss' #'standard' # 'caps_loss' #'relative_update' # 'standard'   
+    run_method = 'relative_update'  #'standard' # 'caps_loss'   
     
     if run_method == 'standard':
         use_caps_loss = False
@@ -987,8 +1132,7 @@ if __name__ == '__main__':
         use_caps_loss = False
         use_relative_action = True
     else:
-        raise NotImplementedError()
-
+        raise NotImplementedError
 
 
     rand_seed = 12345
@@ -1022,7 +1166,7 @@ if __name__ == '__main__':
     foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log} 2>&1"
 
   # reset options
-    n_envs = 2
+    n_envs = 8
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -1063,13 +1207,23 @@ if __name__ == '__main__':
 
     # create the environment
     env = OpenFoamRLEnv(options)
-    env = CustomVecEnv(env)
-    #env = ObservationRewardWrapper2(env, use_relative_action, deque_size=50)
+    env = ObservationRewardWrapper2(env, use_relative_action, deque_size=50)
+    env = CustomMonitor(env)
 
+    # the last wrapper must be a VecEnv type to stop SB3 to wrap our model with SB3 built-in 'Monitor' and 'DummyVecEnv' wrappers
+    # TODO: is there a way to stop _env_wrap() happening in __init__of base_class?
+    env = CustomVecEnv(env)
+    
+    # PPO model
     model = CustomPPO(CustomActorCriticPolicy, env, policy_kwargs={'env':env, 'use_relative_action':use_relative_action}, device="cpu", verbose=1,
                         use_relative_action=use_relative_action, use_caps_loss=use_caps_loss, caps_lambda=caps_lambda)
-
-    num_updates = 1000
+    
+    # set the logger
+    logger_path = "./training_logs"
+    logger = configure(logger_path, ['log'])
+    model.set_logger(logger)
+    
+    num_updates = 100
     buffer_size = model.env.num_envs * model.n_steps
     total_timesteps = int(num_updates * buffer_size)
 
