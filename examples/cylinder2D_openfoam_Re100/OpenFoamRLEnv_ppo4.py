@@ -305,9 +305,14 @@ class OpenFoamRLEnv(gym.Env):
         if return_info:
             return obs_np, [{}] * self.num_envs
         return obs_np
+    
+    def step(self, action):
+        if self.__interface is None:
+            self.reset()
+        return self.step_base(action)
 
     # this makes the environment 
-    def step(self, action):
+    def step_base(self, action):
         if not isinstance(action, list) and not isinstance(action, np.ndarray):
             raise Exception("Action should be either a list or numpy array")
         if isinstance(action, np.ndarray) and len(action.shape) == 2 and action.shape[0] == 1:
@@ -648,7 +653,6 @@ class OpenFoamRLEnv(gym.Env):
                     pass
             self.__prerun_probes_loaded = True
 
-
     def _close_postprocessing_files(self):
         for filename_ in self.__postprocessing_filehandler_dict.keys():
             file_object = self.__postprocessing_filehandler_dict[filename_]
@@ -736,9 +740,9 @@ class OpenFoamRLEnv(gym.Env):
         pass
 
         self.action_space = spaces.Box(
-            low=-1e-4, high=1e-4, shape=(1, ), dtype=np.float64)
+            low=-2.5e-4, high=2.5e-4, shape=(1, ), dtype=np.float32)
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(11,), dtype=np.float64)
+            low=-np.inf, high=np.inf, shape=(11,), dtype=np.float32)
 
     def setup_action_to_write_data(self, action, p_idx=0):
         """ Problem specific function """

@@ -1,8 +1,8 @@
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version:  v1912                                 |
-|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|  \\    /   O peration     | Version:  4.x                                   |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
 FoamFile
@@ -10,7 +10,6 @@ FoamFile
     version     2.0;
     format      ascii;
     class       dictionary;
-    location    "system";
     object      fvSolution;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -19,48 +18,77 @@ solvers
 {
     p
     {
-        solver           GAMG;
-        smoother         DICGaussSeidel;
-        tolerance        1e-6;
-        relTol           0.001;
+        solver GAMG;
+        tolerance 1e-8;
+        relTol 0.001;
+        smoother GaussSeidel;
+        nPreSweeps 0;
+        nPostSweeps 2;
+        cacheAgglomeration on;
+        agglomerator faceAreaPair;
+        nCellsInCoarsestLevel 100;
+        mergeLevels 1;
     }
 
     pFinal
     {
         $p;
-        relTol          0;
+        relTol 0;    
     }
 
     U
     {
-        solver          smoothSolver;
-        smoother        symGaussSeidel;
-        tolerance       1e-08;
-        relTol          0.001;
+        solver PBiCGStab;
+        preconditioner DILU;
+        tolerance 1e-8;
+        relTol 0.001;    
     }
-
+    
     UFinal
     {
         $U;
-        relTol          0;
+        relTol 0;    
     }
 }
 
 PIMPLE
 {
-    nOuterCorrectors    1;
-    nCorrectors         2;
-    nNonOrthogonalCorrectors 2;
+    nOuterCorrectors    100;
+    nCorrectors 2;
+    nNonOrthogonalCorrectors 1;
+
+    pRefCell        0;
+    pRefValue       0;
 
     residualControl
     {
-        "(U|p)"
+        p
         {
-            relTol          0;
-            tolerance       0.0001;
+                tolerance  1e-4;
+                relTol      0;
+        }
+        U
+        {
+                tolerance  1e-4;
+                relTol      0;
         }
     }
 }
 
+relaxationFactors
+{
+
+    fields
+        {
+            p      0.3;
+            pFinal   1;
+        }
+        equations
+        {
+            "U"     0.7;
+            "(U)Final"   1;
+        }
+
+}
 
 // ************************************************************************* //

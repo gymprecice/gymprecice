@@ -14,7 +14,7 @@ FoamFile
     object      controlDict;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-libs ("libCustomisedMeshTools.so" "libCustomisedBCs.so");
+libs ("libCustomisedMeshTools.so");
 
 application     pimpleFoam;
 
@@ -24,22 +24,23 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         1000;
+endTime    0.335;
 
-deltaT          1e-3;
+deltaT          5e-4;
 
+//writeControl    runTime;
+//writeInterval   5e-2;
 
-// writeControl    runTime;
-// writeInterval   5e-3;
+writeControl   timeStep;
+writeInterval   1;
 
-writeControl   none; //adjustableRunTime;
-writeInterval   0.1;
-
-purgeWrite      0;
+purgeWrite      1;
 
 writeFormat     ascii;
 
 writePrecision  8;
+
+writeCompression off;
 
 timeFormat      general;
 
@@ -47,121 +48,17 @@ timePrecision   8;
 
 runTimeModifiable false;
 
-adjustTimeStep true;
-maxCo 0.99;
-
+adjustTimeStep  no;
+maxCo           1;
 functions
 {
-    forces
-    {
-        type            forceCoeffs;
-        libs            (forces);
-        writeControl    timeStep;
-        writeInterval   1;
-        log false;
-
-        patches
-        (
-            cylinder_wall
-            jet1
-            jet2
-        );
-	
-	rho rhoInf;
-        rhoInf 1.0;
-        CofR (0.0 0 0);
-        liftDir (0 1 0);
-        dragDir (1 0 0);
-        pitchAxis (0 0 1);
-        magUInf 1.0;
-        lRef 0.1;           
-        Aref 0.001;         
-    }
-
-    Jet1FlowRate
-    {
-        type            surfaceFieldValue;
-        libs            ("libfieldFunctionObjects.so");
-
-        log             true;
-        writeControl    timeStep;
-        writeFields     false;
-
-        regionType      patch;
-        name            jet1;
-
-        operation        areaNormalIntegrate;
-
-        fields
-        (
-            U
-        );
-    }
-    Jet2FlowRate
-    {
-        type            surfaceFieldValue;
-        libs            ("libfieldFunctionObjects.so");
-
-        log             true;
-        writeControl    timeStep;
-        writeFields     false;
-
-        regionType      patch;
-        name            jet2;
-
-        operation        areaNormalIntegrate;
-
-        fields
-        (
-            U
-        );
-    }
-
-    probes
-    {
-        type            probes;
-        libs            (sampling);
-
-        // Name of the directory for probe data
-        name            probes;
-
-        // Write at same frequency as fields
-        writeControl    timeStep;
-        //writeInterval   1;
-
-        // Fields to be probed
-        fields          (p);
-
-        // Optional: do not recalculate cells if mesh moves
-        fixedLocations  true;
-
-        // Optional: interpolation scheme to use (default is cell)
-        interpolationScheme cellPoint;
-
-        probeLocations
-        (
-            (0.0 -0.05 0.005)
-            (0.0 0.05 0.005)
-            (0.075 -0.1 0.005)
-            (0.075 0.0 0.005)
-            (0.075 0.1 0.005)
-            (0.15 -0.1 0.005)
-            (0.15 0.0 0.005)
-            (0.15 0.1 0.005)
-            (0.3 -0.1 0.005)
-            (0.3 0.0 0.005)
-            (0.3 0.1 0.005)
-        );
-
-        // Optional: filter out points that haven't been found. Default
-        //           is to include them (with value -VGREAT)
-        includeOutOfBounds  true;
-    }
-
-    
-    preCICE_Adapter
-    {
-        type preciceAdapterFunctionObject;
-        libs ("libpreciceAdapterFunctionObject.so");
-    }
+    #includeFunc solverInfo
+    #includeFunc forces
+    #includeFunc probes
+    #includeFunc flowRateJet1
+    #includeFunc flowRateJet2
+// #includeFunc preCICE_Adapter        
 }
+
+
+// ************************************************************************* //

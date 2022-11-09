@@ -1,4 +1,7 @@
 // -*- C++ -*-
-#includeEtc "caseDicts/postProcessing/numerical/solverInfo"
+
+type preciceAdapterFunctionObject;
+libs ("libpreciceAdapterFunctionObject.so");
+
 
 // ************************************************************************* //

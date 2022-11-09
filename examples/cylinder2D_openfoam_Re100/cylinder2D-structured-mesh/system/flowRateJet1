@@ -1,4 +1,8 @@
 // -*- C++ -*-
-#includeEtc "caseDicts/postProcessing/numerical/solverInfo"
+
+#includeEtc "caseDicts/postProcessing/flowRate/flowRatePatch.cfg"
+
+name    jet1;
+
 
 // ************************************************************************* //

@@ -58,7 +58,7 @@ runfoam() {
         sed -i "s/^\s\{0,\}writeControl.*/writeControl   timeStep;/g" ./system/controlDict
     else
         sed -i "s/^\s\{0,\}\/\/.*preCICE_Adapter.*/    #includeFunc preCICE_Adapter/g" ./system/controlDict
-        sed -i "s/^\s\{0,\}endTime.*/endTime    1000;/g" ./system/controlDict
+        sed -i "s/^\s\{0,\}endTime.*/endTime    2.0;/g" ./system/controlDict
         sed -i "s/^\s\{0,\}writeControl.*/writeControl   none;/g" ./system/controlDict
     fi
 

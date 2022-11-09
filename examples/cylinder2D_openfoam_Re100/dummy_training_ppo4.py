@@ -1,21 +1,19 @@
 import argparse
 from collections import deque
 from typing import Optional
-import copy
-from urllib.parse import uses_relative
 import gym
-from OpenFoamRLEnv import OpenFoamRLEnv
+from OpenFoamRLEnv_ppo4 import OpenFoamRLEnv
 from utils import fix_randseeds
 import numpy as np
 import time
 import torch
 import torch.nn as nn
+import math
+
 # from torch.distributions.categorical import Categorical
 from torch.distributions.normal import Normal
 from torch.optim import Adam
-import numpy as np
-import gym
-from gym.spaces import Discrete, Box
+from gym.spaces import Box
 from distutils.util import strtobool
 # from torch.utils.tensorboard import SummaryWriter
 
@@ -27,16 +25,16 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 
 
 class Agent(nn.Module):
-    def __init__(self, env, relative_action=False):
+    def __init__(self, env, relative_action):
         super().__init__()
         self.n_actions = np.prod(env.action_space.shape)
         self.n_obs = np.prod(env.observation_space.shape)
-        self.action_min = torch.from_numpy(envs.action_space.low)
-        self.action_max = torch.from_numpy(envs.action_space.high)
+        self.action_min = torch.from_numpy(np.copy(envs.action_space.low))
+        self.action_max = torch.from_numpy(np.copy(envs.action_space.high))
 
         if relative_action:
-            self.action_min /= 3
-            self.action_max /= 3
+            self.action_min = self.action_min / 3
+            self.action_max = self.action_max / 3
 
         self.critic = nn.Sequential(
             layer_init(nn.Linear(self.n_obs, 64)),
@@ -223,7 +221,6 @@ class WandBRewardRecoder(gym.Wrapper):
         self.episode_count = 0
         self.episode_returns: Optional[np.ndarray] = None
         self.episode_lengths: Optional[np.ndarray] = None
-        self.is_vector_env = getattr(env, "is_vector_env", False)
         self.wandb_context = wandb_context
 
     def reset(self, **kwargs):
@@ -244,7 +241,7 @@ class WandBRewardRecoder(gym.Wrapper):
 
         self.episode_returns += rewards
         self.episode_lengths += 1
-        if not self.is_vector_env:
+        if self.num_envs == 1:
             dones = [dones]
         dones = list(dones)
 
@@ -267,7 +264,7 @@ class WandBRewardRecoder(gym.Wrapper):
         return (
             observations,
             rewards,
-            dones if self.is_vector_env else dones[0],
+            dones if self.num_envs > 1 else dones[0],
             infos,
         )
 
@@ -301,7 +298,7 @@ def parse_args():
         help="the number of parallel game environments")
     parser.add_argument("--num-steps", type=int, default=80,
         help="the number of steps to run in each environment per policy rollout")
-    parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+    parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
     parser.add_argument("--gae", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Use GAE for advantage computation")
@@ -315,7 +312,7 @@ def parse_args():
         help="the K epochs to update the policy")
     parser.add_argument("--norm-adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles advantages normalization")
-    parser.add_argument("--clip-coef", type=float, default=0.2,
+    parser.add_argument("--clip-coef", type=float, default=0.15,
         help="the surrogate clipping coefficient")
     parser.add_argument("--clip-vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
@@ -335,22 +332,19 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    run_method = 'standard'  # 'relative_update' # 'standard'
-
+    run_method = 'standard'  # 'caps_loss'  # 'relative_update' # 'standard'
     if run_method == 'standard':
         use_caps_loss = False
         use_relative_action = False
     elif run_method == 'caps_loss':
         use_caps_loss = True
         use_relative_action = False
-        caps_lambda = 1.0
+        caps_lambda = 10.0
     elif run_method == 'relative_update':
         use_caps_loss = False
         use_relative_action = True
     else:
         assert 0, 'not implemented'
-
-    use_wandb = True
 
     rand_seed = 12345
     fix_randseeds(rand_seed)
@@ -358,7 +352,7 @@ if __name__ == '__main__':
 
     # shell options to run the solver (this can/should be placed in a
     # separate python script)
-    foam_case_path = "cylinder2D-structured-mesh"
+    foam_case_path = "cylinder2D-unstructured-mesh-paper"
     foam_shell_cmd = "foam-functions-cylinder2D.sh"
     foam_clean_cmd = "cleanfoam"
     foam_softclean_cmd = "softcleanfoam"
@@ -378,10 +372,10 @@ if __name__ == '__main__':
     # if True, then the preprocessing (here: blockMesh) happens per each epoch:
     foam_full_reset = False
 
-    foam_clean_cmd = f" && {foam_clean_cmd} > {foam_clean_log} 2>&1"
-    foam_softclean_cmd = f" && {foam_softclean_cmd} > {foam_softclean_log} 2>&1"
-    foam_preprocess_cmd = f" && {foam_preprocess_cmd} > {foam_preprocess_log} 2>&1"
-    foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log} 2>&1"
+    foam_clean_cmd = f" && {foam_clean_cmd}"  # > {foam_clean_log} 2>&1"
+    foam_softclean_cmd = f" && {foam_softclean_cmd}"  # > {foam_softclean_log} 2>&1"
+    foam_preprocess_cmd = f" && {foam_preprocess_cmd}"  # > {foam_preprocess_log} 2>&1"
+    foam_run_cmd = f" && {foam_run_cmd} > {foam_run_log}"  # 2>&1"
 
     # Size and type is redundant data (included controlDict or called from a file)
     # Multiple way to do this in OpenFoam so we delegate it to user
@@ -399,21 +393,7 @@ if __name__ == '__main__':
             'datatype': 'scaler',  # scaler vs field
             'size': 11,  # number of probes
             'output_file': '/postProcessing/probes/0/p',  # depends on the type of the probe/patchProbe/etc
-        },
-        # 'U': {
-        #     'use': 'observation',  # goes into observation or rewards
-        #     'type': 'probe',  # forces|probe|?
-        #     'datatype': 'field',  # scaler vs field
-        #     'size': 3,  # number of probes
-        #     'output_file': '/postProcessing/patchProbes/0/U',
-        # },
-        # 'T': {
-        #     'use': 'observation',  # goes into observation or rewards
-        #     'type': 'probe',  # forces|probe|?
-        #     'datatype': 'scaler',  # scaler vs field
-        #     'size': 3,  # number of probes
-        #     'output_file': '/postProcessing/patchProbes/0/T',
-        # },
+        }
     }
 
     options = {
@@ -430,31 +410,34 @@ if __name__ == '__main__':
         "n_parallel_env": args.num_envs,
         "is_dummy_run": False,
         "prerun": True,
+        "prerun_available": True,
+        "prerun_time": 0.335,
     }
 
-    if use_wandb:
-        import wandb
-        run_name = f'run_obs2_{run_method}_{int(time.time())}'
+    # use_wandb = False
+    # if use_wandb:
+    #     import wandb
+    #     run_name = f'run_obs2_{run_method}_{int(time.time())}'
 
-        wandb_recorder = wandb.init(
-            project='RL_CFD',
-            entity='ahmed-h-elsheikh',
-            sync_tensorboard=False,
-            config=vars(args),
-            name=run_name,
-            monitor_gym=False,
-            save_code=True,
-        )
-    else:
-        wandb_recorder = None
+    #     wandb_recorder = wandb.init(
+    #         project='RL_CFD',
+    #         entity='ahmed-h-elsheikh',
+    #         sync_tensorboard=False,
+    #         config=vars(args),
+    #         name=run_name,
+    #         monitor_gym=False,
+    #         save_code=True,
+    #     )
+    # else:
+    #     wandb_recorder = None
 
     # create the environment
     # env = gym.make("FoamAdapterEnv-v0")
     t0 = time.time()
     envs = OpenFoamRLEnv(options)
-    envs = ObservationRewardWrapper2(envs, use_relative_action)
+    #envs = ObservationRewardWrapper2(envs, use_relative_action)
     envs = gym.wrappers.ClipAction(envs)
-    envs = WandBRewardRecoder(envs, wandb_recorder)
+    envs = WandBRewardRecoder(envs)
 
     print(f"Run time of defining OpenFoamRLEnv is {time.time()-t0} seconds")
 
@@ -479,7 +462,7 @@ if __name__ == '__main__':
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
     values = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    num_updates = 100  # args.total_timesteps // args.batch_size
+    num_updates = 50  # args.total_timesteps // args.batch_size
 
     next_obs = torch.Tensor(envs.reset()).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
@@ -521,10 +504,11 @@ if __name__ == '__main__':
                 else:  # this is valid for both standard and caps method
                     action_fraction = 1 / (subcycle_max - subcycle_counter)
                     smoothed_action = prev_action + action_fraction * (action - prev_action)
+                    
 
                 # TRY NOT TO MODIFY: execute the game and log data.
                 next_obs, reward, done, info = envs.step(smoothed_action.cpu().numpy())
-                print(f'PPO will took the following action:\n{smoothed_action}\n vs previous action:\n{prev_action}\n at subcycle {subcycle_counter} out of {subcycle_max}, reward {reward}')
+                # print(f'PPO will took the following action:\n{smoothed_action}\n vs previous action:\n{prev_action}\n at subcycle {subcycle_counter} out of {subcycle_max}, reward {reward}')
                 subcycle_counter += 1
 
                 if envs.num_envs == 1:
@@ -538,7 +522,7 @@ if __name__ == '__main__':
 
             rewards[step] = torch.tensor(reward).to(device).view(-1)
             next_obs = torch.Tensor(next_obs).to(device)
-            next_done = torch.Tensor(done).to(device=device)  # TODO how to fix this why do I need to put it in a list
+            next_done = torch.Tensor(done).to(device=device)  
 
             # for item in info:
             #     if "episode" in item.keys():
@@ -584,8 +568,8 @@ if __name__ == '__main__':
         b_values = values.reshape(-1)
 
         # for CAPS
-        nxtobs[0, :] = obs[0, :].detach().clone()
-        nxtobs[1:, :] = obs[:-1, :].detach().clone()
+        nxtobs[0:-1, :] = obs[1:, :].detach().clone()
+        nxtobs[-1, :] = obs[-1, :].detach().clone()
 
         b_nxtobs = nxtobs.reshape((-1,) + envs.observation_space.shape)
 
@@ -671,8 +655,10 @@ if __name__ == '__main__':
             "global_step": global_step,
             "charts/SPS": int(global_step / (time.time() - start_time))
         }
-        if wandb_recorder:
-            wandb_recorder.log(metrics_dict, commit=True)
+    #     if wandb_recorder:
+    #         wandb_recorder.log(metrics_dict, commit=True)
 
-    if wandb_recorder:
-        wandb_recorder.close()
+    # if wandb_recorder:
+    #     wandb_recorder.close()
+
+    torch.save(agent.state_dict(), 'agent.pt')
