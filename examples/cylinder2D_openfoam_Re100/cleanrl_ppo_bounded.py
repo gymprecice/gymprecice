@@ -6,12 +6,16 @@ from OpenFoamRLEnv_ppo4 import OpenFoamRLEnv
 from utils import fix_randseeds
 import numpy as np
 import time
+import math
 import torch
 import torch.nn as nn
-from bounded_normal import BoundedNormal
 from torch.optim import Adam
 from gym.spaces import Box
 from distutils.util import strtobool
+
+
+EPSILON = 1e-6
+LOG_EPSILON = math.log(EPSILON)
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -25,8 +29,12 @@ class Agent(nn.Module):
         super().__init__()
         self.n_actions = np.prod(env.action_space.shape)
         self.n_obs = np.prod(env.observation_space.shape)
+
         self.action_min = torch.from_numpy(np.copy(envs.action_space.low))
         self.action_max = torch.from_numpy(np.copy(envs.action_space.high))
+
+        self.action_scale = (self.action_max - self.action_min) / 2.0
+        self.action_bias = (self.action_max + self.action_min) / 2.0
 
         if relative_action:
             self.action_min = self.action_min / 3
@@ -56,16 +64,31 @@ class Agent(nn.Module):
 
     def get_action_and_value(self, x, action=None):
         x = x.reshape(-1, self.n_obs)
-        action_mean = self.actor_mean(x)
-        action_std = self.std.expand_as(action_mean)
+        mean = self.actor_mean(x)
+        std = self.std.expand_as(mean)
 
-        probs = BoundedNormal(action_mean, action_std, action_spec=envs.action_space)
+        # Clip stddev for numerical stability (epsilon < 1.0, hence negative)
+        std = torch.clip(std, LOG_EPSILON, -LOG_EPSILON)
+        # Softplus transformation (based on https://arxiv.org/abs/2007.06059)
+        std = 0.25 * (torch.log(1.0 + torch.exp(std)) + 0.2) / (math.log(2.0) + 0.2)
+
+        probs = torch.distributions.Normal(mean, std)
 
         if action is None:
-            action = probs.sample(temperature=1.0)
+            sample = probs.rsample()
+            squashed_sample = torch.tanh(sample)
+            action = squashed_sample * self.action_scale + self.action_bias  # we scale the sampled action
+
+        inv_action = 2.0 * (action - self.action_min) / (self.action_max - self.action_min) - 1.0
+        clip = 1.0 - EPSILON
+        inv_action = torch.clip(inv_action, -clip, clip)
+        inv_action = torch.atanh(inv_action)
+
+        log_prob = probs.log_prob(inv_action)
+        log_prob -= 2.0 * (math.log(2.0) - inv_action - torch.log(1.0 + torch.exp(-2.0 * inv_action)))
 
         # agent returns the mean action for CAP method
-        return action, action_mean, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(x)
+        return action, mean, log_prob.sum(1), probs.entropy().sum(1), self.critic(x)
 
 
 class ClipFlowAction(gym.ActionWrapper):
