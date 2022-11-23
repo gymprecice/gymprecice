@@ -12,6 +12,7 @@ import torch.nn as nn
 from torch.optim import Adam
 from gym.spaces import Box
 from distutils.util import strtobool
+from torch.distributions import Normal
 
 
 EPSILON = 1e-6
@@ -25,7 +26,7 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 
 
 class Agent(nn.Module):
-    def __init__(self, env, relative_action):
+    def __init__(self, env, relative_action, use_sde=False):
         super().__init__()
         self.n_actions = np.prod(env.action_space.shape)
         self.n_obs = np.prod(env.observation_space.shape)
@@ -36,6 +37,9 @@ class Agent(nn.Module):
         self.action_scale = (self.action_max - self.action_min) / 2.0
         self.action_bias = (self.action_max + self.action_min) / 2.0
 
+        self.latent_dim = 64
+        self.use_sde = use_sde
+
         if relative_action:
             self.action_min = self.action_min / 3
             self.action_max = self.action_max / 3
@@ -43,20 +47,61 @@ class Agent(nn.Module):
         self.critic = nn.Sequential(
             layer_init(nn.Linear(self.n_obs, 64)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
+            layer_init(nn.Linear(64, self.latent_dim)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 1), std=1.0)
+            layer_init(nn.Linear(self.latent_dim, 1), std=1.0)
         )
 
-        self.actor_mean = nn.Sequential(
+        self.actor = nn.Sequential(
             layer_init(nn.Linear(self.n_obs, 64)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, self.n_actions), std=0.1)
+            layer_init(nn.Linear(64, self.latent_dim)),
+            nn.Tanh()
         )
+        self.actor_mean = layer_init(nn.Linear(self.latent_dim, self.n_actions), std=0.1)
 
-        self.std = nn.Parameter(torch.zeros(self.n_actions), requires_grad=True)
+        if self.use_sde:
+            # std_init = 0.0
+            # std = torch.ones(self.latent_dim, self.n_actions)
+            # # Transform it to a parameter so it can be optimized
+            # self.std = nn.Parameter(std * std_init, requires_grad=True)
+
+            log_std_init = 0.0  # TODO: set this as a hyper-parameter
+            log_std = torch.ones(self.latent_dim, self.n_actions)
+            # Transform it to a parameter so it can be optimized
+            self.log_std = nn.Parameter(log_std * log_std_init, requires_grad=True)
+
+            self.sample_weights(env.num_envs)
+        else:
+            self.std = nn.Parameter(torch.zeros(self.n_actions), requires_grad=True)
+
+    def sample_weights(self, num_envs: int = 1) -> None:
+        """
+        Sample weights for the noise exploration matrix,
+        using a centered Gaussian distribution.
+
+        :param num_envs:
+        """
+        # std = torch.exp(self.log_std)
+        # # Clip stddev for numerical stability (epsilon < 1.0, hence negative)
+        # std = torch.clip(std, LOG_EPSILON, -LOG_EPSILON)
+        # # Softplus transformation (based on https://arxiv.org/abs/2007.06059)
+        # std = 0.25 * (torch.log(1.0 + torch.exp(std)) + 0.2) / (math.log(2.0) + 0.2)
+
+        log_std = self.log_std
+        # From gSDE paper, it allows to keep variance
+        # above zero and prevent it from growing too fast
+        below_threshold = torch.exp(log_std) * (log_std <= 0)
+        # Avoid NaN: zeros values that are below zero
+        safe_log_std = log_std * (log_std > 0) + EPSILON
+        above_threshold = (torch.log1p(safe_log_std) + 1.0) * (log_std > 0)
+        std = 0.25 * (below_threshold + above_threshold)
+
+        self.weights_dist = Normal(torch.zeros_like(std), std)
+        # Reparametrization trick to pass gradients
+        self.exploration_mat = self.weights_dist.rsample()
+        # Pre-compute matrices in case of parallel exploration
+        self.exploration_matrices = self.weights_dist.rsample((num_envs,))
 
     def get_value(self, x):
         x = x.reshape(-1, self.n_obs)
@@ -64,31 +109,74 @@ class Agent(nn.Module):
 
     def get_action_and_value(self, x, action=None):
         x = x.reshape(-1, self.n_obs)
-        mean = self.actor_mean(x)
-        std = self.std.expand_as(mean)
+        latent_pi = self.actor(x)
+        mean = self.actor_mean(latent_pi)
 
-        # Clip stddev for numerical stability (epsilon < 1.0, hence negative)
-        std = torch.clip(std, LOG_EPSILON, -LOG_EPSILON)
-        # Softplus transformation (based on https://arxiv.org/abs/2007.06059)
-        std = 0.25 * (torch.log(1.0 + torch.exp(std)) + 0.2) / (math.log(2.0) + 0.2)
+        if self.use_sde:
+            # distribution = self._get_action_dist_from_latent(latent_pi)
+            # Stop gradient if we don't want to influence the features
+            latent_sde = latent_pi.detach()
 
-        probs = torch.distributions.Normal(mean, std)
+            # std = self.std
+            # # Clip stddev for numerical stability (epsilon < 1.0, hence negative)
+            # std = torch.clip(std, LOG_EPSILON, -LOG_EPSILON)
+            # # Softplus transformation (based on https://arxiv.org/abs/2007.06059)
+            # std = 0.25 * (torch.log(1.0 + torch.exp(std)) + 0.2) / (math.log(2.0) + 0.2)
+
+            log_std = self.log_std
+            # From gSDE paper, it allows to keep variance
+            # above zero and prevent it from growing too fast
+            below_threshold = torch.exp(log_std) * (log_std <= 0)
+            # Avoid NaN: zeros values that are below zero
+            safe_log_std = log_std * (log_std > 0) + EPSILON
+            above_threshold = (torch.log1p(safe_log_std) + 1.0) * (log_std > 0)
+            std = 0.25 * (below_threshold + above_threshold)
+
+            variance = torch.mm(latent_sde**2, std ** 2)
+            probs = Normal(mean, torch.sqrt(variance + EPSILON))
+
+            # Default case: only one exploration matrix
+            if len(latent_sde) == 1 or len(latent_sde) != len(self.exploration_matrices):
+                noise = torch.mm(latent_sde, self.exploration_mat)
+            else:
+                # Use batch matrix multiplication for efficient computation
+                # (batch_size, n_features) -> (batch_size, 1, n_features)
+                latent_sde = latent_sde.unsqueeze(1)
+                # (batch_size, 1, n_actions)
+                noise = torch.bmm(latent_sde, self.exploration_matrices)
+            noise = noise.squeeze(1)
+            sample = mean + noise
+        else:
+            std = self.std.expand_as(mean)
+            # Clip stddev for numerical stability (epsilon < 1.0, hence negative)
+            std = torch.clip(std, LOG_EPSILON, -LOG_EPSILON)
+            # Softplus transformation (based on https://arxiv.org/abs/2007.06059)
+            std = 0.25 * (torch.log(1.0 + torch.exp(std)) + 0.2) / (math.log(2.0) + 0.2)
+            probs = Normal(mean, std)
+            sample = probs.rsample()
 
         if action is None:
-            sample = probs.rsample()
             squashed_sample = torch.tanh(sample)
             action = squashed_sample * self.action_scale + self.action_bias  # we scale the sampled action
 
-        inv_action = 2.0 * (action - self.action_min) / (self.action_max - self.action_min) - 1.0
+        # TODO: this should be done only when action is not None
+        squashed_action = 2.0 * (action - self.action_min) / (self.action_max - self.action_min) - 1.0
         clip = 1.0 - EPSILON
-        inv_action = torch.clip(inv_action, -clip, clip)
-        inv_action = torch.atanh(inv_action)
+        squashed_action = torch.clip(squashed_action, -clip, clip)
 
-        log_prob = probs.log_prob(inv_action)
-        log_prob -= 2.0 * (math.log(2.0) - inv_action - torch.log(1.0 + torch.exp(-2.0 * inv_action)))
+        gaussian_action = torch.atanh(squashed_action)
+
+        log_prob = probs.log_prob(gaussian_action)
+        # log_prob -= torch.log(self.action_scale * (1 - squashed_action.pow(2)) + EPSILON)
+        log_prob -= 2.0 * (math.log(2.0) - gaussian_action - torch.log(1.0 + torch.exp(-2.0 * gaussian_action)))
+
+        if self.use_sde:
+            entropy = None
+        else:
+            entropy = probs.entropy().sum(1)
 
         # agent returns the mean action for CAP method
-        return action, mean, log_prob.sum(1), probs.entropy().sum(1), self.critic(x)
+        return action, mean, log_prob.sum(1), entropy, self.critic(x)
 
 
 class ClipFlowAction(gym.ActionWrapper):
@@ -339,6 +427,11 @@ def parse_args():
         help="the maximum norm for the gradient clipping")
     parser.add_argument("--target-kl", type=float, default=None,
         help="the target KL divergence threshold")
+    parser.add_argument("--use-sde", type=bool, default=False,
+        help="Whether to use generalized State Dependent Exploration (gSDE) instead of action noise exploration")
+    parser.add_argument("--sde-sample-freq", type=int, default=-1,
+        help="Sample a new noise matrix every n steps when using gSDE. Default: -1 (only sample at the beginning of the rollout)")
+
     args = parser.parse_args()
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
@@ -460,7 +553,7 @@ if __name__ == '__main__':
     n_acts = np.prod(envs.action_space.shape)
     device = "cpu"  # torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
-    agent = Agent(envs, use_relative_action)
+    agent = Agent(envs, use_relative_action, args.use_sde)
     optimizer = Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # TRY NOT TO MODIFY: start the game
@@ -490,7 +583,16 @@ if __name__ == '__main__':
             lrnow = frac * args.learning_rate
             optimizer.param_groups[0]["lr"] = lrnow
         t0 = time.time()
+
+        if args.use_sde:
+            # Sample new weights for gSDE
+            agent.sample_weights(envs.num_envs)
+
         for step in range(0, args.num_steps):
+            # Sample new weights for gSDE
+            if args.use_sde and args.sde_sample_freq > 0 and step % args.sde_sample_freq == 0:
+                agent.sample_weights(envs.num_envs)
+
             global_step += 1 * args.num_envs
             obs[step] = next_obs
             dones[step] = next_done
@@ -519,7 +621,6 @@ if __name__ == '__main__':
                 else:  # this is valid for both standard and caps method
                     action_fraction = 1 / (subcycle_max - subcycle_counter)
                     smoothed_action = prev_action + action_fraction * (action - prev_action)
-
 
                 # TRY NOT TO MODIFY: execute the game and log data.
                 next_obs, reward, done, info = envs.step(smoothed_action.cpu().numpy())
@@ -597,6 +698,10 @@ if __name__ == '__main__':
                 end = start + args.minibatch_size
                 mb_inds = b_inds[start:end]
 
+                # Re-sample the noise matrix because the log_std has changed
+                if args.use_sde:
+                    agent.sample_weights(args.minibatch_size)
+
                 _, newmu, newlogprob, entropy, newvalue = agent.get_action_and_value(b_obs[mb_inds], b_actions[mb_inds])
 
                 _, newnextmu, _, _, _ = agent.get_action_and_value(b_nxtobs[mb_inds])
@@ -634,8 +739,14 @@ if __name__ == '__main__':
                 else:
                     v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
 
-                entropy_loss = entropy.mean()
-                loss = pg_loss - args.ent_coef * entropy_loss + args.vf_coef * v_loss
+                # Entropy loss favor exploration
+                if entropy is None:
+                    # Approximate entropy when no analytical form
+                    entropy_loss = -torch.mean(-newlogprob)
+                else:
+                    entropy_loss = -entropy.mean()
+
+                loss = pg_loss + args.ent_coef * entropy_loss + args.vf_coef * v_loss
 
                 if use_caps_loss:
                     # CAPS loss
