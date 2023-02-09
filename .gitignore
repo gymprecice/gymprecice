@@ -9,7 +9,7 @@ output/
 precice-run/
 *.foam
 *.OpenFOAM
-postProcessing/
+postProcessing*/
 processor*
 [0-9]*/
 [0-9]*.[0-9]*/
@@ -21,3 +21,11 @@ linux*/
 lnInclude/
 dynamicCode/
 rl_gym_run*/
+*.png
+nohup*
+env*
+wandb/
+*.pickle
+*.csv
+*.ipynb
+*.txt

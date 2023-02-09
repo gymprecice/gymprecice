@@ -1,10 +1,12 @@
 import subprocess
 import numpy as np
-import precice
-from precice import action_write_initial_data, action_write_iteration_checkpoint
+
 from pathlib import Path
 from datetime import datetime
 import os
+
+import precice
+from precice import action_write_initial_data, action_write_iteration_checkpoint
 
 import gym
 from gym import spaces
@@ -20,6 +22,7 @@ from scipy import signal
 
 from os.path import join
 import os
+
 
 # def unload_module(module_name):
 #     import sys
@@ -37,11 +40,12 @@ class OpenFoamRLEnv(gym.Env):
     internal functions starts with '_' (e.g. _make_run_folders)
     problem setup functions starts with setup_ (e.g. setup_env_obs_act)
     """
-    metadata = {"render_modes": [], "render_fps": 4}
+    metadata = {}
 
-    def __init__(self, options) -> None:
+    def __init__(self, options, idx) -> None:
         super().__init__()
-
+        self.__idx = idx
+        print(f'----------- Start Env_{idx} ---------------')
         self.__options = copy.deepcopy(options)
         # gym env attributes:
         self.__is_reset = False
@@ -55,13 +59,13 @@ class OpenFoamRLEnv(gym.Env):
 
         self.__patch_data = None
 
-        self.num_envs = self.__options['n_parallel_env']
+        self.num_envs = 1  #self.__options['n_parallel_env']
         self.__prerun_t = None
 
         max_time, _ = get_coupling_data('', self.__options['precice_cfg']) 
         self.__init_max_time = float(max_time)
 
-        self.run_folders = self._make_run_folders()
+        self._make_run_folders()
 
         scaler_variables, vector_variables, mesh_list, mesh_variables = \
             get_cfg_data('', self.__options['precice_cfg'])
@@ -87,7 +91,7 @@ class OpenFoamRLEnv(gym.Env):
         self.__vertex_ids = None
 
         # solver attributes:
-        self.__solver_run = []  # physical solver
+        self.__solver_run = None  # physical solver
         self.__solver_full_reset = False  # if True, run foam-preprocess upon every reset
 
         # observations and rewards are obtained from post-processing files
@@ -136,37 +140,45 @@ class OpenFoamRLEnv(gym.Env):
 
         # Create an empty folder for the RL_Gym to run OpenFoam
         cwd = Path.cwd()
-        time_str = datetime.now().strftime('%d%m%Y_%H%M%S')
-        run_folder_name = f'rl_gym_run_{time_str}'
-        run_folder = cwd.joinpath(run_folder_name)
-        try:
-            run_folder.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            raise Exception(f'failed to create run folder: {e}')
+        # time_str = datetime.now().strftime('%d%m%Y_%H%M%S')
+        # run_folder_name = f'rl_gym_run_{time_str}'
+        # run_folder = cwd.joinpath(run_folder_name)
 
-        case_path = self.__options['case_path']
+        # case_path = self.__options['case_path']
         source_folder_str = join(str(cwd), case_path)
-        run_folder_str = join(str(cwd), run_folder_name)
+        # run_folder_str = join(str(cwd), run_folder_name)
 
-         # copy base case to RL_gym folder
-        try:
-            os.system(f'cp -r {source_folder_str} {run_folder_str}')
-        except Exception as e:
-            raise Exception(f'Failed to copy base case to run folder: {e}')
-        source_folder_str = join(run_folder_str, case_path)
-        case_path = source_folder_str
+        self.run_folder = '.'
 
-        os.system(f'cp ./{shell_cmd} {run_folder_str}')
-        
-        if not prerun_available or not prerun:
-            self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
-            self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
-        
-        if not prerun_available and prerun:
-            run_cmd_split = run_cmd.split(">")
-            run_cmd_split[0] += " -prerun " + str(self.__prerun_t) + " "
-            run_cmd = '>'.join(run_cmd_split)
-            self._launch_subprocess(shell_cmd, run_cmd, case_path, cmd_type='prerun')
+        if self.__idx == 0:
+            
+            # self.run_folder = run_folder
+            # try:
+            #     self.run_folder.mkdir(parents=True, exist_ok=True)
+            # except Exception as e:
+            #     raise Exception(f'failed to create run folder: {e}')
+            
+           
+            # # copy base case to RL_gym folder
+            # try:
+            #     os.system(f'cp -r {source_folder_str} {run_folder_str}')
+            # except Exception as e:
+            #     raise Exception(f'Failed to copy base case to run folder: {e}')
+            # source_folder_str = join(run_folder_str, case_path)
+            # case_path = source_folder_str
+
+            # os.system(f'cp ./{shell_cmd} {run_folder_str}')
+            
+            if not prerun_available or not prerun:
+                self._launch_subprocess(shell_cmd, clean_cmd, case_path, cmd_type='clean')
+                self._launch_subprocess(shell_cmd, preprocess_cmd, case_path, cmd_type='preprocess')
+            
+            if not prerun_available and prerun:
+                run_cmd_split = run_cmd.split(">")
+                run_cmd_split[0] += " -prerun " + str(self.__prerun_t) + " "
+                run_cmd = '>'.join(run_cmd_split)
+                self._launch_subprocess(shell_cmd, run_cmd, case_path, cmd_type='prerun')
+            
         
             
         # parse solver mesh data
@@ -174,42 +186,51 @@ class OpenFoamRLEnv(gym.Env):
         self.__patch_data = self.setup_mesh_data(case_path, patch_list)
 
         # Create a n_parallel case_folders as symbolic links
+        
+        self.case_path_str = f'env_{self.__idx}'
+        dist_folder_str = str(self.run_folder) + '/' + self.case_path_str
+        try:
+            os.system(f'cp -rs {source_folder_str} {dist_folder_str}')
+        except Exception as e:
+            raise Exception(f'Failed to create symbolic links to foam case files: {e}')
+        
+        time.sleep(0.5)
 
-        run_folder_list = []
-        case_path_str = 'env'
-        for idx_ in range(self.num_envs):
-            dist_folder_str = str(run_folder) + '/' + case_path_str + f'_{idx_}'
-            run_folder_list.append(dist_folder_str)
-            try:
-                os.system(f'cp -rs {source_folder_str} {dist_folder_str}')
-            except Exception as e:
-                raise Exception(f'Failed to create symbolic links to foam case files: {e}')
+        # precicedict_str = load_file(dist_folder_str + "/system/", 'preciceDict')
+        # new_string = parallel_precice_dict(precicedict_str, idx_)
+        # print(new_string)
+        # delete the symbolic link
+        # complete_filepath = f'{dist_folder_str}/system/preciceDict'
 
-            precicedict_str = load_file(dist_folder_str + "/system/", 'preciceDict')
-            new_string = parallel_precice_dict(precicedict_str, idx_)
-            # print(new_string)
-            # delete the symbolic link
-            complete_filepath = f'{dist_folder_str}/system/preciceDict'
-
-            os.system(f"rm {complete_filepath}")
-            with open(complete_filepath, 'w') as file_obj:
-                file_obj.write(new_string)
+        # os.system(f"rm {complete_filepath}")
+        # with open(complete_filepath, 'w') as file_obj:
+        #     file_obj.write(new_string)
 
         # Get a new version of precice-config.xml
-        parallel_tree = make_parallel_config(str(cwd) + '/', "precice-config.xml", self.num_envs, run_folder_list, use_mapping=True)
-        precice_config_parallel_file = str(run_folder) + "/precice-config.xml"
+        # parallel_tree = make_parallel_config(str(cwd) + '/', "precice-config.xml", self.num_envs, run_folder_list, use_mapping=True)
+        # precice_config_parallel_file = str(run_folder) + "/precice-config.xml"
 
-        with open(precice_config_parallel_file, 'w') as file_obj:
-            file_obj.write(xmltodict.unparse(parallel_tree, encoding='utf-8', pretty=True))
+        # with open(precice_config_parallel_file, 'w') as file_obj:
+        #     file_obj.write(xmltodict.unparse(parallel_tree, encoding='utf-8', pretty=True))
 
-        os.chdir(str(run_folder))
+        # try:
+        #     precice_config = join(str(cwd) , "precice-config.xml")
+        #     if self.__idx == 0:
+        #         os.system(f'cp {precice_config} {self.run_folder}')
+        # except Exception as e:
+        #     raise Exception(f'Failed to copy precice_config: {e}')
 
-        self.__options['precice_cfg'] = precice_config_parallel_file
-        return run_folder_list
+        # os.chdir(str(self.run_folder))
+
+
+        # self.__options['precice_cfg'] = precice_config_parallel_file
+        # return run_folder_list
 
     # gym methods:
     def reset(self, *, seed=None, return_info=False):
         super().reset(seed=seed)
+
+        print(f'reset: ------env-----{self.__idx}')
 
         # get the solver-launch options
         shell_cmd = self.__options.get("foam_shell_cmd", "")
@@ -218,43 +239,39 @@ class OpenFoamRLEnv(gym.Env):
         self.__solver_full_reset = self.__options.get("solver_full_reset", self.__solver_full_reset)
         
         self.__max_time = self.__init_max_time
-        case_path = 'env'
 
         if self.__prerun:
             softclean_cmd_split = softclean_cmd.split(">")
             softclean_cmd_split[0] += " -prerun "
             softclean_cmd = '>'.join(softclean_cmd_split)
 
-        for p_idx in range(self.num_envs):
-            p_case_path = case_path + f'_{p_idx}'
-            # clean the log files
-            
-            self._launch_subprocess(shell_cmd, softclean_cmd, p_case_path, cmd_type='softclean')
+        p_case_path = self.case_path_str 
+        # clean the log files
+        self._launch_subprocess(shell_cmd, softclean_cmd, p_case_path, cmd_type='softclean')
 
         if len(self.__postprocessing_filehandler_dict) > 0:
             self._close_postprocessing_files()
 
         # run open-foam solver
-        if len(self.__solver_run) > 0:
+        if self.__solver_run is not None:
             raise Exception('solver_run pointer is not cleared -- should not reach here')
 
-        for p_idx in range(self.num_envs):
-            p_case_path = case_path + f'_{p_idx}'
-            if self.__options['is_dummy_run']:
-                p_process = self._launch_dummy_subprocess(p_idx, p_case_path)
-            else:
-                p_process = self._launch_subprocess(shell_cmd, run_cmd, p_case_path, cmd_type='run')
 
-            assert p_process is not None
-            self.__solver_run.append(p_process)
+        if self.__options['is_dummy_run']:
+            p_process = self._launch_dummy_subprocess(p_case_path)
+        else:
+            p_process = self._launch_subprocess(shell_cmd, run_cmd, p_case_path, cmd_type='run')
+
+        assert p_process is not None
+        self.__solver_run = p_process
 
         # checking spawning after n_parallel calls to avoid sleeping $n times
-        time.sleep(0.5)  # single wait time for all parallel runs
-        for p_idx in range(self.num_envs):
-            p_case_path = case_path + f'_{p_idx}'
-            self._check_subprocess(self.__solver_run[p_idx], shell_cmd, run_cmd, p_case_path, cmd_type='run')
+        # time.sleep(1)  # single wait time for all parallel runs
 
-        # initiate precice interface and read single mesh data
+        self._check_subprocess(self.__solver_run, shell_cmd, run_cmd, p_case_path, cmd_type='run')
+        time.sleep(1) 
+       
+       # initiate precice interface and read single mesh data
         self._init_precice()
         self._set_precice_data()
         if self.__interface.is_action_required(action_write_initial_data()):
@@ -300,19 +317,22 @@ class OpenFoamRLEnv(gym.Env):
         self._read_probes_rewards_files()
         obs_np = self.setup_observations(n_lookback=0)
 
+        print(f'End: reset: ------env-----{self.__idx}')
         #if self.num_envs == 1:
         #    obs_np = obs_np[0]
         if return_info:
-            return obs_np, [{}] * self.num_envs
-        return obs_np
+            return obs_np[0], {} 
+        return obs_np[0]
     
-    def step(self, action):
-        if self.__interface is None:
-            self.reset()
-        return self.step_base(action)
+    # def step(self, action):
+    #     if self.__interface is None:
+    #         self.reset()
+    #     return self.step_base(action)
 
     # this makes the environment 
-    def step_base(self, action):
+    def step(self, action):
+        print(f'step: ------env-----{self.__idx}')
+
         if not isinstance(action, list) and not isinstance(action, np.ndarray):
             raise Exception("Action should be either a list or numpy array")
         if isinstance(action, np.ndarray) and len(action.shape) == 2 and action.shape[0] == 1:
@@ -328,10 +348,10 @@ class OpenFoamRLEnv(gym.Env):
 
         self.__write_data = {}
         # dummy random values to be sent to the solver
-        for p_idx in range(self.num_envs):
-            conv_action = self.setup_patch_field_to_write(action[p_idx], self.__patch_data)  # TODO: self.__patch_data to be moved into setup
-            actions_dict = self.setup_action_to_write_data(conv_action, p_idx)
-            self.__write_data.update(actions_dict)
+
+        conv_action = self.setup_patch_field_to_write(action[0], self.__patch_data)  # TODO: self.__patch_data to be moved into setup
+        actions_dict = self.setup_action_to_write_data(conv_action)
+        self.__write_data.update(actions_dict)
 
         if not self.__is_data_initialized:
             self._initialize()
@@ -358,10 +378,9 @@ class OpenFoamRLEnv(gym.Env):
             self.__solver_full_reset = False
             self.__is_reset = False
         
-        infos = [{} for _ in range(self.num_envs)]
-        dones = np.full((self.num_envs), done)
 
-        return observations, rewards, dones,  infos
+        
+        return observations[0], rewards, done,  {}
 
     def render(self, mode='human'):
         """ not implemented """
@@ -370,6 +389,7 @@ class OpenFoamRLEnv(gym.Env):
 
     def close(self):
         """ not implemented """
+        self.finalize()
 
     # preCICE related methods:
     def _init_precice(self):
@@ -421,8 +441,9 @@ class OpenFoamRLEnv(gym.Env):
             self.__interface.advance(self.__precice_dt)
     
     def _initialize(self):
+        
         self._write()
-        self.__interface.initialize_data()#self.__interface.advance(self.__precice_dt)
+        self.__interface.initialize_data() #self.__interface.advance(self.__precice_dt)
         # increase the time before reading the probes/forces for internal consistency checks
         self.__time_window += 1
         self.__t += self.__precice_dt
@@ -482,7 +503,7 @@ class OpenFoamRLEnv(gym.Env):
                     self.__interface.write_block_scalar_data(
                         self.__write_ids[write_var], self.__vertex_ids[mesh_name], self.__write_data[write_var])
 
-    def _launch_dummy_subprocess(self, process_idx, cwd):
+    def _launch_dummy_subprocess(self, cwd):
         cmd_str = f'python -u fluid-solver.py'
         subproc = subprocess.Popen(cmd_str, shell=True, cwd=cwd)
         return subproc
@@ -527,20 +548,19 @@ class OpenFoamRLEnv(gym.Env):
             print(psutil.Process(subproc.pid), psutil.Process(subproc.pid).status())
             raise Exception(f'Error: subprocess failed to be launched  {cmd_type}: {cmd_str} STATUS_ZOMBIE run from {cwd}')
 
-    def _finalize_subprocess(self, process_list):
-        for subproc in process_list:
-            if subproc and psutil.pid_exists(subproc.pid):
-                if psutil.Process(subproc.pid).status() != psutil.STATUS_ZOMBIE:
-                    print("subprocess status is not zombie - waiting to finish ...")
-                    exit_signal = subproc.wait()
-                else:
-                    print("subprocess status is zombie - cleaning up ...")
-                    exit_signal = subproc.poll()
-                # check the subprocess exit signal
-                if exit_signal != 0:
-                    raise Exception("subprocess failed to complete its shell command: " + subproc.args)
-                print("subprocess successfully completed its shell command: " + subproc.args)
-        return []
+    def _finalize_subprocess(self, subproc):
+        if subproc and psutil.pid_exists(subproc.pid):
+            if psutil.Process(subproc.pid).status() != psutil.STATUS_ZOMBIE:
+                print("subprocess status is not zombie - waiting to finish ...")
+                exit_signal = subproc.wait()
+            else:
+                print("subprocess status is zombie - cleaning up ...")
+                exit_signal = subproc.poll()
+            # check the subprocess exit signal
+            if exit_signal != 0:
+                raise Exception("subprocess failed to complete its shell command: " + subproc.args)
+            print("subprocess successfully completed its shell command: " + subproc.args)
+        return None
 
     # def _read_observations(self):
     #     if not self.__options['is_dummy_run']:
@@ -568,23 +588,21 @@ class OpenFoamRLEnv(gym.Env):
     
         data_dict = {}
         for field_ in self.__options['postprocessing_data'].keys():
-            for p_idx in range(self.num_envs):
-                p_field_ = f'{field_}_{p_idx}'
-                field_info = self.__options['postprocessing_data'][field_]
-                if field_info['use'] == type_str and \
-                        p_field_ in self.__probes_rewards_data.keys() and \
-                        len(self.__probes_rewards_data[p_field_]) > 0:
-                    # avoid the starting again and again from t0 by working in reverse order
-                    full_data = self.__probes_rewards_data[p_field_][::-1]
-                    data_per_trj = []
-                    for data in full_data:
-                        time_stamp = data[0]
-                        if time_stamp <= time_bound[0]:
-                            break
-                        data_per_trj.append(data)
+            p_field_ = field_
+            field_info = self.__options['postprocessing_data'][field_]
+            if field_info['use'] == type_str and \
+                    p_field_ in self.__probes_rewards_data.keys() and \
+                    len(self.__probes_rewards_data[p_field_]) > 0:
+                # avoid the starting again and again from t0 by working in reverse order
+                full_data = self.__probes_rewards_data[p_field_][::-1]
+                data_per_trj = []
+                for data in full_data:
+                    time_stamp = data[0]
+                    if time_stamp <= time_bound[0]:
+                        break
+                    data_per_trj.append(data)
+                data_dict[p_field_] = data_per_trj[::-1]
 
-
-                    data_dict[p_field_] = data_per_trj[::-1]
         return data_dict
 
     def _get_observations_dict(self, n_lookback):
@@ -595,50 +613,50 @@ class OpenFoamRLEnv(gym.Env):
 
     def _read_probes_rewards_files(self):
         # sequential read of a single line (last line) of the file at each RL-Gym step
-        case_path = 'env'
+
         #case_path = self.__options['case_path']
-        for p_idx in range(self.num_envs):
-            p_case_path = case_path + f'_{p_idx}'
-            for field_ in self.__options['postprocessing_data'].keys():
-                temp_filename = ""
-                if self.__prerun and self.__prerun_probes_loaded:
-                    filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
-                    filename_split = filename.split('/')
-                    time_dir = ""
-                    if self.__prerun_t.is_integer():
-                        time_dir = str(int(self.__prerun_t))
-                    else:
-                        time_dir = str(self.__prerun_t)
-                    filename_split[-2] = time_dir
-                    temp_filename = '/'.join(filename_split)
+
+        p_case_path = self.case_path_str
+        for field_ in self.__options['postprocessing_data'].keys():
+            temp_filename = ""
+            if self.__prerun and self.__prerun_probes_loaded:
+                filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
+                filename_split = filename.split('/')
+                time_dir = ""
+                if self.__prerun_t.is_integer():
+                    time_dir = str(int(self.__prerun_t))
                 else:
-                    temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
-                print(f'reading filename: {temp_filename}')
+                    time_dir = str(self.__prerun_t)
+                filename_split[-2] = time_dir
+                temp_filename = '/'.join(filename_split)
+            else:
+                temp_filename = f"{p_case_path}{self.__options['postprocessing_data'][field_]['output_file']}"
+            print(f'reading filename: {temp_filename}')
 
-                if temp_filename not in self.__postprocessing_filehandler_dict.keys():
-                    # file_object = open(temp_filename, 'r')
-                    file_object = open_file(temp_filename)
-                    self.__postprocessing_filehandler_dict[temp_filename] = file_object
+            if temp_filename not in self.__postprocessing_filehandler_dict.keys():
+                # file_object = open(temp_filename, 'r')
+                file_object = open_file(temp_filename)
+                self.__postprocessing_filehandler_dict[temp_filename] = file_object
 
-                # data = np.loadtxt(temp_filename  , unpack=True, usecols=[0, 1, 3])
-                time_idx = 0
-                # utils.wait_for_file(temp_filename, sleep_time=0.1)
-                n_fields_expected = self.__options['postprocessing_data'][field_]['size']
+            # data = np.loadtxt(temp_filename  , unpack=True, usecols=[0, 1, 3])
+            time_idx = 0
+            # utils.wait_for_file(temp_filename, sleep_time=0.1)
+            n_fields_expected = self.__options['postprocessing_data'][field_]['size']
 
-                while not np.isclose(time_idx, self.__t):  # read till the end of time-window         
-                    while True:
-                        is_comment, time_idx, n_probes, probe_data = \
-                            robust_readline(self.__postprocessing_filehandler_dict[temp_filename], n_fields_expected, sleep_time=0.01)
-                        if not is_comment and n_fields_expected == n_probes:
-                            break
+            while not np.isclose(time_idx, self.__t):  # read till the end of time-window         
+                while True:
+                    is_comment, time_idx, n_probes, probe_data = \
+                        robust_readline(self.__postprocessing_filehandler_dict[temp_filename], n_fields_expected, sleep_time=0.01)
+                    if not is_comment and n_fields_expected == n_probes:
+                        break
 
-                    # print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
-                    p_field_ = f'{field_}_{p_idx}'
-                    if p_field_ not in self.__probes_rewards_data.keys():
-                        self.__probes_rewards_data[p_field_] = []
-                    self.__probes_rewards_data[p_field_].append([time_idx, n_probes, probe_data])
+                # print(f"time: {time_idx}, Number of probes {n_probes}, probes data {probe_data}")
+                p_field_ = f'{field_}'
+                if p_field_ not in self.__probes_rewards_data.keys():
+                    self.__probes_rewards_data[p_field_] = []
+                self.__probes_rewards_data[p_field_].append([time_idx, n_probes, probe_data])
 
-                assert np.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"  
+            assert np.isclose(time_idx, self.__t), f"probes/forces data should be at the same time as RL-Gym: {time_idx} vs {self.__t}"  
         
         #first_key = list(self.__options['postprocessing_data'].keys())[0] + '_0'
         #self.__prerun_t = self.__probes_rewards_data[first_key][-1][0]
@@ -683,6 +701,8 @@ class OpenFoamRLEnv(gym.Env):
             Cf = patch_data[patch_name]['Cf']
             nf = patch_data[patch_name]['nf']
             w_patch = w[idx]
+
+
             # convert volumetric flow rate to a sinusoidal profile on the interface
             avg_U = patch_flow_rate[idx] / np.sum(magSf)
 
@@ -715,6 +735,8 @@ class OpenFoamRLEnv(gym.Env):
                 raise Exception('estimated velocity profile violates mass conservation')
 
         U_profile = np.array([item for sublist in U for item in sublist])
+        # U_profile = np.zeros((1, 3))
+
 
         return U_profile
 
@@ -744,13 +766,13 @@ class OpenFoamRLEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(11,), dtype=np.float32)
 
-    def setup_action_to_write_data(self, action, p_idx=0):
+    def setup_action_to_write_data(self, action):
         """ Problem specific function """
         """ return dummy random values for Velocity """
-        write_data_dict = {f"Velocity_{p_idx}": action}
+        write_data_dict = {f"Velocity": action}
         return write_data_dict
 
-    def setup_initial_action(self, p_idx):
+    def setup_initial_action(self):
         # should we setup this in side of the options?
         return 0.0
 
@@ -758,13 +780,12 @@ class OpenFoamRLEnv(gym.Env):
         obs_dict = self._get_observations_dict(n_lookback)
         # list container to store 'pressure' probes
         obs_list = []
-        for p_idx in range(self.num_envs):
-            dict_name = f'p_{p_idx}'
-            # data = obs_dict[dict_name][-1]
-            # obs_list.append(data[2])
-            pressures = [[x[0]] + x[2] for x in obs_dict[dict_name]]
-            pressures = np.array(pressures)  # first column is time and the rest are the probes
-            obs_list.append(pressures[-1, 1:])  # only the last timestep and remove the timestamp
+        dict_name = 'p'
+        # data = obs_dict[dict_name][-1]
+        # obs_list.append(data[2])
+        pressures = [[x[0]] + x[2] for x in obs_dict[dict_name]]
+        pressures = np.array(pressures)  # first column is time and the rest are the probes
+        obs_list.append(pressures[-1, 1:])  # only the last timestep and remove the timestamp
 
             # print(f'Trajectory#{p_idx}:')
             # print(f'Time: {pressures[-1, 0]} --> p_avg: {np.mean(pressures[-1, 1:])}')
@@ -781,31 +802,30 @@ class OpenFoamRLEnv(gym.Env):
 
         reward_dict = self._get_reward_dict(n_lookback=n_lookback)
         # list container to store 'force-based' reward per trajectory
-        reward_list = []
+        # reward_list = []
 
-        for p_idx in range(self.num_envs):
 
-            var_name = f'forces_{p_idx}'
-            data_list = reward_dict[var_name]
+        var_name = 'forces'
+        data_list = reward_dict[var_name]
 
-            Cd = np.array([[x[0], x[2][0]] for x in data_list])
-            Cl = np.array([[x[0], x[2][2]] for x in data_list])
-            # print(f'Trajectory#{p_idx}:')
-            # print(f'Time: {Cd[0, 0]} --> Cd: {Cd[0, 1]}, Cl: {Cl[0, 1]}')
-            # print(f'Time: {Cd[-1, 0]} --> Cd: {Cd[-1, 1]}, Cl: {Cl[-1, 1]}')
+        Cd = np.array([[x[0], x[2][0]] for x in data_list])
+        Cl = np.array([[x[0], x[2][2]] for x in data_list])
+        # print(f'Trajectory#{p_idx}:')
+        # print(f'Time: {Cd[0, 0]} --> Cd: {Cd[0, 1]}, Cl: {Cl[0, 1]}')
+        # print(f'Time: {Cd[-1, 0]} --> Cd: {Cd[-1, 1]}, Cl: {Cl[-1, 1]}')
 
-            last_time = Cd[-1, 0]
-            start_time = last_time - lookback_time
-            # average is not correct when using adaptive time-stepping
-            Cd_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cd[:, 0], Cd[:, 1])
-            Cl_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cl[:, 0], Cl[:, 1])
-            # for constant time stepping one can filter the signals
-            Cd_filtered = signal.savgol_filter(Cd_uniform, 49, 0)
-            Cl_filtered = signal.savgol_filter(Cl_uniform, 49, 0)
-            reward_value = 3.205 - np.mean(Cd_filtered) - 0.2 * np.abs(np.mean(Cl_filtered))
+        last_time = Cd[-1, 0]
+        start_time = last_time - lookback_time
+        # average is not correct when using adaptive time-stepping
+        Cd_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cd[:, 0], Cd[:, 1])
+        Cl_uniform = np.interp(np.linspace(start_time, last_time, num=100, endpoint=True), Cl[:, 0], Cl[:, 1])
+        # for constant time stepping one can filter the signals
+        Cd_filtered = signal.savgol_filter(Cd_uniform, 49, 0)
+        Cl_filtered = signal.savgol_filter(Cl_uniform, 49, 0)
+        reward_value = 3.205 - np.mean(Cd_filtered) - 0.2 * np.abs(np.mean(Cl_filtered))
 
-            # reward_value = np.mean(Cd[:, 1]) + 0.2 * np.mean(Cl[:, 1])
-            reward_list.append(reward_value)
+        # reward_value = np.mean(Cd[:, 1]) + 0.2 * np.mean(Cl[:, 1])
+        # reward_list.append(reward_value)
 
-        return np.array(reward_list)
+        return reward_value #np.array(reward_list)
 

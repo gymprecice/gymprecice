@@ -2,7 +2,7 @@ import argparse
 from collections import deque
 from typing import Optional
 import gym
-from OpenFoamRLEnv_ppo4 import OpenFoamRLEnv
+from OpenFoamRLEnv_4_multiEnv import OpenFoamRLEnv
 from utils import fix_randseeds
 import numpy as np
 import time
@@ -13,7 +13,15 @@ from torch.optim import Adam
 from gym.spaces import Box
 from distutils.util import strtobool
 from torch.distributions import Normal
+from torch.utils.tensorboard import SummaryWriter
 
+from gym import spaces
+from datetime import datetime
+
+try:
+    from collections.abc import Iterable
+except ImportError:
+    Iterable = (tuple, list)
 
 EPSILON = 1e-6
 LOG_EPSILON = math.log(EPSILON)
@@ -28,11 +36,11 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 class Agent(nn.Module):
     def __init__(self, env, relative_action, use_sde=False):
         super().__init__()
-        self.n_actions = np.prod(env.action_space.shape)
-        self.n_obs = np.prod(env.observation_space.shape)
+        self.n_actions = np.prod(env.single_action_space.shape)
+        self.n_obs = np.prod(env.single_observation_space.shape)
 
-        self.action_min = torch.from_numpy(np.copy(envs.action_space.low))
-        self.action_max = torch.from_numpy(np.copy(envs.action_space.high))
+        self.action_min = torch.from_numpy(np.copy(envs.single_action_space.low))
+        self.action_max = torch.from_numpy(np.copy(envs.single_action_space.high))
 
         self.action_scale = (self.action_max - self.action_min) / 2.0
         self.action_bias = (self.action_max + self.action_min) / 2.0
@@ -82,20 +90,20 @@ class Agent(nn.Module):
 
         :param num_envs:
         """
-        # std = torch.exp(self.log_std)
-        # # Clip stddev for numerical stability (epsilon < 1.0, hence negative)
-        # std = torch.clip(std, LOG_EPSILON, -LOG_EPSILON)
-        # # Softplus transformation (based on https://arxiv.org/abs/2007.06059)
-        # std = 0.25 * (torch.log(1.0 + torch.exp(std)) + 0.2) / (math.log(2.0) + 0.2)
+        std = torch.exp(self.log_std)
+        # Clip stddev for numerical stability (epsilon < 1.0, hence negative)
+        std = torch.clip(std, LOG_EPSILON, -LOG_EPSILON)
+        # Softplus transformation (based on https://arxiv.org/abs/2007.06059)
+        std = 0.25 * (torch.log(1.0 + torch.exp(std)) + 0.2) / (math.log(2.0) + 0.2)
 
-        log_std = self.log_std
-        # From gSDE paper, it allows to keep variance
-        # above zero and prevent it from growing too fast
-        below_threshold = torch.exp(log_std) * (log_std <= 0)
-        # Avoid NaN: zeros values that are below zero
-        safe_log_std = log_std * (log_std > 0) + EPSILON
-        above_threshold = (torch.log1p(safe_log_std) + 1.0) * (log_std > 0)
-        std = 0.25 * (below_threshold + above_threshold)
+        # log_std = self.log_std
+        # # From gSDE paper, it allows to keep variance
+        # # above zero and prevent it from growing too fast
+        # below_threshold = torch.exp(log_std) * (log_std <= 0)
+        # # Avoid NaN: zeros values that are below zero
+        # safe_log_std = log_std * (log_std > 0) + EPSILON
+        # above_threshold = (torch.log1p(safe_log_std) + 1.0) * (log_std > 0)
+        # std = 0.25 * (below_threshold + above_threshold)
 
         self.weights_dist = Normal(torch.zeros_like(std), std)
         # Reparametrization trick to pass gradients
@@ -117,22 +125,22 @@ class Agent(nn.Module):
             # Stop gradient if we don't want to influence the features
             latent_sde = latent_pi.detach()
 
-            # std = self.std
-            # # Clip stddev for numerical stability (epsilon < 1.0, hence negative)
-            # std = torch.clip(std, LOG_EPSILON, -LOG_EPSILON)
-            # # Softplus transformation (based on https://arxiv.org/abs/2007.06059)
-            # std = 0.25 * (torch.log(1.0 + torch.exp(std)) + 0.2) / (math.log(2.0) + 0.2)
+            std = torch.exp(self.log_std)
+            # Clip stddev for numerical stability (epsilon < 1.0, hence negative)
+            std = torch.clip(std, LOG_EPSILON, -LOG_EPSILON)
+            # Softplus transformation (based on https://arxiv.org/abs/2007.06059)
+            std = 0.25 * (torch.log(1.0 + torch.exp(std)) + 0.2) / (math.log(2.0) + 0.2)
 
-            log_std = self.log_std
-            # From gSDE paper, it allows to keep variance
-            # above zero and prevent it from growing too fast
-            below_threshold = torch.exp(log_std) * (log_std <= 0)
-            # Avoid NaN: zeros values that are below zero
-            safe_log_std = log_std * (log_std > 0) + EPSILON
-            above_threshold = (torch.log1p(safe_log_std) + 1.0) * (log_std > 0)
-            std = 0.25 * (below_threshold + above_threshold)
+            # log_std = self.log_std
+            # # From gSDE paper, it allows to keep variance
+            # # above zero and prevent it from growing too fast
+            # below_threshold = torch.exp(log_std) * (log_std <= 0)
+            # # Avoid NaN: zeros values that are below zero
+            # safe_log_std = log_std * (log_std > 0) + EPSILON
+            # above_threshold = (torch.log1p(safe_log_std) + 1.0) * (log_std > 0)
+            # std = 0.25 * (below_threshold + above_threshold)
 
-            variance = torch.mm(latent_sde**2, std ** 2)
+            variance = torch.mm(latent_sde**2, std**2)
             probs = Normal(mean, torch.sqrt(variance + EPSILON))
 
             # Default case: only one exploration matrix
@@ -223,7 +231,7 @@ class ObservationRewardWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         """Resets the environment and add fake action."""
         observations = super().reset(**kwargs)
-        fake_action = self.num_envs * [0.0 * self.env.action_space.sample()]
+        fake_action = self.num_envs * [0.0 * self.env.single_action_space.sample()]
         if self.num_envs > 1:
             action_ = np.array(fake_action).reshape(self.num_envs, -1)
             wrapped_observations = np.concatenate((observations, action_), axis=1)
@@ -246,11 +254,11 @@ class ObservationRewardWrapper2(gym.Wrapper):
 
         # for relative action, observations are augmented with the current action
         if self.use_relative_action:
-            low = np.append(env.observation_space.low, env.observation_space.low[0])
-            high = np.append(env.observation_space.high, env.observation_space.high[0])
+            low = np.append(env.single_observation_space.low, env.single_observation_space.low[0])
+            high = np.append(env.single_observation_space.high, env.single_observation_space.high[0])
         else:
-            low = env.observation_space.low
-            high = env.observation_space.high
+            low = env.single_observation_space.low
+            high = env.single_observation_space.high
 
         # stacking is inspired by what is done
         # https://github.com/openai/gym/blob/master/gym/wrappers/frame_stack.py
@@ -286,7 +294,7 @@ class ObservationRewardWrapper2(gym.Wrapper):
     def reset(self, **kwargs):
         """Resets the environment and add fake action."""
         observations = super().reset(**kwargs)
-        fake_action = self.num_envs * [0.0 * self.env.action_space.sample()]
+        fake_action = self.num_envs * [0.0 * self.env.single_action_space.sample()]
 
         # for relative action, observations are augmented with the current action
         if self.use_relative_action:
@@ -319,7 +327,7 @@ class WandBRewardRecoder(gym.Wrapper):
             deque_size: The size of the buffers :attr:`return_queue` and :attr:`length_queue`
         """
         super().__init__(env)
-        self.num_envs = getattr(env, "num_envs", 1)
+        # self.num_envs = num_envs
         self.t0 = time.perf_counter()
         self.episode_count = 0
         self.episode_returns: Optional[np.ndarray] = None
@@ -329,8 +337,11 @@ class WandBRewardRecoder(gym.Wrapper):
     def reset(self, **kwargs):
         """Resets the environment using kwargs and resets the episode returns and lengths."""
         observations = super().reset(**kwargs)
+        self.episode_returns_saved = np.zeros(self.num_envs, dtype=np.float32)
+        self.episode_lengths_saved = np.zeros(self.num_envs, dtype=np.int32)
         self.episode_returns = np.zeros(self.num_envs, dtype=np.float32)
         self.episode_lengths = np.zeros(self.num_envs, dtype=np.int32)
+        
         return observations
 
     def step(self, action):
@@ -342,8 +353,9 @@ class WandBRewardRecoder(gym.Wrapper):
             infos,
         ) = self.env.step(action)
 
-        self.episode_returns += rewards
+        self.episode_returns += rewards.flatten()
         self.episode_lengths += 1
+
         if self.num_envs == 1:
             dones = [dones]
         dones = list(dones)
@@ -352,6 +364,7 @@ class WandBRewardRecoder(gym.Wrapper):
             if dones[i]:
                 episode_return = self.episode_returns[i]
                 episode_length = self.episode_lengths[i]
+                print(episode_length)
                 if self.wandb_context:
                     metrics_dict = {
                         "rewards": episode_return / episode_length,
@@ -361,6 +374,8 @@ class WandBRewardRecoder(gym.Wrapper):
                 print(f"DEBUG print, episode: {self.episode_count}, rewards : {episode_return / episode_length}")
 
                 self.episode_count += 1
+                self.episode_returns_saved[i] = self.episode_returns[i]
+                self.episode_lengths_saved[i] = self.episode_lengths[i]
                 self.episode_returns[i] = 0
                 self.episode_lengths[i] = 0
 
@@ -370,6 +385,10 @@ class WandBRewardRecoder(gym.Wrapper):
             dones if self.num_envs > 1 else dones[0],
             infos,
         )
+    
+    def close(self):
+        self.env.close()
+
 
 
 def parse_args():
@@ -381,7 +400,7 @@ def parse_args():
         help="if toggled, `torch.backends.cudnn.deterministic=False`")
     parser.add_argument("--cuda", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="if toggled, cuda will be enabled by default")
-    parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
+    parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="if toggled, this experiment will be tracked with Weights and Biases")
     parser.add_argument("--wandb-project-name", type=str, default="cleanRL",
         help="the wandb's project name")
@@ -397,7 +416,7 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-4,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=8,
+    parser.add_argument("--num-envs", type=int, default=32,
         help="the number of parallel game environments")
     parser.add_argument("--num-steps", type=int, default=80,
         help="the number of steps to run in each environment per policy rollout")
@@ -415,7 +434,7 @@ def parse_args():
         help="the K epochs to update the policy")
     parser.add_argument("--norm-adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles advantages normalization")
-    parser.add_argument("--clip-coef", type=float, default=0.15,
+    parser.add_argument("--clip-coef", type=float, default=0.2,
         help="the surrogate clipping coefficient")
     parser.add_argument("--clip-vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
@@ -522,35 +541,103 @@ if __name__ == '__main__':
         "prerun_time": 0.335,
     }
 
-    # use_wandb = False
-    # if use_wandb:
-    #     import wandb
-    #     run_name = f'run_obs2_{run_method}_{int(time.time())}'
+    args.track = True
 
-    #     wandb_recorder = wandb.init(
-    #         project='RL_CFD',
-    #         entity='ahmed-h-elsheikh',
-    #         sync_tensorboard=False,
-    #         config=vars(args),
-    #         name=run_name,
-    #         monitor_gym=False,
-    #         save_code=True,
-    #     )
-    # else:
-    #     wandb_recorder = None
+    if args.track:
+        import wandb
+        run_name = f'test_RL_{run_method}_{int(time.time())}'
 
-    # create the environment
-    # env = gym.make("FoamAdapterEnv-v0")
+        wandb_recorder = wandb.init(
+            project='RL_CFD',
+            entity='cfddrl',
+            sync_tensorboard=False,
+            config=vars(args),
+            name=run_name,
+            monitor_gym=False,
+            save_code=True,
+        )
+    else:
+        wandb_recorder = None
+
     t0 = time.time()
-    envs = OpenFoamRLEnv(options)
-    #envs = ObservationRewardWrapper2(envs, use_relative_action)
-    envs = gym.wrappers.ClipAction(envs)
-    envs = WandBRewardRecoder(envs)
+
+    def make_env(options=options, idx=None, wrappers=None):
+        def _make_env():
+            env = OpenFoamRLEnv(options, idx)
+            if wrappers is not None:
+                if callable(wrappers):
+                    env = wrappers(env)
+                elif isinstance(wrappers, Iterable) and all(
+                    [callable(w) for w in wrappers]
+                ):
+                    for wrapper in wrappers:
+                        env = wrapper(env)
+                else:
+                    raise NotImplementedError
+            return env
+        return _make_env
+
+    env_fns = []
+    for idx in range(args.num_envs):
+        env_fns.append(make_env(options=options, idx=idx, wrappers=[gym.wrappers.ClipAction]))
+
+    action_space = spaces.Box(
+            low=-2.5e-4, high=2.5e-4, shape=(1, ), dtype=np.float32)
+    observation_space = spaces.Box(
+            low=-np.inf, high=np.inf, shape=(11,), dtype=np.float32)
+    
+    from pathlib import Path
+    from os.path import join
+    import os
+    
+    cwd = Path.cwd()
+    time_str = datetime.now().strftime('%d%m%Y_%H%M%S')
+    run_folder_name = f'rl_gym_run_{time_str}'
+    run_folder = cwd.joinpath(run_folder_name)
+
+    case_path = options['case_path']
+    source_folder_str = join(str(cwd), case_path)
+    run_folder_str = join(str(cwd), run_folder_name)
+
+    try:
+        run_folder.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise Exception(f'failed to create run folder: {e}')
+        
+    # copy base case to RL_gym folder
+    try:
+        os.system(f'cp -r {source_folder_str} {run_folder_str}')
+    except Exception as e:
+        raise Exception(f'Failed to copy base case to run folder: {e}')
+    
+    source_folder_str = join(run_folder_str, case_path)
+    case_path = source_folder_str
+    shell_cmd = options['foam_shell_cmd']
+    precice_cfg = options['precice_cfg']
+    os.system(f'cp ./{shell_cmd} {run_folder_str}')
+    os.system(f'cp ./{precice_cfg} {run_folder_str}')    
+
+    os.chdir(str(run_folder))
+
+    
+    envs = gym.vector.AsyncVectorEnv(
+        env_fns=env_fns,
+        context='fork',
+        observation_space=observation_space,
+        action_space=action_space,
+        shared_memory=False
+    )
+    
+    # envs = gym.vector.SyncVectorEnv(
+    #     env_fns=env_fns
+    # )
+
+    envs = WandBRewardRecoder(envs, wandb_recorder)
 
     print(f"Run time of defining OpenFoamRLEnv is {time.time()-t0} seconds")
 
-    obs_dim = np.prod(envs.observation_space.shape)
-    n_acts = np.prod(envs.action_space.shape)
+    obs_dim = np.prod(envs.single_observation_space.shape)
+    n_acts = np.prod(envs.single_action_space.shape)
     device = "cpu"  # torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     agent = Agent(envs, use_relative_action, args.use_sde)
@@ -561,16 +648,16 @@ if __name__ == '__main__':
     start_time = time.time()
 
     # ALGO Logic: Storage setup --> (timesteps, num_env, n_obs) if obs is 2d then the following will be 4 dimesional
-    obs = torch.zeros((args.num_steps, args.num_envs) + envs.observation_space.shape).to(device)
-    nxtobs = torch.zeros((args.num_steps, args.num_envs) + envs.observation_space.shape).to(device)
-
-    actions = torch.zeros((args.num_steps, args.num_envs) + envs.action_space.shape).to(device)
+    obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
+    nxtobs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
+    actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space.shape).to(device)
 
     logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
     values = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    num_updates = 50  # args.total_timesteps // args.batch_size
+    
+    num_updates = 1000  #args.total_timesteps // args.batch_size
 
     next_obs = torch.Tensor(envs.reset()).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
@@ -629,7 +716,8 @@ if __name__ == '__main__':
 
                 if envs.num_envs == 1:
                     done = [done]
-
+                
+                # TODO: Async setup 
                 if done[0]:
                     prev_action = None
                     break
@@ -640,12 +728,6 @@ if __name__ == '__main__':
             next_obs = torch.Tensor(next_obs).to(device)
             next_done = torch.Tensor(done).to(device=device)
 
-            # for item in info:
-            #     if "episode" in item.keys():
-            #         print(f"global_step={global_step}, episodic_return={item['episode']['r']}")
-            #         writer.add_scalar("charts/episodic_return", item["episode"]["r"], global_step)
-            #         writer.add_scalar("charts/episodic_length", item["episode"]["l"], global_step)
-            #         break
 
         # bootstrap value if not done
         with torch.no_grad():
@@ -676,9 +758,9 @@ if __name__ == '__main__':
                 advantages = returns - values
 
         # flatten the batch
-        b_obs = obs.reshape((-1,) + envs.observation_space.shape)
+        b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + envs.action_space.shape)
+        b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
@@ -687,7 +769,7 @@ if __name__ == '__main__':
         nxtobs[0:-1, :] = obs[1:, :].detach().clone()
         nxtobs[-1, :] = obs[-1, :].detach().clone()
 
-        b_nxtobs = nxtobs.reshape((-1,) + envs.observation_space.shape)
+        b_nxtobs = nxtobs.reshape((-1,) + envs.single_observation_space.shape)
 
         # Optimizing the policy and value network
         b_inds = np.arange(args.batch_size)
@@ -769,7 +851,7 @@ if __name__ == '__main__':
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         metrics_dict = {
-            # "rewards": np.mean(envs.episode_returns / envs.episode_lengths),
+            "update": update,
             "charts/learning_rate": optimizer.param_groups[0]["lr"],
             "losses/value_loss": v_loss.item(),
             "losses/policy_loss": pg_loss.item(),
@@ -781,10 +863,11 @@ if __name__ == '__main__':
             "global_step": global_step,
             "charts/SPS": int(global_step / (time.time() - start_time))
         }
-    #     if wandb_recorder:
-    #         wandb_recorder.log(metrics_dict, commit=True)
 
-    # if wandb_recorder:
-    #     wandb_recorder.close()
+        if wandb_recorder:
+            wandb_recorder.log(metrics_dict, commit=True)
+        
+        if update % 5 == 0:
+            torch.save(agent.state_dict(), f'agent_{update}.pt')
 
-    torch.save(agent.state_dict(), 'agent.pt')
+    envs.close()
