@@ -8,7 +8,7 @@ import copy
 import re
 from functools import partial
 import time
-from mesh_parser import FoamMesh
+from utils.mesh_parser import FoamMesh
 
 verbose_mode = False
 

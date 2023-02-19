@@ -27,7 +27,7 @@ def _get_actuation_patches(path_to_precicedict):
         name_list += local_list
     return name_list
 
-from mesh_parser import FoamMesh  # TODO: implement this as a stand alone method
+from utils.mesh_parser import FoamMesh  # TODO: implement this as a stand alone method
 def _get_patch_geometry(case_path, patches):
     foam_mesh = FoamMesh(case_path)
     patch_data = {}

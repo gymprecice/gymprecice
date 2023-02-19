@@ -29,3 +29,4 @@ wandb/
 *.csv
 *.ipynb
 *.txt
+RL_*/
