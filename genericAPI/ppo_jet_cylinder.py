@@ -235,7 +235,8 @@ def parse_args():
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     args.num_updates = args.total_timesteps // args.batch_size
-
+    args.track = True
+    
     return args
 
 
@@ -470,10 +471,10 @@ if __name__ == '__main__':
             "charts/SPS": int(global_step / (time.time() - start_time))
         }
 
-        if wandb_recorder:
+        if wandb_recorder is not None:
             wandb_recorder.log(metrics_dict, commit=True)
         
         if args.dump_policy and update % args.dump_policy_freq == 0:
-            torch.save(agent.state_dict(), f'agent_{update}.pt')
+            torch.save(agent.state_dict(), f'policy_{update}.pt')
 
     envs.close()
