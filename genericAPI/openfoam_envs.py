@@ -253,7 +253,12 @@ class JetCylinder2DEnv(Adapter):
         while subcycle < self._steps_per_action:
             action_fraction = 1 / (self._steps_per_action - subcycle)
             smoothed_action = self._previous_action + action_fraction * (action - self._previous_action)
-            next_obs, reward, done, info =  super(JetCylinder2DEnv, self).step(smoothed_action.cpu().numpy())
+            
+            if isinstance(smoothed_action ,np.ndarray):
+                next_obs, reward, done, info =  super(JetCylinder2DEnv, self).step(smoothed_action)
+            else:
+                next_obs, reward, done, info =  super(JetCylinder2DEnv, self).step(smoothed_action.cpu().numpy())
+            
             subcycle += 1
         
             if done:

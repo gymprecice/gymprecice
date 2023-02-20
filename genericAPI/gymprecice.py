@@ -216,22 +216,20 @@ class Adapter(gym.Env):
             try:
                 completed_process = subprocess.run([f"./{self._reset_script}"], shell=True, cwd=self._env_dir)
             except Exception as e:
-                print(e)
-                raise Exception(f'failed to run {cmd}: {self._reset_script} from the folder {self._env_dir}')
+                raise Exception(f'failed to run {cmd} - {self._reset_script} from the folder {self._env_dir}')
 
             if completed_process.returncode != 0:
-                raise Exception(f"run is not successful: {completed_process}")
+                raise Exception(f"run is not successful - {completed_process}")
             return None
 
         elif cmd == 'prerun_solver':
             try:
                 completed_process = subprocess.run([f"./{self._prerun_script}"], shell=True, cwd=self._env_dir)
             except Exception as e:
-                print(e)
-                raise Exception(f'failed to run {cmd}: {self._prerun_script} from the folder {self._env_dir}')
+                raise Exception(f'failed to run {cmd} - {self._prerun_script} from the folder {self._env_dir}')
 
             if completed_process.returncode != 0:
-                raise Exception(f"run is not successful: {completed_process}")
+                raise Exception(f"run is not successful - {completed_process}")
             return None
 
         elif cmd == 'run_solver':
@@ -241,12 +239,12 @@ class Adapter(gym.Env):
     def _check_subprocess(self, subproc): 
         # check if the spawning process is successful
         if not psutil.pid_exists(subproc.pid):
-            raise Exception(f'Error: subprocess failed to be launched: {self._env_dir} -> {subproc.args[0]}')
+            raise Exception(f'Error: subprocess failed to be launched - {self._env_dir} -> {subproc.args[0]}')
 
         # finalize the subprocess if it is terminated (normally/abnormally)
         if psutil.Process(subproc.pid).status() == psutil.STATUS_ZOMBIE:
             print(psutil.Process(subproc.pid), psutil.Process(subproc.pid).status())
-            raise Exception(f'Error: subprocess failed to be launched : {self._env_dir} -> {subproc.args[0]}')
+            raise Exception(f'Error: subprocess failed to be launched - {self._env_dir} -> {subproc.args[0]}')
 
     def _finalize_subprocess(self, subproc):
         if subproc and psutil.pid_exists(subproc.pid):
@@ -258,7 +256,7 @@ class Adapter(gym.Env):
                 exit_signal = subproc.poll()
             # check the subprocess exit signal
             if exit_signal != 0:
-                raise Exception(f'subprocess failed to complete its shell command: {self._env_dir} -> {subproc.args[0]}')
+                raise Exception(f'subprocess failed to complete its shell command - {self._env_dir} -> {subproc.args[0]}')
             print(f'subprocess successfully completed its shell command: {self._env_dir} -> {subproc.args[0]}')
         return None
 
@@ -269,13 +267,14 @@ class Adapter(gym.Env):
             try:
                 self.dummy_episode()
             except Exception as e:
-                pass
+                raise Exception(f"Unsuccessful termination attempt - {e}")
 
     def dummy_episode(self):
-        # advance with  actions equal to zero till the coupling finish and finalize
-        dummy_action = [0.0 * self.action_space.sample()]
-        while True:
-            self.step(dummy_action)
+        # advance with actions equal to zero till the coupling finish and finalize
+        dummy_action = 0.0 * self.action_space.sample()
+        done = False
+        while not done:
+            _, _, done, _ = self.step(dummy_action)
     
     def _finalize(self):
         self.__del__()
