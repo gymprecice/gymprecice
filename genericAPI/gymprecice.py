@@ -35,7 +35,7 @@ class Adapter(gym.Env):
 
         self.actuator_coords = options['actuator_geometry']['coords']
 
-        scaler_variables, vector_variables, mesh_list, RL_participant = get_mesh_data('', self._precice_cfg)
+        scalar_variables, vector_variables, mesh_list, RL_participant = get_mesh_data('', self._precice_cfg)
         
         for mesh_name in mesh_list:
             if 'rl' in mesh_name.lower():
@@ -45,7 +45,7 @@ class Adapter(gym.Env):
         self._RL_mesh = self._RL_participant['mesh_name']
 
         # scaler and vector variables should be used to define the size of action space
-        self._scaler_variables = scaler_variables
+        self._scalar_variables = scalar_variables
         self._vector_variables = vector_variables
         self._mesh_id = None
         self._vertex_ids = None
