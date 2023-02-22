@@ -7,7 +7,7 @@
       enabled="true" />
   </log>
 
-  <solver-interface dimensions="3">
+  <solver-interface dimensions="2">
     <data:vector name="Velocity" />
 
     <mesh name="Fluid-Mesh">

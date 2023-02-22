@@ -64,8 +64,8 @@ class JetCylinder2DEnv(Adapter):
         actuator_coords = []
        
         for patch_name in self.actuator_geometric_data.keys():
-            actuator_coords.append(self.actuator_geometric_data[patch_name]['Cf'])
-        
+            actuator_coords.append([np.delete(coord, 2) for coord in self.actuator_geometric_data[patch_name]['Cf']])
+
         options['actuator_geometry'] = {'coords': actuator_coords}
 
         super(JetCylinder2DEnv, self).__init__(options)
@@ -142,7 +142,7 @@ class JetCylinder2DEnv(Adapter):
             else:
                 raise Exception('estimated velocity profile violates mass conservation')
 
-        U_profile = np.array([item for sublist in U for item in sublist])
+        U_profile = np.array([np.delete(item, 2) for sublist in U for item in sublist])
 
         return U_profile
 
@@ -323,7 +323,7 @@ class RotatingCylinder2DEnv(Adapter):
         actuator_coords = []
        
         for patch_name in self.actuator_geometric_data.keys():
-            actuator_coords.append(self.actuator_geometric_data[patch_name]['Cf'])
+            actuator_coords.append([np.delete(coord, 2) for coord in self.actuator_geometric_data[patch_name]['Cf']])
         
         options['actuator_geometry'] = {'coords': actuator_coords}
 
@@ -371,7 +371,7 @@ class RotatingCylinder2DEnv(Adapter):
                 U_patch[i] = (U_patch[i] - nf[i] * (np.dot(nf[i], U_patch[i])))
             U.append(U_patch)
            
-        U_profile = np.array([item for sublist in U for item in sublist])
+        U_profile = np.array([np.delete(item, 2) for sublist in U for item in sublist])
 
         return U_profile
 
