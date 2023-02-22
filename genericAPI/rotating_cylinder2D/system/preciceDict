@@ -36,7 +36,6 @@ interfaces
     
     writeData
     (
-      Pressure
     );
   };
 };

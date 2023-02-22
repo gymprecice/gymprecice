@@ -119,7 +119,7 @@ def get_mesh_data(foldername, filename):
             scaler_variables.append(item_['@name'])
 
     vector_variables = []
-    if 'data:scalar' in solver_interface.keys():
+    if 'data:vector' in solver_interface.keys():
         if isinstance(solver_interface['data:vector'], dict):
             solver_interface['data:vector'] = [solver_interface['data:vector']]
         for item_ in solver_interface['data:vector']:

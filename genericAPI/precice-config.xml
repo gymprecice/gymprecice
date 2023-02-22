@@ -8,51 +8,40 @@
   </log>
 
   <solver-interface dimensions="3">
-    <data:scalar name="Pressure" />
     <data:vector name="Velocity" />
 
     <mesh name="Fluid-Mesh">
-      <use-data name="Pressure" />
       <use-data name="Velocity" />
     </mesh>
 
     <mesh name="RL-Mesh">
-      <use-data name="Pressure" />
       <use-data name="Velocity" />
     </mesh>
 
     <participant name="Fluid">
       <use-mesh name="Fluid-Mesh" provide="yes" />
       <use-mesh name="RL-Mesh" from="RL" />
-      <write-data name="Pressure" mesh="Fluid-Mesh" />
       <read-data name="Velocity" mesh="Fluid-Mesh" />
       <mapping:nearest-neighbor
         direction="read"
         from="RL-Mesh"
         to="Fluid-Mesh"
         constraint="consistent" />
-      <mapping:nearest-neighbor
-        direction="write"
-        from="Fluid-Mesh"
-        to="RL-Mesh"
-        constraint="conservative" />
     </participant>
 
     <participant name="RL">
       <use-mesh name="RL-Mesh" provide="yes" />
       <use-mesh name="Fluid-Mesh" from="Fluid"/>
-      <read-data name="Pressure" mesh="RL-Mesh" />
       <write-data name="Velocity" mesh="RL-Mesh" />
     </participant>
 
     <m2n:sockets from="RL" to="Fluid" exchange-directory=""/>
 
     <coupling-scheme:parallel-explicit>
-      <max-time value="2.335" />
+      <max-time value="2.0" />
       <time-window-size value="0.0005" valid-digits="8" />
       <participants first="RL" second="Fluid"/>
       <exchange data="Velocity" mesh="RL-Mesh" from="RL" to="Fluid" initialize="False"/>
-      <exchange data="Pressure" mesh="RL-Mesh" from="Fluid" to="RL"/>
     </coupling-scheme:parallel-explicit>
   </solver-interface>
 </precice-configuration>
