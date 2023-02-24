@@ -200,7 +200,7 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-4,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=24,
+    parser.add_argument("--num-envs", type=int, default=1,
         help="the number of parallel game environments")
     parser.add_argument("--num-steps", type=int, default=80,
         help="the number of steps to run in each environment per policy rollout")
@@ -235,7 +235,7 @@ def parse_args():
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     args.num_updates = args.total_timesteps // args.batch_size
-    args.track = True
+    args.track = False
 
     return args
 
@@ -253,9 +253,9 @@ if __name__ == '__main__':
             'precice_config_file_name': "precice-config.xml",
             },
         'shell_scripts': {
-            'prerun_solver': "Allrun.pre",
-            'reset_solver': "Allclean",
-            'run_solver': "Allrun"
+            'prerun_solver': "clean.sh",
+            'reset_solver': "clean.sh",
+            'run_solver': "run.sh"
         }
     }
     # a directory structure is created in "base_path" to run and manage RL training.  

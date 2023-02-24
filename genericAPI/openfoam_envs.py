@@ -114,18 +114,13 @@ class JetCylinder2DEnv(Adapter):
             w_patch = w[idx]
 
             # convert volumetric flow rate to a sinusoidal profile on the interface
-            avg_U = patch_flow_rate[idx] / np.sum(magSf)
+            avg_U = (patch_flow_rate[idx] / np.sum(magSf)).item()
             d = (patch_ctr - origin) / (np.sqrt((patch_ctr - origin).dot((patch_ctr - origin))))
 
-            U_patch = np.zeros((Cf.shape[0], 3))
-
             # estimate flow rate based on the sinusoidal profile
-            Q_calc = 0
-            for i, c in enumerate(Cf):
-                r = (c - origin) / (np.sqrt((c - origin).dot((c - origin))))
-                theta = np.arccos(np.dot(r, d))
-                U_patch[i] = avg_U * np.pi / 2 * np.cos(np.pi / w_patch * theta) * nf[i]
-                Q_calc += U_patch[i].dot(Sf[i])
+            theta = np.arccos(np.dot(nf, d)).reshape((-1, 1))
+            U_patch = avg_U * np.pi / 2 * np.cos(np.pi / w_patch * theta) * nf
+            Q_calc = sum([u.dot(s) for u, s in zip(U_patch, Sf)])
 
             # correct velocity profile to enforce mass conservation
             Q_err = patch_flow_rate[idx] - Q_calc
@@ -133,9 +128,7 @@ class JetCylinder2DEnv(Adapter):
             U_patch += U_err
 
             # return the velocity profile
-            Q_final = 0
-            for i, Uf in enumerate(U_patch):
-                Q_final += Uf.dot(Sf[i])
+            Q_final = sum([u.dot(s) for u, s in zip(U_patch, Sf)])
 
             if np.isclose(Q_final, patch_flow_rate[idx]):
                 U.append(U_patch)
@@ -362,13 +355,14 @@ class RotatingCylinder2DEnv(Adapter):
         # velocity field of the actuation patches
         U = []
 
-        for idx, patch_name in enumerate(self.actuator_geometric_data.keys()):
+        for patch_name in self.actuator_geometric_data.keys():
             Cf = self.actuator_geometric_data[patch_name]['Cf']
             nf = self.actuator_geometric_data[patch_name]['nf']
-            U_patch = np.zeros((Cf.shape[0], 3))
-            for i, c in enumerate(Cf):
-                U_patch[i] = (-omega) * np.cross(c - origin,  axis / np.sqrt(axis.dot(axis)))
-                U_patch[i] = (U_patch[i] - nf[i] * (np.dot(nf[i], U_patch[i])))
+            
+            U_patch = (-omega) * np.cross(Cf - origin,  axis / np.sqrt(axis.dot(axis)))
+            flux = np.array([np.dot(u, n) for u, n in zip(U_patch, nf)]).reshape(-1, 1)
+            U_patch = (U_patch - flux * nf)
+
             U.append(U_patch)
            
         U_profile = np.array([np.delete(item, 2) for sublist in U for item in sublist])
