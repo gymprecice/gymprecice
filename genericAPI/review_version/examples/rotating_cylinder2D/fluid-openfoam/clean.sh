@@ -14,4 +14,5 @@ set -e
     #cleanTimeDirectories
     rm -rf ./preCICE-output/
     rm -rf ./preCICE-*/
+    rm -rf  ./postProcessing/*/*[1-9]*
 )

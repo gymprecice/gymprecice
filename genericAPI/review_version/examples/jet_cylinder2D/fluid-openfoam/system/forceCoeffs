@@ -2,7 +2,7 @@
 
 #includeEtc "caseDicts/postProcessing/forces/forceCoeffsIncompressible.cfg"
 
-patches (cylinder_wall jet1 jet2);
+patches (cylinder jet1 jet2);
 
 magUInf     1;
 lRef        0.1;	
