@@ -119,8 +119,6 @@ class WandBRewardRecoder(gym.Wrapper):
     def reset(self, **kwargs):
         """Resets the environment using kwargs and resets the episode returns and lengths."""
         observations = super().reset(**kwargs)
-        self.episode_returns_saved = np.zeros(self.num_envs, dtype=np.float32)
-        self.episode_lengths_saved = np.zeros(self.num_envs, dtype=np.int32)
         self.episode_returns = np.zeros(self.num_envs, dtype=np.float32)
         self.episode_lengths = np.zeros(self.num_envs, dtype=np.int32)
         
@@ -146,7 +144,6 @@ class WandBRewardRecoder(gym.Wrapper):
             if dones[i]:
                 episode_return = self.episode_returns[i]
                 episode_length = self.episode_lengths[i]
-                print(episode_length)
                 if self.wandb_context:
                     metrics_dict = {
                         "rewards": episode_return / episode_length,
@@ -156,8 +153,6 @@ class WandBRewardRecoder(gym.Wrapper):
                 print(f"DEBUG print, episode: {self.episode_count}, rewards : {episode_return / episode_length}")
 
                 self.episode_count += 1
-                self.episode_returns_saved[i] = self.episode_returns[i]
-                self.episode_lengths_saved[i] = self.episode_lengths[i]
                 self.episode_returns[i] = 0
                 self.episode_lengths[i] = 0
 
