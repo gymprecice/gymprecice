@@ -23,7 +23,7 @@ dynamicCode/
 rl_gym_run*/
 *.png
 nohup*
-env*
+env_*
 wandb/
 *.pickle
 *.csv
