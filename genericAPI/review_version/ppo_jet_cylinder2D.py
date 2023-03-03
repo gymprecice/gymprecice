@@ -247,9 +247,9 @@ if __name__ == '__main__':
         {
             'name_list': ["fluid-openfoam"],
             'base_path': f"{BASE_PATH}/examples/jet_cylinder2D",
-            'prerun_script': "prerun.sh",
+            'prerun_script': "clean.sh",
             'reset_script': "clean.sh",
-            'run_script': "run.sh" 
+            'run_script': "run_parallel.sh" 
         },
 
         'actuators':

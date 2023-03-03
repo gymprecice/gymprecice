@@ -9,6 +9,8 @@ import numpy as np
 import psutil
 import subprocess
 
+import os
+
 from utils.oldutil import (get_mesh_data, get_episode_end_time)
 
 
@@ -228,11 +230,13 @@ class Adapter(gym.Env):
     def _launch_subprocess(self, cmd):
         assert cmd in ['reset_solvers', 'prerun_solvers', 'run_solvers'], \
             "Error: invalid shell command - supported commands: 'reset_solvers', 'prerun_solvers', and 'run_solvers'"
-
+        
+        subproc_env = {key: variable for key, variable in os.environ.items() if "MPI" not in key}
+        
         if cmd == 'reset_solvers':
             for solver in self._solvers:
                 try:
-                    completed_process = subprocess.run([f"./{self._reset_script}"], shell=True, cwd=f"{self._env_dir}/{solver}")
+                    completed_process = subprocess.run([f"./{self._reset_script}"], shell=True, env=subproc_env, cwd=f"{self._env_dir}/{solver}")
                 except Exception as e:
                     raise Exception(f'failed to run {cmd} - {self._reset_script} from the folder f"{self._env_dir}/{solver}"')
 
@@ -243,7 +247,7 @@ class Adapter(gym.Env):
         elif cmd == 'prerun_solvers':
             for solver in self._solvers:
                 try:
-                    completed_process = subprocess.run([f"./{self._prerun_script}"], shell=True, cwd=f"{self._env_dir}/{solver}")
+                    completed_process = subprocess.run([f"./{self._prerun_script}"], shell=True, env=subproc_env, cwd=f"{self._env_dir}/{solver}")
                 except Exception as e:
                     raise Exception(f'failed to run {cmd} - {self._prerun_script} from the folder f"{self._env_dir}/{solver}"')
 
@@ -254,7 +258,7 @@ class Adapter(gym.Env):
         elif cmd == 'run_solvers':
             subproc = []
             for solver in self._solvers:
-                subproc.append(subprocess.Popen([f"./{self._run_script}"], shell=True, cwd=f"{self._env_dir}/{solver}"))
+                subproc.append(subprocess.Popen([f"./{self._run_script}"], shell=True, env=subproc_env, cwd=f"{self._env_dir}/{solver}"))
             return subproc
 
     def _check_subprocess(self, subproc_list):

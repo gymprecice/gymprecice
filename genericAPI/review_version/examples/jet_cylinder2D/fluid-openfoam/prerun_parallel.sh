@@ -1,6 +1,7 @@
 #!/bin/bash
 cd "${0%/*}" || exit
 set -e
+. ${WM_PROJECT_DIR:?}/bin/tools/RunFunctions
 . ${WM_PROJECT_DIR:?}/bin/tools/CleanFunctions 
 
 #------------------------------------------------------------------------------
@@ -10,11 +11,13 @@ set -e
     cleanAuxiliary
     cleanDynamicCode
     cleanOptimisation
-    # cleanPostProcessing
-    # cleanTimeDirectories
+    #cleanPostProcessing
+    #cleanTimeDirectories
+    rm -f log.*
     rm -rf ./preCICE-output/
     rm -rf ./preCICE-*/
-    rm -rf  ./postProcessing/*/*[1-9]*
-    rm -f log.*
-    #decomposePar -force
+ 
+    runApplication setExprBoundaryFields
+    runApplication decomposePar -force
+    runParallel renumberMesh -overwrite
 )
