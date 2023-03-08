@@ -25,10 +25,12 @@ from utils.constants import (EPSILON, LOG_EPSILON, BASE_PATH)
 from utils.oldutil import set_training_dir
 from utils.envutil import AsyncVectorEnv
 
+
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
+
 
 class Agent(nn.Module):
     def __init__(self, env):
@@ -60,7 +62,6 @@ class Agent(nn.Module):
         )
         self.actor_mean = layer_init(nn.Linear(self.latent_dim, self.n_actions), std=0.1)
         self.std = nn.Parameter(torch.zeros(self.n_actions), requires_grad=True)
-
 
     def get_value(self, x):
         x = x.reshape(-1, self.n_obs)
@@ -94,7 +95,6 @@ class Agent(nn.Module):
         # log_prob -= torch.log(self.action_scale * (1 - squashed_action.pow(2)) + EPSILON)
         log_prob -= 2.0 * (math.log(2.0) - gaussian_action - torch.log(1.0 + torch.exp(-2.0 * gaussian_action)))
 
-
         entropy = probs.entropy().sum(1)
 
         # agent returns the mean action for CAP method
@@ -121,7 +121,6 @@ class WandBRewardRecoder(gym.Wrapper):
         observations = super().reset(**kwargs)
         self.episode_returns = np.zeros(self.num_envs, dtype=np.float32)
         self.episode_lengths = np.zeros(self.num_envs, dtype=np.int32)
-        
         return observations
 
     def step(self, action):
@@ -162,7 +161,7 @@ class WandBRewardRecoder(gym.Wrapper):
             dones if self.num_envs > 1 else dones[0],
             infos,
         )
-    
+
     def close(self):
         self.env.close()
 
@@ -171,97 +170,94 @@ def parse_args():
     # Training specific arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=1,
-        help="seed of the experiment")
+                        help="seed of the experiment")
     parser.add_argument("--torch-deterministic", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="if toggled, `torch.backends.cudnn.deterministic=False`")
+                        help="if toggled, `torch.backends.cudnn.deterministic=False`")
     parser.add_argument("--cuda", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="if toggled, cuda will be enabled by default")
+                        help="if toggled, cuda will be enabled by default")
     parser.add_argument("--dump-policy", type=bool, default=True,
-        help="tif toggled, trained policy will be dumped each `dump_policy_freq`")
+                        help="tif toggled, trained policy will be dumped each `dump_policy_freq`")
     parser.add_argument("--dump-policy-freq", type=int, default=10,
-        help="the freqency of saving policy on hard-drive")
+                        help="the freqency of saving policy on hard-drive")
     parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
-        help="if toggled, this experiment will be tracked with Weights and Biases")
+                        help="if toggled, this experiment will be tracked with Weights and Biases")
     parser.add_argument("--wandb-project-name", type=str, default="RL_CFD",
-        help="the wandb's project name")
+                        help="the wandb's project name")
     parser.add_argument("--wandb-entity", type=str, default="cfddrl",
-        help="the entity (team) of wandb's project")
-
+                        help="the entity (team) of wandb's project")
 
     # Algorithm specific arguments
     parser.add_argument("--env-id", type=str, default="",
-        help="the id of the environment")
+                        help="the id of the environment")
     parser.add_argument("--total-timesteps", type=int, default=96000,
-        help="total timesteps of the experiments")
+                        help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-4,
-        help="the learning rate of the optimizer")
+                        help="the learning rate of the optimizer")
     parser.add_argument("--num-envs", type=int, default=24,
-        help="the number of parallel game environments")
+                        help="the number of parallel game environments")
     parser.add_argument("--num-steps", type=int, default=80,
-        help="the number of steps to run in each environment per policy rollout")
+                        help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggle learning rate annealing for policy and value networks")
+                        help="Toggle learning rate annealing for policy and value networks")
     parser.add_argument("--gae", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Use GAE for advantage computation")
+                        help="Use GAE for advantage computation")
     parser.add_argument("--gamma", type=float, default=0.99,
-        help="the discount factor gamma")
+                        help="the discount factor gamma")
     parser.add_argument("--gae-lambda", type=float, default=0.95,
-        help="the lambda for the general advantage estimation")
+                        help="the lambda for the general advantage estimation")
     parser.add_argument("--num-minibatches", type=int, default=32,
-        help="the number of mini-batches")
+                        help="the number of mini-batches")
     parser.add_argument("--update-epochs", type=int, default=10,
-        help="the K epochs to update the policy")
+                        help="the K epochs to update the policy")
     parser.add_argument("--norm-adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggles advantages normalization")
+                        help="Toggles advantages normalization")
     parser.add_argument("--clip-coef", type=float, default=0.2,
-        help="the surrogate clipping coefficient")
+                        help="the surrogate clipping coefficient")
     parser.add_argument("--clip-vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
+                        help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
     parser.add_argument("--ent-coef", type=float, default=1e-2,
-        help="coefficient of the entropy")
+                        help="coefficient of the entropy")
     parser.add_argument("--vf-coef", type=float, default=0.5,
-        help="coefficient of the value function")
+                        help="coefficient of the value function")
     parser.add_argument("--max-grad-norm", type=float, default=0.5,
-        help="the maximum norm for the gradient clipping")
+                        help="the maximum norm for the gradient clipping")
     parser.add_argument("--target-kl", type=float, default=None,
-        help="the target KL divergence threshold")
+                        help="the target KL divergence threshold")
 
     args = parser.parse_args()
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     args.num_updates = args.total_timesteps // args.batch_size
-    args.track = True
+    args.track = False
 
     return args
 
 
 if __name__ == '__main__':
     args = parse_args()
-   
+
     # case-specific config-dictionary
     # this assumes all the necessary files and directories are available in "base_path".
     # the default "base_path" is where the RL training python script is launched (BASE_PATH).
     options = {
-    'solvers':
+        'solvers':
         {
             'name_list': ["fluid-openfoam"],
             'base_path': f"{BASE_PATH}/examples/rotating_cylinder2D",
             'prerun_script': "prerun.sh",
             'reset_script': "clean.sh",
-            'run_script': "run.sh" 
+            'run_script': "run.sh",
         },
-
         'actuators':
         {
             'name_list': ['cylinder']
         },
-        
         'precice':
         {
             'precice_config_file_name': "precice-config.xml"
         }
     }
-    # a directory structure is created in "base_path" to run and manage RL training.  
+    # a directory structure is created in "base_path" to run and manage RL training.
     set_training_dir(options)
 
     # weigh and biases
@@ -280,7 +276,7 @@ if __name__ == '__main__':
             monitor_gym=False,
             save_code=True,
         )
-         
+
     def make_env(options, idx, wrappers=None):
         def _make_env():
             env = RotatingCylinder2DEnv(options, idx)
@@ -300,7 +296,6 @@ if __name__ == '__main__':
     env_fns = []
     for idx in range(args.num_envs):
         env_fns.append(make_env(options=options, idx=idx, wrappers=[gym.wrappers.ClipAction]))
-    
     # env setup
     envs = AsyncVectorEnv(
         env_fns=env_fns,
@@ -308,7 +303,7 @@ if __name__ == '__main__':
         shared_memory=False
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
-    
+
     envs = WandBRewardRecoder(envs, wandb_recorder)
 
     obs_dim = np.prod(envs.single_observation_space.shape)
@@ -335,14 +330,13 @@ if __name__ == '__main__':
     next_obs = torch.Tensor(envs.reset()).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
 
-
     for update in range(1, args.num_updates + 1):
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (update - 1.0) / args.num_updates
             lrnow = frac * args.learning_rate
             optimizer.param_groups[0]["lr"] = lrnow
-        
+
         for step in range(0, args.num_steps):
             global_step += 1 * args.num_envs
             obs[step] = next_obs
@@ -397,7 +391,6 @@ if __name__ == '__main__':
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
 
-
         # Optimizing the policy and value network
         b_inds = np.arange(args.batch_size)
         clipfracs = []
@@ -442,7 +435,6 @@ if __name__ == '__main__':
                 else:
                     v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
 
-
                 entropy_loss = -entropy.mean()
 
                 loss = pg_loss + args.ent_coef * entropy_loss + args.vf_coef * v_loss
@@ -477,7 +469,7 @@ if __name__ == '__main__':
 
         if wandb_recorder is not None:
             wandb_recorder.log(metrics_dict, commit=True)
-        
+
         if args.dump_policy and update % args.dump_policy_freq == 0:
             torch.save(agent.state_dict(), f'policy_{update}.pt')
 

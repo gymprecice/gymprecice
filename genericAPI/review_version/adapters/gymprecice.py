@@ -3,6 +3,7 @@ import precice
 
 from abc import abstractmethod
 
+
 from precice import action_write_initial_data, action_write_iteration_checkpoint, action_read_iteration_checkpoint
 import numpy as np
 
@@ -12,34 +13,43 @@ import subprocess
 import os
 
 from utils.oldutil import (get_mesh_data, get_episode_end_time)
+from utils.foamutil import _make_env_dir
 
 
 class Adapter(gym.Env):
     """
-    Gym-preCICE adapter is a generic adapter to couple OpenAI Gym RL algorithms to 
+    Gym-preCICE adapter is a generic adapter to couple OpenAI Gym RL algorithms to
     mesh-based simulation packeges supported by preCICE.
-    The adapter is base class for all RL environments providing a common OpenAI Gym 
+    The adapter is a base class for all RL environments providing a common OpenAI Gym
     interface for all derived environments and implements shared preCICE functionality.
     RL environments should be derived from this class, and override the abstract methods:
     "_get_action", "_get_observation", "_get_reward", "_close_files".
     """
-
     metadata = {}
 
-    def __init__(self, options) -> None:
+    def __init__(self, options, idx) -> None:
         super().__init__()
-        
-        self._precice_cfg = options['precice']['precice_config_file_name']
-        self._env_dir = options['env_name']
-        self._solvers = options['solvers']['name_list']
-        self._reset_script = options['solvers']['reset_script']
-        self._prerun_script = options['solvers']['prerun_script']
-        self._run_script = options['solvers']['run_script']
+        try:
+            self._precice_cfg = options['precice']['precice_config_file_name']
+            self._solver_list = options['solvers']['name_list']
+            self._actuator_list = options['actuators']['name_list']
+            self._reset_script = options['solvers']['reset_script']
+            self._prerun_script = options['solvers']['prerun_script']
+            self._run_script = options['solvers']['run_script']
+            # self.actuator_coords = options['actuator_geometry']['coords']
+        except Exception as e:
+            raise Exception(f'Error: Adapter options are not well defined, {e}')
 
-        self.actuator_coords = options['actuator_geometry']['coords']
+        try:
+            self._idx = idx
+            self._env_dir = f'env_{self._idx}'
+            self._env_path = os.path.join(os.getcwd(), self._env_dir)
+            _make_env_dir(self._env_dir, self._solver_list)
+        except Exception as e:
+            raise Exception(f'Error: Adapter cannot create folders: {e}')
 
         scalar_variables, vector_variables, mesh_list, RL_participant = get_mesh_data('', self._precice_cfg)
-        
+
         for mesh_name in mesh_list:
             if 'rl' in mesh_name.lower():
                 RL_participant['mesh_name'] = mesh_name
@@ -50,6 +60,8 @@ class Adapter(gym.Env):
         # scaler and vector variables should be used to define the size of action space
         self._scalar_variables = scalar_variables
         self._vector_variables = vector_variables
+        # preCICE exchange mesh vertices are not defined yet
+        self._precice_mesh_defined = False
         self._mesh_id = None
         self._vertex_ids = None
         self._read_ids = None
@@ -77,15 +89,18 @@ class Adapter(gym.Env):
         self._t = None  # episode time
 
         self._solver = None  # mesh-based numerical solver
-
-        self._launch_subprocess('prerun_solvers')
+        self._is_reset = False
+        self._first_reset = True
 
     # gym methods:
     def reset(self, *, seed=None, return_info=False):
         super().reset(seed=seed)
-        
-        print(f'reset: {self._env_dir}')
 
+        if self._first_reset is True:
+            self._launch_subprocess('prerun_solvers')
+            self._first_reset = False
+
+        print(f'reset: {self._env_dir}')
         self._close_files()
         # reset mesh-based solver
         self._launch_subprocess('reset_solvers')
@@ -96,37 +111,29 @@ class Adapter(gym.Env):
         assert p_process is not None, 'Error: slover launch failed!'
         self._solver = p_process
         self._check_subprocess(self._solver)
-       
-       # initiate precice interface and read single mesh data
-        self._init_precice()
 
+        # initiate precice interface and read single mesh data
+        self._init_precice()
         if self._interface.is_action_required(action_write_initial_data()):
             self._interface.mark_action_fulfilled(action_write_initial_data())
 
         self._interface.initialize_data()  # if initialize="True" --> push solver one time-window forward
+
         self._t = self._dt
         self._is_data_initialized = True
 
         self._is_reset = True
-
         obs = self._get_observation()
-
         print(f'End: reset: {self._env_dir}')
- 
         return obs
-
 
     def step(self, action):
         print(f'step: {self._env_dir}')
-
         if not self._is_reset:
             raise Exception("Call reset before interacting with the environment.")
 
-        write_data = self._get_action(action, self._write_var_list)  
-        
+        write_data = self._get_action(action, self._write_var_list)
         self._advance(write_data)  # run to complete the next time-window
-        
-        
         obs = self._get_observation()
         reward = self._get_reward()
         done = not self._interface.is_coupling_ongoing()
@@ -142,37 +149,40 @@ class Adapter(gym.Env):
             self._interface = None
             self._solver_full_reset = False
             self._is_reset = False
-        
-        return obs, reward, done, {}
 
+        return obs, reward, done, {}
 
     def close(self):
         self._finalize()
 
+    def _set_precice_vectices(self, actuator_coords):
+        # define the set of vertices to exchange data through precice
+        self._vertex_coords_np = np.array([item for sublist in actuator_coords for item in sublist])
+        self._precice_mesh_defined = True
 
     # preCICE related methods:
     def _init_precice(self):
         assert self._interface is None, "Error: precice interface re-initialisation attempt!"
-        
         self._interface = precice.Interface("RL", self._precice_cfg, 0, 1)
+        assert self._precice_mesh_defined is True, "Error: call set_precice_mesh within problem env initialization"
 
         self._time_window = 0
         self._mesh_id = {}
         self._vertex_coords = {}
         self._vertex_ids = {}
-        
+
+        # TODO: extend to multiple actuator meshes and/or observation mesh
         mesh_name = self._RL_participant['mesh_name']
         mesh_id = self._interface.get_mesh_id(mesh_name)
         self._mesh_id[mesh_name] = mesh_id
-        
-        vertex_coords = np.array([item for sublist in self.actuator_coords for item in sublist])
-        vertex_ids = self._interface.set_mesh_vertices(mesh_id, vertex_coords)
+
+        vertex_ids = self._interface.set_mesh_vertices(mesh_id, self._vertex_coords_np)
         self._vertex_ids[mesh_name] = vertex_ids
-        self._vertex_coords[mesh_name] = vertex_coords
+        self._vertex_coords[mesh_name] = self._vertex_coords_np
 
         # establish connection with the solver
         self._dt = self._interface.initialize()
-    
+
         self._read_ids = {}
         self._write_ids = {}
         # precice data from a single mesh on the solver side
@@ -181,7 +191,6 @@ class Adapter(gym.Env):
             self._read_ids[read_var] = self._interface.get_data_id(read_var, self._mesh_id[mesh_name])
         for write_var in self._write_var_list:
             self._write_ids[write_var] = self._interface.get_data_id(write_var, self._mesh_id[mesh_name])
-   
 
     def _advance(self, write_data):
         self._write(write_data)
@@ -215,7 +224,6 @@ class Adapter(gym.Env):
             else:
                 self._interface.advance(self._dt)
 
-    
     def _write(self, write_data):
         for write_var in self._write_var_list:
             if write_var in self._vector_variables:
@@ -225,16 +233,14 @@ class Adapter(gym.Env):
                 self._interface.write_block_scalar_data(
                     self._write_ids[write_var], self._vertex_ids[self._RL_mesh], write_data[write_var])
             else:
-                raise Exception(f'Invalid variable type: {write_var}')   
+                raise Exception(f'Invalid variable type: {write_var}')
 
     def _launch_subprocess(self, cmd):
         assert cmd in ['reset_solvers', 'prerun_solvers', 'run_solvers'], \
             "Error: invalid shell command - supported commands: 'reset_solvers', 'prerun_solvers', and 'run_solvers'"
-        
         subproc_env = {key: variable for key, variable in os.environ.items() if "MPI" not in key}
-        
         if cmd == 'reset_solvers':
-            for solver in self._solvers:
+            for solver in self._solver_list:
                 try:
                     completed_process = subprocess.run([f"./{self._reset_script}"], shell=True, env=subproc_env, cwd=f"{self._env_dir}/{solver}")
                 except Exception as e:
@@ -245,7 +251,7 @@ class Adapter(gym.Env):
             return None
 
         elif cmd == 'prerun_solvers':
-            for solver in self._solvers:
+            for solver in self._solver_list:
                 try:
                     completed_process = subprocess.run([f"./{self._prerun_script}"], shell=True, env=subproc_env, cwd=f"{self._env_dir}/{solver}")
                 except Exception as e:
@@ -257,12 +263,12 @@ class Adapter(gym.Env):
 
         elif cmd == 'run_solvers':
             subproc = []
-            for solver in self._solvers:
+            for solver in self._solver_list:
                 subproc.append(subprocess.Popen([f"./{self._run_script}"], shell=True, env=subproc_env, cwd=f"{self._env_dir}/{solver}"))
             return subproc
 
     def _check_subprocess(self, subproc_list):
-        for subproc, solver in zip(subproc_list, self._solvers):
+        for subproc, solver in zip(subproc_list, self._solver_list):
             # check if the spawning process is successful
             if not psutil.pid_exists(subproc.pid):
                 raise Exception(f'Error: subprocess failed to be launched - f"{self._env_dir}/{solver}" -> {subproc.args[0]}')
@@ -273,7 +279,7 @@ class Adapter(gym.Env):
                 raise Exception(f'Error: subprocess failed to be launched - f"{self._env_dir}/{solver}" -> {subproc.args[0]}')
 
     def _finalize_subprocess(self, subproc_list):
-        for subproc, solver in zip(subproc_list, self._solvers):
+        for subproc, solver in zip(subproc_list, self._solver_list):
             if subproc and psutil.pid_exists(subproc.pid):
                 if psutil.Process(subproc.pid).status() != psutil.STATUS_ZOMBIE:
                     print("subprocess status is not zombie - waiting to finish ...")
@@ -290,7 +296,7 @@ class Adapter(gym.Env):
     def __del__(self):
         # close all the open files
         self._close_files()
-        if self._interface:
+        if self._interface is not None:
             try:
                 self.dummy_episode()
             except Exception as e:
@@ -302,26 +308,22 @@ class Adapter(gym.Env):
         done = False
         while not done:
             _, _, done, _ = self.step(dummy_action)
-    
+
     def _finalize(self):
         self.__del__()
-
 
     @abstractmethod
     def _get_action(self, action):
         raise NotImplementedError
-    
+
     @abstractmethod
     def _get_observation(self):
         raise NotImplementedError
-    
+
     @abstractmethod
     def _get_reward(self):
         raise NotImplementedError
-    
+
     @abstractmethod
     def _close_files(self):
         pass
-
-
-    
