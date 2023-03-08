@@ -25,26 +25,16 @@ stopAt          endTime;
 endTime         0.335;
 deltaT          0.0005;
 
-writeControl   none;
-
+writeControl   timeStep;
 writeInterval   1;
-
 purgeWrite      1;
-
 writeFormat     ascii;
-
 writePrecision  8;
-
 writeCompression off;
-
 timeFormat      general;
-
 timePrecision   6;
-
 runTimeModifiable no;
-
 adjustTimeStep  no;
-
 maxCo           1;
 
 functions
