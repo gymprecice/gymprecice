@@ -707,6 +707,7 @@ def get_episode_end_time(filename):
 
 
 def set_training_dir(options):
+    problem_prefix = options['problem_name']
     base_path = options['solvers']['base_path']
     env_source_path = options['solvers']['base_src']
     solver_names = options['solvers']['name_list']
@@ -715,7 +716,7 @@ def set_training_dir(options):
     solver_dirs = [join(env_source_path, solver) for solver in solver_names]
     precice_config_file = join(env_source_path, precice_config_file_name)
     time_str = datetime.now().strftime('%d%m%Y_%H%M%S')
-    run_dir_name = f'RL_training_{time_str}'
+    run_dir_name = f'{problem_prefix}_rl_training_{time_str}'
     run_dir = join(base_path, run_dir_name)
 
     try:

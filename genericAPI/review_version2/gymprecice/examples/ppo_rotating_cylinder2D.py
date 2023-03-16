@@ -13,6 +13,7 @@ import time
 from typing import Optional
 import argparse
 
+
 from distutils.util import strtobool
 
 try:
@@ -20,8 +21,9 @@ try:
 except ImportError:
     Iterable = (tuple, list)
 
-import gymprecice.envs.openfoam.jet_cylinder_2d as jet_cylinder_2d
-from gymprecice.envs.openfoam.jet_cylinder_2d.environment import JetCylinder2DEnv
+
+import gymprecice.envs.openfoam.rotating_cylinder_2d as rotating_cylinder_2d
+from gymprecice.envs.openfoam.rotating_cylinder_2d.environment import RotatingCylinder2DEnv
 from gymprecice.utils.constants import EPSILON, LOG_EPSILON
 from gymprecice.utils.precicexmlutils import set_training_dir
 from gymprecice.wrappers.envutil import AsyncVectorEnv
@@ -180,7 +182,7 @@ def parse_args():
                         help="tif toggled, trained policy will be dumped each `dump_policy_freq`")
     parser.add_argument("--dump-policy-freq", type=int, default=10,
                         help="the freqency of saving policy on hard-drive")
-    parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+    parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
                         help="if toggled, this experiment will be tracked with Weights and Biases")
     parser.add_argument("--wandb-project-name", type=str, default="RL_CFD",
                         help="the wandb's project name")
@@ -194,7 +196,7 @@ def parse_args():
                         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-4,
                         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=4,
+    parser.add_argument("--num-envs", type=int, default=6,
                         help="the number of parallel game environments")
     parser.add_argument("--num-steps", type=int, default=80,
                         help="the number of steps to run in each environment per policy rollout")
@@ -241,23 +243,20 @@ if __name__ == '__main__':
     # this assumes all the necessary files and directories are available in "base_path".
     # the default "base_path" is where the RL training python script is launched (BASE_PATH).
     options = {
-        'problem_name': 'jet_cylinder2D',
+        'problem_name': 'rotating_cylinder2D',
         'solvers':
         {
             'name_list': ["fluid-openfoam"],
-            'base_src': jet_cylinder_2d.__path__[0],
+            'base_src': rotating_cylinder_2d.__path__[0],
             'base_path': os.getcwd(),
-            'prerun_script': "clean.sh",
+            'prerun_script': "prerun.sh",
             'reset_script': "clean.sh",
-            # 'run_script': "run_parallel.sh",
             'run_script': "run.sh",
         },
-
         'actuators':
         {
-            'name_list': ['jet1', 'jet2']
+            'name_list': ['cylinder']
         },
-
         'precice':
         {
             'precice_config_file_name': "precice-config.xml"
@@ -265,11 +264,13 @@ if __name__ == '__main__':
     }
     # a directory structure is created in "base_path" to run and manage RL training.
     set_training_dir(options)
+
     # weigh and biases
+
     wandb_recorder = None
     if args.track:
         import wandb
-        run_name = f'JetCylinder2D_PPO_{int(time.time())}'
+        run_name = f'RotatingCylinder2D_PPO_{int(time.time())}'
 
         wandb_recorder = wandb.init(
             project=args.wandb_project_name,
@@ -283,7 +284,7 @@ if __name__ == '__main__':
 
     def make_env(options, idx, wrappers=None):
         def _make_env():
-            env = JetCylinder2DEnv(options, idx)
+            env = RotatingCylinder2DEnv(options, idx)
             if wrappers is not None:
                 if callable(wrappers):
                     env = wrappers(env)
@@ -300,7 +301,6 @@ if __name__ == '__main__':
     env_fns = []
     for idx in range(args.num_envs):
         env_fns.append(make_env(options=options, idx=idx, wrappers=[gym.wrappers.ClipAction]))
-
     # env setup
     envs = AsyncVectorEnv(
         env_fns=env_fns,
@@ -314,6 +314,7 @@ if __name__ == '__main__':
     obs_dim = np.prod(envs.single_observation_space.shape)
     n_acts = np.prod(envs.single_action_space.shape)
     device = "cpu"
+
     agent = Agent(envs)
     optimizer = Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
@@ -333,8 +334,8 @@ if __name__ == '__main__':
 
     next_obs = torch.Tensor(envs.reset()).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
+
     for update in range(1, args.num_updates + 1):
-        print(f'updateing loop: update number {update}')
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (update - 1.0) / args.num_updates
