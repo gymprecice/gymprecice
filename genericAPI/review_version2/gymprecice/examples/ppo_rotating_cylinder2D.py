@@ -26,7 +26,7 @@ import gymprecice.envs.openfoam.rotating_cylinder_2d as rotating_cylinder_2d
 from gymprecice.envs.openfoam.rotating_cylinder_2d.environment import RotatingCylinder2DEnv
 from gymprecice.utils.constants import EPSILON, LOG_EPSILON
 from gymprecice.utils.precicexmlutils import set_training_dir
-from gymprecice.wrappers.envutil3 import AsyncVectorEnv
+from gymprecice.wrappers.envutil import AsyncVectorEnv
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):

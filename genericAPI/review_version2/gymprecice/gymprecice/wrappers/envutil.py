@@ -406,12 +406,6 @@ class AsyncVectorEnv(VectorEnv):
         observations_list, rewards, dones, infos = zip(*results)
 
         if not self.shared_memory:
-            print(self.single_observation_space)
-            print(observations_list)
-            print(rewards)
-            print(dones)
-            print(infos)
-            print(self.observations)
             self.observations = concatenate(
                 self.single_observation_space,
                 observations_list,
