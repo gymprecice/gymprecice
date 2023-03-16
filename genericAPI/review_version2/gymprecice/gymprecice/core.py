@@ -125,7 +125,7 @@ class Adapter(gym.Env):
         self._is_reset = True
         obs = self._get_observation()
         print(f'End: reset: {self._env_dir}')
-        return obs
+        return obs, {}  # info is an empty dictionary
 
     def step(self, action):
         print(f'step: {self._env_dir}')

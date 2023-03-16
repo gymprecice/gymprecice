@@ -217,7 +217,6 @@ class AsyncVectorEnv(VectorEnv):
     def reset_async(
         self,
         seed: Optional[Union[int, List[int]]] = None,
-        return_info: bool = False,
         options: Optional[dict] = None,
     ):
         """Send the calls to :obj:`reset` to each sub-environment.
@@ -251,8 +250,6 @@ class AsyncVectorEnv(VectorEnv):
             single_kwargs = {}
             if single_seed is not None:
                 single_kwargs["seed"] = single_seed
-            if return_info:
-                single_kwargs["return_info"] = return_info
             if options is not None:
                 single_kwargs["options"] = options
 
@@ -263,7 +260,6 @@ class AsyncVectorEnv(VectorEnv):
         self,
         timeout=None,
         seed: Optional[int] = None,
-        return_info: bool = False,
         options: Optional[dict] = None,
     ):
         """
@@ -310,25 +306,18 @@ class AsyncVectorEnv(VectorEnv):
         self._raise_if_errors(successes)
         self._state = AsyncState.DEFAULT
 
-        if return_info:
-            results, infos = zip(*results)
-            infos = list(infos)
+        results, infos = zip(*results)
+        infos = list(infos)
 
-            if not self.shared_memory:
-                self.observations = concatenate(
-                    self.single_observation_space, results, self.observations
-                )
+        if not self.shared_memory:
+            self.observations = concatenate(
+                self.single_observation_space, results, self.observations
+            )
 
-            return (
-                deepcopy(self.observations) if self.copy else self.observations
-            ), infos
-        else:
-            if not self.shared_memory:
-                self.observations = concatenate(
-                    self.single_observation_space, results, self.observations
-                )
+        return (
+            deepcopy(self.observations) if self.copy else self.observations
+        ), infos
 
-            return deepcopy(self.observations) if self.copy else self.observations
 
     def step_async(self, actions):
         """Send the calls to :obj:`step` to each sub-environment.
@@ -641,15 +630,11 @@ def _worker(index, env_fn, pipe, parent_pipe, shared_memory, error_queue, lock):
         while True:
             command, data = pipe.recv()
             if command == "reset":
-                if "return_info" in data and data["return_info"] is True:
-                    observation, info = env.reset(**data)
-                    pipe.send(((observation, info), True))
-                else:
-                    lock.acquire(block=True)
-                    observation = env.reset(**data)
-                    time.sleep(1)
-                    lock.release()
-                    pipe.send((observation, True))
+                lock.acquire(block=True)
+                observation, info = env.reset(**data)
+                time.sleep(1)
+                lock.release()
+                pipe.send(((observation, info), True))
             elif command == "step":
                 observation, reward, done, info = env.step(data)
                 if done:
@@ -710,18 +695,11 @@ def _worker_shared_memory(index, env_fn, pipe, parent_pipe, shared_memory, error
         while True:
             command, data = pipe.recv()
             if command == "reset":
-                if "return_info" in data and data["return_info"] is True:
-                    observation, info = env.reset(**data)
-                    write_to_shared_memory(
-                        observation_space, index, observation, shared_memory
-                    )
-                    pipe.send(((None, info), True))
-                else:
-                    observation = env.reset(**data)
-                    write_to_shared_memory(
-                        observation_space, index, observation, shared_memory
-                    )
-                    pipe.send((None, True))
+                observation, info = env.reset(**data)
+                write_to_shared_memory(
+                    observation_space, index, observation, shared_memory
+                )
+                pipe.send(((None, info), True))
             elif command == "step":
                 observation, reward, done, info = env.step(data)
                 if done:

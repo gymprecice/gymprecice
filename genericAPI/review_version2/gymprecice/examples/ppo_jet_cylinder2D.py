@@ -119,10 +119,10 @@ class WandBRewardRecoder(gym.Wrapper):
 
     def reset(self, **kwargs):
         """Resets the environment using kwargs and resets the episode returns and lengths."""
-        observations = super().reset(**kwargs)
+        observations, infos = super().reset(**kwargs)
         self.episode_returns = np.zeros(self.num_envs, dtype=np.float32)
         self.episode_lengths = np.zeros(self.num_envs, dtype=np.int32)
-        return observations
+        return observations, infos
 
     def step(self, action):
         """Steps through the environment, recording the episode statistics."""
@@ -330,8 +330,8 @@ if __name__ == '__main__':
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
     values = torch.zeros((args.num_steps, args.num_envs)).to(device)
-
-    next_obs = torch.Tensor(envs.reset()).to(device)
+    # reset returns info as well
+    next_obs = torch.Tensor(envs.reset()[0]).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
     for update in range(1, args.num_updates + 1):
         print(f'updateing loop: update number {update}')
