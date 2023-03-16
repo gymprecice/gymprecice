@@ -26,7 +26,7 @@ import gymprecice.envs.openfoam.rotating_cylinder_2d as rotating_cylinder_2d
 from gymprecice.envs.openfoam.rotating_cylinder_2d.environment import RotatingCylinder2DEnv
 from gymprecice.utils.constants import EPSILON, LOG_EPSILON
 from gymprecice.utils.precicexmlutils import set_training_dir
-from gymprecice.wrappers.envutil import AsyncVectorEnv
+from gymprecice.wrappers.envutil3 import AsyncVectorEnv
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -121,10 +121,10 @@ class WandBRewardRecoder(gym.Wrapper):
 
     def reset(self, **kwargs):
         """Resets the environment using kwargs and resets the episode returns and lengths."""
-        observations = super().reset(**kwargs)
+        observations, infos = super().reset(**kwargs)
         self.episode_returns = np.zeros(self.num_envs, dtype=np.float32)
         self.episode_lengths = np.zeros(self.num_envs, dtype=np.int32)
-        return observations
+        return observations, infos
 
     def step(self, action):
         """Steps through the environment, recording the episode statistics."""
@@ -331,8 +331,8 @@ if __name__ == '__main__':
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
     values = torch.zeros((args.num_steps, args.num_envs)).to(device)
-
-    next_obs = torch.Tensor(envs.reset()).to(device)
+    # env.reset returns and empty info dict
+    next_obs = torch.Tensor(envs.reset()[0]).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
 
     for update in range(1, args.num_updates + 1):

@@ -37,6 +37,9 @@ class AsyncState(Enum):
     WAITING_CALL = "call"
 
 
+SLEEP_TIME = 0.5
+
+
 class AsyncVectorEnv(VectorEnv):
     """Vectorized environment that runs multiple environments in parallel. It
     uses `multiprocessing`_ processes, and pipes for communication.
@@ -318,7 +321,6 @@ class AsyncVectorEnv(VectorEnv):
             deepcopy(self.observations) if self.copy else self.observations
         ), infos
 
-
     def step_async(self, actions):
         """Send the calls to :obj:`step` to each sub-environment.
 
@@ -404,6 +406,12 @@ class AsyncVectorEnv(VectorEnv):
         observations_list, rewards, dones, infos = zip(*results)
 
         if not self.shared_memory:
+            print(self.single_observation_space)
+            print(observations_list)
+            print(rewards)
+            print(dones)
+            print(infos)
+            print(self.observations)
             self.observations = concatenate(
                 self.single_observation_space,
                 observations_list,
@@ -632,16 +640,17 @@ def _worker(index, env_fn, pipe, parent_pipe, shared_memory, error_queue, lock):
             if command == "reset":
                 lock.acquire(block=True)
                 observation, info = env.reset(**data)
-                time.sleep(1)
+                time.sleep(SLEEP_TIME)
                 lock.release()
                 pipe.send(((observation, info), True))
             elif command == "step":
                 observation, reward, done, info = env.step(data)
+                # TODO: now this automatic restart is not correct for simulation based stuff
                 if done:
                     info["terminal_observation"] = observation
                     lock.acquire(block=True)
-                    observation = env.reset()
-                    time.sleep(1)
+                    observation, info = env.reset()
+                    time.sleep(SLEEP_TIME)
                     lock.release()
                 pipe.send(((observation, reward, done, info), True))
             elif command == "seed":
