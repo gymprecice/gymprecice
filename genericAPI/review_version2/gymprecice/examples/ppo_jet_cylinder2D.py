@@ -350,8 +350,7 @@ if __name__ == '__main__':
             actions[step] = action
             logprobs[step] = logprob
 
-            next_obs, reward, terminated, truncated, info = envs.step(action)
-            done = terminated or truncated
+            next_obs, reward, done, _, info = envs.step(action)
             rewards[step] = torch.tensor(reward).to(device).view(-1)
             next_obs = torch.Tensor(next_obs).to(device)
             next_done = torch.Tensor(done).to(device=device)
