@@ -1,4 +1,4 @@
-import gym
+import gymnasium as gym
 import os
 
 import torch
@@ -26,7 +26,8 @@ import gymprecice.envs.openfoam.rotating_cylinder_2d as rotating_cylinder_2d
 from gymprecice.envs.openfoam.rotating_cylinder_2d.environment import RotatingCylinder2DEnv
 from gymprecice.utils.constants import EPSILON, LOG_EPSILON
 from gymprecice.utils.precicexmlutils import set_training_dir
-from gymprecice.wrappers.envutil import AsyncVectorEnv
+# Please use LockAsyncVectorEnv instead of AsyncVectorEnv --> introduces lock around preCICE init
+from gymprecice.wrappers.vectorenvutil import LockAsyncVectorEnv
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -128,12 +129,7 @@ class WandBRewardRecoder(gym.Wrapper):
 
     def step(self, action):
         """Steps through the environment, recording the episode statistics."""
-        (
-            observations,
-            rewards,
-            dones,
-            infos,
-        ) = self.env.step(action)
+        observations, rewards, dones, _, infos = self.env.step(action)
 
         self.episode_returns += rewards.flatten()
         self.episode_lengths += 1
@@ -158,10 +154,13 @@ class WandBRewardRecoder(gym.Wrapper):
                 self.episode_returns[i] = 0
                 self.episode_lengths[i] = 0
 
+        terminated = dones if self.num_envs > 1 else dones[0]
+        truncated = False
         return (
             observations,
             rewards,
-            dones if self.num_envs > 1 else dones[0],
+            terminated,
+            truncated,
             infos,
         )
 
@@ -302,7 +301,7 @@ if __name__ == '__main__':
     for idx in range(args.num_envs):
         env_fns.append(make_env(options=options, idx=idx, wrappers=[gym.wrappers.ClipAction]))
     # env setup
-    envs = AsyncVectorEnv(
+    envs = LockAsyncVectorEnv(
         env_fns=env_fns,
         context='fork',
         shared_memory=False
@@ -354,7 +353,7 @@ if __name__ == '__main__':
             actions[step] = action
             logprobs[step] = logprob
 
-            next_obs, reward, done, info = envs.step(action)
+            next_obs, reward, done, _, info = envs.step(action)
 
             rewards[step] = torch.tensor(reward).to(device).view(-1)
             next_obs = torch.Tensor(next_obs).to(device)

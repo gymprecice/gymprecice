@@ -1,5 +1,5 @@
 from gymprecice.core import Adapter
-from gym import spaces
+import gymnasium as gym
 from os.path import join
 
 import numpy as np
@@ -28,10 +28,10 @@ class JetCylinder2DEnv(Adapter):
         self._reward_average_time = 0.335
         self._prerun_data_required = True
 
-        self.action_space = spaces.Box(
+        self.action_space = gym.spaces.Box(
             low=self.min_jet_rate, high=self.max_jet_rate, shape=(1, ), dtype=np.float32)
 
-        self.observation_space = spaces.Box(
+        self.observation_space = gym.spaces.Box(
             low=-np.inf, high=np.inf, shape=(self.n_probes,), dtype=np.float32)
 
         # observations and rewards are obtained from post-processing files
@@ -274,17 +274,14 @@ class JetCylinder2DEnv(Adapter):
         while subcycle < self._steps_per_action:
             action_fraction = 1 / (self._steps_per_action - subcycle)
             smoothed_action = self._previous_action + action_fraction * (action - self._previous_action)
-
             if isinstance(smoothed_action, np.ndarray):
-                next_obs, reward, done, info = super(JetCylinder2DEnv, self).step(smoothed_action)
+                next_obs, reward, terminated, truncated, info = super(JetCylinder2DEnv, self).step(smoothed_action)
             else:
-                next_obs, reward, done, info = super(JetCylinder2DEnv, self).step(smoothed_action.cpu().numpy())
-
+                next_obs, reward, terminated, truncated, info = super(JetCylinder2DEnv, self).step(smoothed_action.cpu().numpy())
             subcycle += 1
-
-            if done:
+            if terminated or truncated:
                 self._previous_action = None
                 break
             else:
                 self._previous_action = smoothed_action
-        return next_obs, reward, done, info
+        return next_obs, reward, terminated, truncated, info

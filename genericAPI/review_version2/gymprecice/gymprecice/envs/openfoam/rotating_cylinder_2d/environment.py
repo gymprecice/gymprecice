@@ -1,5 +1,5 @@
 from gymprecice.core import Adapter
-from gym import spaces
+import gymnasium as gym
 from os.path import join
 
 import numpy as np
@@ -28,10 +28,10 @@ class RotatingCylinder2DEnv(Adapter):
         self._reward_average_time = 0.335
         self._prerun_data_required = True
 
-        self.action_space = spaces.Box(
+        self.action_space = gym.spaces.Box(
             low=self.min_omega, high=self.max_omega, shape=(1, ), dtype=np.float32)
 
-        self.observation_space = spaces.Box(
+        self.observation_space = gym.spaces.Box(
             low=-np.inf, high=np.inf, shape=(self.n_probes,), dtype=np.float32)
 
         # options['env_name'] = self.env_dir
@@ -77,7 +77,6 @@ class RotatingCylinder2DEnv(Adapter):
             actuator_coords.append([np.delete(coord, 2) for coord in self.actuator_geometric_data[patch_name]['Cf']])
 
         self._set_precice_vectices(actuator_coords)
-
 
     def step(self, action):
         return self._smooth_step(action)
@@ -259,15 +258,15 @@ class RotatingCylinder2DEnv(Adapter):
             smoothed_action = self._previous_action + action_fraction * (action - self._previous_action)
 
             if isinstance(smoothed_action, np.ndarray):
-                next_obs, reward, done, info = super(RotatingCylinder2DEnv, self).step(smoothed_action)
+                next_obs, reward, terminated, truncated, info = super(RotatingCylinder2DEnv, self).step(smoothed_action)
             else:
-                next_obs, reward, done, info = super(RotatingCylinder2DEnv, self).step(smoothed_action.cpu().numpy())
+                next_obs, reward, terminated, truncated, info = super(RotatingCylinder2DEnv, self).step(smoothed_action.cpu().numpy())
 
             subcycle += 1
-            if done:
+            if terminated or truncated:
                 self._previous_action = None
                 break
             else:
                 self._previous_action = smoothed_action
-        return next_obs, reward, done, info
+        return next_obs, reward, terminated, truncated, info
 

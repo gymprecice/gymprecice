@@ -1,4 +1,4 @@
-import gym
+import gymnasium as gym
 import precice
 
 from abc import abstractmethod
@@ -93,7 +93,7 @@ class Adapter(gym.Env):
         self._first_reset = True
 
     # gym methods:
-    def reset(self, *, seed=None, return_info=False):
+    def reset(self, seed=None, options={}):
         super().reset(seed=seed)
 
         if self._first_reset is True:
@@ -125,7 +125,8 @@ class Adapter(gym.Env):
         self._is_reset = True
         obs = self._get_observation()
         print(f'End: reset: {self._env_dir}')
-        return obs, {}  # info is an empty dictionary
+        info = {}
+        return obs, info  # info is an empty dictionary
 
     def step(self, action):
         print(f'step: {self._env_dir}')
@@ -150,7 +151,10 @@ class Adapter(gym.Env):
             self._solver_full_reset = False
             self._is_reset = False
 
-        return obs, reward, done, {}
+        terminated = done
+        truncated = False
+        info = {}
+        return obs, reward, terminated, truncated, info
 
     def close(self):
         self._finalize()
@@ -307,7 +311,7 @@ class Adapter(gym.Env):
         dummy_action = 0.0 * self.action_space.sample()
         done = False
         while not done:
-            _, _, done, _ = self.step(dummy_action)
+            _, _, done, _, _ = self.step(dummy_action)
 
     def _finalize(self):
         self.__del__()
