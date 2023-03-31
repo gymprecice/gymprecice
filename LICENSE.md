@@ -24,7 +24,8 @@ THE SOFTWARE.
 
 -------------------------------------------------------------------------------
 
-These Python scripts are adapted from [CleanRL](https://github.com/vwxyzjn/cleanrl) under the following license:
+The following Python scripts are adapted from [CleanRL](https://github.com/vwxyzjn/cleanrl):
+
 - `gymprecice/examples/ppo_jet_cylinder_2D.py`
 - `gymprecice/examples/ppo_rotating_cylinder_2D.py`
 - `gymprecice/examples/ppo_fsi3.py`
@@ -53,8 +54,9 @@ SOFTWARE.
 
 -------------------------------------------------------------------------------
 
-These Python scripts are adapted from [gym](https://github.com/openai/gym) under the following license:
-- `gymprecice/utils/vectorenvutil.py`
+The following Python scripts are adapted from [gym](https://github.com/openai/gym):
+
+- `gymprecice/utils/multienvutils.py`
 - `gymprecice/setup.py`
 
 The MIT License
@@ -69,7 +71,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 -------------------------------------------------------------------------------
 
-The mesh for these OpenFOAM cases are adapted from [DRLinFluids](https://github.com/venturi123/DRLinFluids) under the following license:
+The mesh for the following OpenFOAM cases are adapted from [DRLinFluids](https://github.com/venturi123/DRLinFluids):
+
 - `gymprecice/envs/openfoam/jet_cylinder_2d/fluid-openfoam`
 - `gymprecice/envs/openfoam/rotating_cylinder_2d/fluid-openfoam`
 
@@ -91,9 +94,9 @@ limitations under the License.
 
 -------------------------------------------------------------------------------
 
-These Python scripts are adapted from [Ofpp](https://github.com/xu-xianghua/ofpp) under the following license:
-- `gymprecice/envs/openfoam/field_parser.py`
-- `gymprecice/envs/openfoam/mesh_parser.py`
+The following Python function uses subroutines adapted from [Ofpp](https://github.com/xu-xianghua/ofpp):
+
+- `gymprecice/envs/openfoam/utils.get_patch_geometry`
 
 MIT License
 
