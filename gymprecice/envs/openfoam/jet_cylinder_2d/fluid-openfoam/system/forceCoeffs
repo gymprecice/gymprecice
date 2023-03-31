@@ -1,0 +1,17 @@
+// -*- C++ -*-
+
+#includeEtc "caseDicts/postProcessing/forces/forceCoeffsIncompressible.cfg"
+
+patches (cylinder jet1 jet2);
+
+magUInf     1;
+lRef        0.1;	
+Aref        4.475757e-3;
+
+liftDir     (0 1 0);
+dragDir     (1 0 0);
+CofR        (0 0 0);
+pitchAxis   (0 0 1);
+
+
+// ************************************************************************* //
