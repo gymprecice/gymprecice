@@ -28,5 +28,4 @@ wandb/
 *.pickle
 *.csv
 *.ipynb
-*.txt
 RL_*/
