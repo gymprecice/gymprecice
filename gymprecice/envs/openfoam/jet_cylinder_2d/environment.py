@@ -71,7 +71,7 @@ class JetCylinder2DEnv(Adapter):
         actuator_coords = []
 
         for patch_name in self.actuator_geometric_data.keys():
-            actuator_coords.append([np.delete(coord, 2) for coord in self.actuator_geometric_data[patch_name]['Cf']])
+            actuator_coords.append([np.delete(coord, 2) for coord in self.actuator_geometric_data[patch_name]['face_centre']])
         self._set_precice_vectices(actuator_coords)
 
     def step(self, action):
@@ -111,9 +111,9 @@ class JetCylinder2DEnv(Adapter):
 
         for idx, patch_name in enumerate(self.actuator_geometric_data.keys()):
             patch_ctr = np.array([radius * np.cos(theta0[idx]), radius * np.sin(theta0[idx]), origin[2]])
-            magSf = self.actuator_geometric_data[patch_name]['magSf']
-            Sf = self.actuator_geometric_data[patch_name]['Sf']
-            nf = self.actuator_geometric_data[patch_name]['nf']
+            magSf = self.actuator_geometric_data[patch_name]['face_area_mag']
+            Sf = self.actuator_geometric_data[patch_name]['face_area_vector']
+            nf = self.actuator_geometric_data[patch_name]['face_normal']
             w_patch = w[idx]
 
             # convert volumetric flow rate to a sinusoidal profile on the interface
@@ -211,7 +211,7 @@ class JetCylinder2DEnv(Adapter):
         while not math.isclose(probes_time_stamp, self._t + self._control_start_time):  # read till the end of a time-window
             while True:
                 is_comment, probes_time_stamp, n_probes, probes_data = \
-                    robust_readline(self._observation_info['file_handler'], self._observation_info['n_probes'], sleep_time=0.01)
+                    robust_readline(self._observation_info['file_handler'], self._observation_info['n_probes'])
                 if not is_comment and n_probes == self._observation_info['n_probes']:
                     break
             self._observation_info['data'].append([probes_time_stamp, n_probes, probes_data])
@@ -232,7 +232,7 @@ class JetCylinder2DEnv(Adapter):
             while not math.isclose(forces_time_stamp, self._control_start_time):  # read till the end of a time-window
                 while True:
                     is_comment, forces_time_stamp, n_forces, forces_data = \
-                        robust_readline(self._reward_info['file_handler'], self._reward_info['n_forces'], sleep_time=0.01)
+                        robust_readline(self._reward_info['file_handler'], self._reward_info['n_forces'])
                     if not is_comment and n_forces == self._reward_info['n_forces']:
                         break
                 self._reward_info['data'].append([forces_time_stamp, n_forces, forces_data])
@@ -260,7 +260,7 @@ class JetCylinder2DEnv(Adapter):
         while not math.isclose(forces_time_stamp, self._t + self._control_start_time):  # read till the end of a time-window
             while True:
                 is_comment, forces_time_stamp, n_forces, forces_data = \
-                    robust_readline(self._reward_info['file_handler'], self._reward_info['n_forces'], sleep_time=0.01)
+                    robust_readline(self._reward_info['file_handler'], self._reward_info['n_forces'])
                 if not is_comment and n_forces == self._reward_info['n_forces']:
                     break
             self._reward_info['data'].append([forces_time_stamp, n_forces, forces_data])
