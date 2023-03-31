@@ -1,7 +1,0 @@
-// -*- C++ -*-
-
-type preciceAdapterFunctionObject;
-libs ("libpreciceAdapterFunctionObject.so");
-
-
-// ************************************************************************* //

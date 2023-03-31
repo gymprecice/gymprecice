@@ -1,4 +1,0 @@
-recursive-include gymprecice/envs *
-recursive-exclude *.pyc
-
-

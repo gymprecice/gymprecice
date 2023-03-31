@@ -1,3 +1,0 @@
-arcSinusoidalvelocityProfile2D/cylindricalSinusoidalVelocityProfile2DFvPatchVectorField.C
-
-LIB = $(FOAM_USER_LIBBIN)/libCustomisedBCs

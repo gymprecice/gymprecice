@@ -1,8 +1,0 @@
-// -*- C++ -*-
-
-#includeEtc "caseDicts/postProcessing/flowRate/flowRatePatch.cfg"
-
-name    jet2;
-
-
-// ************************************************************************* //
