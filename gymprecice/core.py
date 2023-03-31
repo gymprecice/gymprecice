@@ -12,7 +12,7 @@ import subprocess
 
 import os
 
-from gymprecice.utils.precicexmlutils import get_mesh_data, get_episode_end_time
+from gymprecice.utils.xmlutils import get_mesh_data, get_episode_end_time
 from gymprecice.utils.fileutils import make_env_dir
 
 
@@ -48,14 +48,14 @@ class Adapter(gym.Env):
         except Exception as e:
             raise Exception(f'Error: Adapter cannot create folders: {e}')
 
-        scalar_variables, vector_variables, mesh_list, RL_participant = get_mesh_data('', self._precice_cfg)
+        scalar_variables, vector_variables, mesh_list, controller = get_mesh_data('', self._precice_cfg)
 
         for mesh_name in mesh_list:
-            if 'rl' in mesh_name.lower():
-                RL_participant['mesh_name'] = mesh_name
+            if 'controller' in mesh_name.lower():
+                controller['mesh_name'] = mesh_name
                 break
-        self._RL_participant = RL_participant
-        self._RL_mesh = self._RL_participant['mesh_name']
+        self._controller = controller
+        self._controller_mesh = self._controller['mesh_name']
 
         # scaler and vector variables should be used to define the size of action space
         self._scalar_variables = scalar_variables
@@ -67,19 +67,8 @@ class Adapter(gym.Env):
         self._read_ids = None
         self._write_ids = None
         self._vertex_coords = None
-        self._read_var_list = None
-        self._write_var_list = None
-
-        try:
-            self._read_var_list = self._RL_participant[self._RL_mesh]['read']
-        except Exception as e:
-            # a valid situation when the mesh doesn't have any read variables
-            self._read_var_list = []
-        try:
-            self._write_var_list = self._RL_participant[self._RL_mesh]['write']
-        except Exception as e:
-            # a valid situation when the mesh doesn't have any write variables
-            self._write_var_list = []
+        self._read_var_list = self._controller[self._controller_mesh]['read']
+        self._write_var_list = self._controller[self._controller_mesh]['write']
 
         # coupling attributes:
         self._episode_end_time = float(get_episode_end_time(self._precice_cfg))
@@ -167,7 +156,7 @@ class Adapter(gym.Env):
     # preCICE related methods:
     def _init_precice(self):
         assert self._interface is None, "Error: precice interface re-initialisation attempt!"
-        self._interface = precice.Interface("RL", self._precice_cfg, 0, 1)
+        self._interface = precice.Interface("Controller", self._precice_cfg, 0, 1)
         assert self._precice_mesh_defined is True, "Error: call set_precice_mesh within problem env initialization"
 
         self._time_window = 0
@@ -176,7 +165,7 @@ class Adapter(gym.Env):
         self._vertex_ids = {}
 
         # TODO: extend to multiple actuator meshes and/or observation mesh
-        mesh_name = self._RL_participant['mesh_name']
+        mesh_name = self._controller['mesh_name']
         mesh_id = self._interface.get_mesh_id(mesh_name)
         self._mesh_id[mesh_name] = mesh_id
 
@@ -190,7 +179,7 @@ class Adapter(gym.Env):
         self._read_ids = {}
         self._write_ids = {}
         # precice data from a single mesh on the solver side
-        mesh_name = self._RL_participant['mesh_name']
+        mesh_name = self._controller['mesh_name']
         for read_var in self._read_var_list:
             self._read_ids[read_var] = self._interface.get_data_id(read_var, self._mesh_id[mesh_name])
         for write_var in self._write_var_list:
@@ -232,10 +221,10 @@ class Adapter(gym.Env):
         for write_var in self._write_var_list:
             if write_var in self._vector_variables:
                 self._interface.write_block_vector_data(
-                    self._write_ids[write_var], self._vertex_ids[self._RL_mesh], write_data[write_var])
+                    self._write_ids[write_var], self._vertex_ids[self._controller_mesh], write_data[write_var])
             elif write_var in self._scalar_variables:
                 self._interface.write_block_scalar_data(
-                    self._write_ids[write_var], self._vertex_ids[self._RL_mesh], write_data[write_var])
+                    self._write_ids[write_var], self._vertex_ids[self._controller_mesh], write_data[write_var])
             else:
                 raise Exception(f'Invalid variable type: {write_var}')
 

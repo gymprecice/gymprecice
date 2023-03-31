@@ -7,13 +7,13 @@ log.*
 *-info/
 output/
 precice-run/
-gymprecice_run/
+gymprecice-run/
 gymprecice.egg*/
 *.foam
 *.OpenFOAM
-postProcessing*/
 [0-9]*/
 [0-9]*.[0-9]*/
+!0.335/
 !0.org/
 !0.orig/
 !0/

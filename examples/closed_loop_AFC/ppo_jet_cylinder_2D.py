@@ -23,9 +23,9 @@ except ImportError:
 import gymprecice.envs.openfoam.jet_cylinder_2d as jet_cylinder_2d
 from gymprecice.envs.openfoam.jet_cylinder_2d.environment import JetCylinder2DEnv
 from gymprecice.utils.constants import EPSILON, LOG_EPSILON
-from gymprecice.utils.precicexmlutils import set_training_dir
+from gymprecice.utils.xmlutils import set_training_dir
 
-from gymprecice.utils.vectorenvutil import worker_with_lock
+from gymprecice.utils.multienvutils import worker_with_lock
 from gymnasium.vector.async_vector_env import AsyncVectorEnv
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):

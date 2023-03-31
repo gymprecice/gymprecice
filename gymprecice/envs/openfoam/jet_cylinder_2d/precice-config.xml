@@ -14,34 +14,34 @@
       <use-data name="Velocity" />
     </mesh>
 
-    <mesh name="RL-Mesh">
+    <mesh name="Controller-Mesh">
       <use-data name="Velocity" />
     </mesh>
 
     <participant name="Fluid">
       <use-mesh name="Fluid-Mesh" provide="yes" />
-      <use-mesh name="RL-Mesh" from="RL" />
+      <use-mesh name="Controller-Mesh" from="Controller" />
       <read-data name="Velocity" mesh="Fluid-Mesh" />
       <mapping:nearest-neighbor
         direction="read"
-        from="RL-Mesh"
+        from="Controller-Mesh"
         to="Fluid-Mesh"
         constraint="consistent" />
     </participant>
 
-    <participant name="RL">
-      <use-mesh name="RL-Mesh" provide="yes" />
+    <participant name="Controller">
+      <use-mesh name="Controller-Mesh" provide="yes" />
       <use-mesh name="Fluid-Mesh" from="Fluid"/>
-      <write-data name="Velocity" mesh="RL-Mesh" />
+      <write-data name="Velocity" mesh="Controller-Mesh" />
     </participant>
 
-    <m2n:sockets from="RL" to="Fluid" exchange-directory=""/>
+    <m2n:sockets from="Controller" to="Fluid" exchange-directory=""/>
 
     <coupling-scheme:parallel-explicit>
       <max-time value="2.0" />
       <time-window-size value="0.0005" valid-digits="8" />
-      <participants first="RL" second="Fluid"/>
-      <exchange data="Velocity" mesh="RL-Mesh" from="RL" to="Fluid" initialize="False"/>
+      <participants first="Controller" second="Fluid"/>
+      <exchange data="Velocity" mesh="Controller-Mesh" from="Controller" to="Fluid" initialize="False"/>
     </coupling-scheme:parallel-explicit>
   </solver-interface>
 </precice-configuration>
