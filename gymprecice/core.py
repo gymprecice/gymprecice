@@ -12,7 +12,7 @@ import subprocess
 
 import os
 
-from gymprecice.utils.precicexmlutils import get_mesh_data, get_episode_end_time
+from gymprecice.utils.xmlutils import get_mesh_data, get_episode_end_time
 from gymprecice.utils.fileutils import make_env_dir
 
 

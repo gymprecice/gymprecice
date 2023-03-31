@@ -327,7 +327,7 @@ def get_interface_patches(path_to_precicedict):
     return name_list
 
 
-def robust_readline(filehandler, n_expected):
+def read_line(filehandler, n_expected):
     file_pos = filehandler.tell()
     line_text = filehandler.readline()
     is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text.strip())

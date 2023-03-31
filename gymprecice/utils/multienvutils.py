@@ -15,7 +15,6 @@ def worker_with_lock(index, env_fn, pipe, parent_pipe, shared_memory, error_queu
                 observation, info = env.reset(**data)
                 LOCK.release()
                 pipe.send(((observation, info), True))
-
             elif command == "step":
                 (
                     observation,

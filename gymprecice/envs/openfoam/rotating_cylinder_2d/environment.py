@@ -7,7 +7,7 @@ import math
 from scipy import signal
 
 from gymprecice.envs.openfoam.utils import get_interface_patches, get_patch_geometry
-from gymprecice.envs.openfoam.utils import robust_readline
+from gymprecice.envs.openfoam.utils import read_line
 from gymprecice.utils.fileutils import open_file
 
 
@@ -193,7 +193,7 @@ class RotatingCylinder2DEnv(Adapter):
         while not math.isclose(probes_time_stamp, self._t + self._control_start_time):  # read till the end of a time-window
             while True:
                 is_comment, probes_time_stamp, n_probes, probes_data = \
-                    robust_readline(self._observation_info['file_handler'], self._observation_info['n_probes'])
+                    read_line(self._observation_info['file_handler'], self._observation_info['n_probes'])
                 if not is_comment and n_probes == self._observation_info['n_probes']:
                     break
             self._observation_info['data'].append([probes_time_stamp, n_probes, probes_data])
@@ -214,7 +214,7 @@ class RotatingCylinder2DEnv(Adapter):
             while not math.isclose(forces_time_stamp, self._control_start_time):  # read till the end of a time-window
                 while True:
                     is_comment, forces_time_stamp, n_forces, forces_data = \
-                        robust_readline(self._reward_info['file_handler'], self._reward_info['n_forces'])
+                        read_line(self._reward_info['file_handler'], self._reward_info['n_forces'])
                     if not is_comment and n_forces == self._reward_info['n_forces']:
                         break
                 self._reward_info['data'].append([forces_time_stamp, n_forces, forces_data])
@@ -242,7 +242,7 @@ class RotatingCylinder2DEnv(Adapter):
         while not math.isclose(forces_time_stamp, self._t + self._control_start_time):  # read till the end of a time-window
             while True:
                 is_comment, forces_time_stamp, n_forces, forces_data = \
-                    robust_readline(self._reward_info['file_handler'], self._reward_info['n_forces'])
+                    read_line(self._reward_info['file_handler'], self._reward_info['n_forces'])
                 if not is_comment and n_forces == self._reward_info['n_forces']:
                     break
             self._reward_info['data'].append([forces_time_stamp, n_forces, forces_data])
