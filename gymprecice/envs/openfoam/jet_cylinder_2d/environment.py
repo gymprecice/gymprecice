@@ -6,7 +6,7 @@ import numpy as np
 import math
 from scipy import signal
 
-from gymprecice.envs.openfoam.utils import _get_interface_patches, _get_patch_geometry
+from gymprecice.envs.openfoam.utils import get_interface_patches, get_patch_geometry
 from gymprecice.envs.openfoam.utils import robust_readline
 from gymprecice.utils.fileutils import open_file
 
@@ -61,13 +61,13 @@ class JetCylinder2DEnv(Adapter):
                 break
 
         self._openfoam_solver_path = join(self._env_path, openfoam_case_name)
-        interface_patches = _get_interface_patches(join(openfoam_case_name, "system", "preciceDict"))
+        interface_patches = get_interface_patches(join(openfoam_case_name, "system", "preciceDict"))
         actuators = []
         for patch in interface_patches:
             if patch in self._actuator_list:
                 actuators.append(patch)
 
-        self.actuator_geometric_data = _get_patch_geometry(openfoam_case_name, actuators)
+        self.actuator_geometric_data = get_patch_geometry(openfoam_case_name, actuators)
         actuator_coords = []
 
         for patch_name in self.actuator_geometric_data.keys():

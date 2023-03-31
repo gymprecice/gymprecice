@@ -49,10 +49,8 @@ setup(
     tests_require=extras["testing"],
     install_requires=[
         "gymnasium>=0.26.0",
-        "pyprecice==2.4.0.0",
         "torch==1.12.1",
-        "mpi4py>=3.1.3",
-        "numpy>=1.21.6",
+        "pyprecice==2.4.0.0",
         "scipy>=1.7.3",
         "xmltodict>=0.13.0",
         "psutil>=5.9.2",

@@ -5,7 +5,7 @@ import time
 verbose_mode = False
 
 
-def _get_interface_patches(path_to_precicedict):
+def get_interface_patches(path_to_precicedict):
     """
     Extract patch names of the interface boundaries.
 
@@ -34,7 +34,7 @@ def _get_interface_patches(path_to_precicedict):
     return name_list
 
 
-def _get_patch_geometry(case_path, patches):
+def get_patch_geometry(case_path, patches):
     foam_mesh = FoamMesh(case_path)
     patch_data = {}
     for patch in patches:
