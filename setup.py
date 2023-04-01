@@ -30,6 +30,12 @@ with open("README.md") as fh:
 # Specific dependencies.
 extras = {}
 
+# Visualisation dependency groups.
+testing_group = set(extras.keys())
+extras["visual"] = list(
+    set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
+) + ["wandb>=0.13.6"]
+
 # Testing dependency groups.
 testing_group = set(extras.keys())
 extras["testing"] = list(

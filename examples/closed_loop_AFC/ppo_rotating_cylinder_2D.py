@@ -1,5 +1,10 @@
 import gymnasium as gym
-import os
+
+from gymprecice.utils.constants import EPSILON, LOG_EPSILON
+from gymprecice.envs.openfoam.rotating_cylinder_2d.environment import RotatingCylinder2DEnv
+from gymprecice.envs.openfoam.rotating_cylinder_2d import environment_config
+from gymprecice.utils.multienvutils import worker_with_lock
+from gymnasium.vector.async_vector_env import AsyncVectorEnv
 
 import torch
 import torch.nn as nn
@@ -8,26 +13,15 @@ from torch.distributions import Normal
 
 import numpy as np
 import math
-
 import time
+
 from typing import Optional
 import argparse
-
-
 from distutils.util import strtobool
-
 try:
     from collections.abc import Iterable
 except ImportError:
     Iterable = (tuple, list)
-
-from gymprecice.envs.openfoam.rotating_cylinder_2d.environment import RotatingCylinder2DEnv
-from gymprecice.envs.openfoam.rotating_cylinder_2d import environment_config
-
-from gymprecice.utils.constants import EPSILON, LOG_EPSILON
-
-from gymprecice.utils.multienvutils import worker_with_lock
-from gymnasium.vector.async_vector_env import AsyncVectorEnv
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -239,21 +233,22 @@ if __name__ == '__main__':
     args = parse_args()
     
     # weigh and biases
-    args.track = False
     wandb_recorder = None
     if args.track:
-        import wandb
-        run_name = f'RotatingCylinder2D_PPO_{int(time.time())}'
-
-        wandb_recorder = wandb.init(
-            project=args.wandb_project_name,
-            entity=args.wandb_entity,
-            sync_tensorboard=False,
-            config=vars(args),
-            name=run_name,
-            monitor_gym=False,
-            save_code=True,
-        )
+        try:
+            import wandb
+            run_name = f'{environment_config["environment"].get("name", "training")}_{int(time.time())}'
+            wandb_recorder = wandb.init(
+                project=args.wandb_project_name,
+                entity=args.wandb_entity,
+                sync_tensorboard=False,
+                config=vars(args),
+                name=run_name,
+                monitor_gym=False,
+                save_code=True,
+            )
+        except ModuleNotFoundError:
+            print("Warning: 'wandb' module not found.")
 
     def make_env(options, idx, wrappers=None):
         def _make_env():
