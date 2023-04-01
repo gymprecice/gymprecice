@@ -24,7 +24,6 @@ from gymprecice.envs.openfoam.jet_cylinder_2d.environment import JetCylinder2DEn
 from gymprecice.envs.openfoam.jet_cylinder_2d import environment_config
 
 from gymprecice.utils.constants import EPSILON, LOG_EPSILON
-from gymprecice.utils.xmlutils import set_training_dir
 
 from gymprecice.utils.multienvutils import worker_with_lock
 from gymnasium.vector.async_vector_env import AsyncVectorEnv
