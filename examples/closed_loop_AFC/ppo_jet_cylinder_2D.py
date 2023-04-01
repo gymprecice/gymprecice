@@ -20,8 +20,9 @@ try:
 except ImportError:
     Iterable = (tuple, list)
 
-import gymprecice.envs.openfoam.jet_cylinder_2d as jet_cylinder_2d
 from gymprecice.envs.openfoam.jet_cylinder_2d.environment import JetCylinder2DEnv
+from gymprecice.envs.openfoam.jet_cylinder_2d import environment_config
+
 from gymprecice.utils.constants import EPSILON, LOG_EPSILON
 from gymprecice.utils.xmlutils import set_training_dir
 
@@ -233,38 +234,7 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-
-    # case-specific config-dictionary
-    # this assumes all the necessary files and directories are available in "base_path".
-    # the default "base_path" is where the RL training python script is launched (BASE_PATH).
-    options = {
-        'environment':
-        {
-            'name': jet_cylinder_2d.__name__.split(".")[-1],
-            'src': jet_cylinder_2d.__path__[0],
-            'training_path': os.getcwd(),
-        },
-
-        'solvers':
-        {
-            'name': ["fluid-openfoam"],
-            'prerun_script': "clean.sh",
-            'reset_script': "clean.sh",
-            'run_script': "run.sh"
-        },
-
-        'actuators':
-        {
-            'name': ['jet1', 'jet2']
-        },
-
-        'precice':
-        {
-            'precice_config_file_name': "precice-config.xml"
-        }
-    }
-    # a directory structure is created in "base_path" to run and manage RL training.
-    set_training_dir(options)
+    
     args.track = False
     # weigh and biases
     wandb_recorder = None
@@ -300,7 +270,7 @@ if __name__ == '__main__':
 
     env_fns = []
     for idx in range(args.num_envs):
-        env_fns.append(make_env(options=options, idx=idx, wrappers=[gym.wrappers.ClipAction]))
+        env_fns.append(make_env(options=environment_config, idx=idx, wrappers=[gym.wrappers.ClipAction]))
 
     # env setup
     envs = AsyncVectorEnv(

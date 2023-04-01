@@ -4,6 +4,7 @@
 log.*
 *__pycache__/
 *.json
+!gymprecice-config.json
 *-info/
 output/
 precice-run/

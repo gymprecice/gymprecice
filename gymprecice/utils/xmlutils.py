@@ -95,7 +95,7 @@ def get_mesh_data(foldername, filename):
 def set_training_dir(options):
     env_name = options['environment']['name']
     env_source_path = options['environment']['src']
-    training_path = options['environment']['training_path']
+    result_path = options['environment'].get('result_save_path', os.getcwd()) 
     
     solver_names = options['solvers']['name']
     precice_config_file_name = options['precice']['precice_config_file_name']
@@ -103,7 +103,7 @@ def set_training_dir(options):
     precice_config_file = join(env_source_path, precice_config_file_name)
     time_str = datetime.now().strftime('%d%m%Y_%H%M%S')
     run_dir_name = f'{env_name}_controller_training_{time_str}'
-    run_dir = join(training_path, 'gymprecice-run', run_dir_name)
+    run_dir = join(result_path, 'gymprecice-run', run_dir_name)
 
     try:
         os.makedirs(run_dir, exist_ok=True)

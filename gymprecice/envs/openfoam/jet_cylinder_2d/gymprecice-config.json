@@ -1,0 +1,24 @@
+ {
+    "environment":
+    {
+        "name": "jet_cylinder_2d"
+    },
+
+    "solvers":
+    {
+        "name": ["fluid-openfoam"],
+        "prerun_script": "clean.sh",
+        "reset_script": "clean.sh",
+        "run_script": "run.sh"
+    },
+
+    "actuators":
+    {
+        "name": ["jet1", "jet2"]
+    },
+
+    "precice":
+    {
+        "precice_config_file_name": "precice-config.xml"
+    }
+}
