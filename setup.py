@@ -40,7 +40,7 @@ extras["visual"] = list(
 testing_group = set(extras.keys())
 extras["testing"] = list(
     set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
-) + ["pytest==7.0.1"]
+) + ["pytest==7.0.1", "mock==5.0.1"]
 
 setup(
     name='gymprecice',
