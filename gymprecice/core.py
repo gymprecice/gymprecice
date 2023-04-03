@@ -32,11 +32,10 @@ class Adapter(gym.Env):
         try:
             self._precice_cfg = options['precice']['precice_config_file_name']
             self._solver_list = options['solvers']['name']
-            self._actuator_list = options['actuators']['name']
             self._reset_script = options['solvers']['reset_script']
             self._prerun_script = options['solvers']['prerun_script']
             self._run_script = options['solvers']['run_script']
-            # self.actuator_coords = options['actuator_geometry']['coords']
+            self._actuator_list = options['actuators']['name']
         except Exception as e:
             raise Exception(f'Error: Adapter options are not well defined, {e}')
 
@@ -48,7 +47,7 @@ class Adapter(gym.Env):
         except Exception as e:
             raise Exception(f'Error: Adapter cannot create folders: {e}')
 
-        scalar_variables, vector_variables, mesh_list, controller = get_mesh_data('', self._precice_cfg)
+        scalar_variables, vector_variables, mesh_list, controller = get_mesh_data(self._precice_cfg)
 
         for mesh_name in mesh_list:
             if 'controller' in mesh_name.lower():
@@ -71,7 +70,7 @@ class Adapter(gym.Env):
         self._write_var_list = self._controller[self._controller_mesh]['write']
 
         # coupling attributes:
-        self._episode_end_time = float(get_episode_end_time(self._precice_cfg))
+        self._episode_end_time = get_episode_end_time(self._precice_cfg)
         self._dt = None  # solver time-step size (dictated by preCICE)
         self._interface = None  # preCICE interface
         self._time_window = None
