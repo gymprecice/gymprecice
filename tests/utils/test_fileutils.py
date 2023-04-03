@@ -45,11 +45,7 @@ def test_valid_make_env_dir(tmpdir):
         "soft_link_1_bool": path.islink("env_0/fluid-openfoam/content/info.txt"),
         "soft_link_2_bool": path.islink("env_0/solid-fenics/content/info.txt")
     }
-    expect = {
-        "soft_link_1_bool": True,
-        "soft_link_2_bool": True
-    }
-    assert output == expect
+    assert all(output.values())
     
 def test_invalid_make_env_dir(tmpdir):
     test_dir = tmpdir.mkdir("test")
@@ -121,12 +117,4 @@ def test_valid_make_result_dir(tmpdir):
         "fluid-openfoam-content": path.exists(path.join(run_dir, "fluid-openfoam", "content", "info.txt")),
         "solid-fenics-content": path.exists(path.join(run_dir, "solid-fenics", "content", "info.txt")),
     }
-    expect = {
-        "gymprecice-run": True,
-        "precice-config.xml": True,
-        "fluid-openfoam": True,
-        "solid-fenics": True,
-        "fluid-openfoam-content": True,
-        "solid-fenics-content": True
-    }
-    assert output == expect
+    assert all(output.values())
