@@ -6,7 +6,6 @@ import numpy as np
 
 verbose_mode = False
 
-
 import struct
 from collections import namedtuple
 Boundary = namedtuple('Boundary', 'type, num, start, id')
@@ -35,7 +34,7 @@ def _is_binary_format(content, maxline=20):
     return False
 
 
-def _parse_boundary_content(content, is_binary=None, skip=10):
+def _parse_boundary_content(content, is_binary=None, skip=0):
     """
     parse boundary from content
     :param content: file contents
@@ -106,7 +105,7 @@ def _parse_boundary_content(content, is_binary=None, skip=10):
     return bd
 
 
-def _parse_faces_content(content, is_binary, skip=10):
+def _parse_faces_content(content, is_binary, skip=0):
     """
     parse faces from content
     :param content: file contents
@@ -137,7 +136,7 @@ def _parse_faces_content(content, is_binary, skip=10):
     return None
 
 
-def _parse_points_content(content, is_binary, skip=10):
+def _parse_points_content(content, is_binary, skip=0):
     """
     parse points from content
     :param content: file contents
@@ -280,12 +279,48 @@ def _boundary_face_area(path, patch):
                 n = sum_normals/np.sqrt(sum_normals.dot(sum_normals))
                 face_normals.append(n)
                 face_vector_areas.append(sum_area * n)
-
-        # print(f"total area of patch: {total_area}")
         return np.array(face_vector_areas), np.array(face_areas), np.array(face_normals)
 
     except KeyError:
         return ()
+
+
+def _parse_probe_lines(line_string):
+    if len(line_string) == 0:
+        # print('line of length zero')
+        return False, None, 0, None
+    if line_string[0] == "#":
+        if verbose_mode:
+            print(f"comment line: {line_string}")
+        is_comment = True
+        return is_comment, None, 0, None
+
+    is_comment = False
+    numeric_const_pattern = r"""
+        [-+]? # optional sign
+        (?:
+        (?: \d* \. \d+ ) # .1 .12 .123 etc 9.1 etc 98.1 etc
+        |
+        (?: \d+ \.? ) # 1. 12. 123. etc 1 12 123 etc
+        )
+        # followed by optional exponent part if desired
+        (?: [Ee] [+-]? \d+ ) ?
+    """
+    rx = re.compile(numeric_const_pattern, re.VERBOSE)
+    float_list = rx.findall(line_string)
+    float_list = [float(x) for x in float_list]
+
+    if line_string.count("(") > 0:
+        if verbose_mode:
+            print("vector variable")
+        num_probes = line_string.count("(")
+        assert num_probes == line_string.count(")"), f'corrupt file, number of ( and ) should be equal:" \
+            "{line_string.count(")")}, {line_string.count(")")}'
+        assert (len(float_list) - 1) % num_probes == 0, f'corrupt file, each probe should have the same number of components, {len(float_list)}, {num_probes}'
+    else:
+        num_probes = len(float_list) - 1
+    # comment or not, time idx, number of probes, probe values
+    return is_comment, float_list[0], num_probes, float_list[1:]
 
 
 def get_patch_geometry(case_path, patches):
@@ -330,46 +365,8 @@ def get_interface_patches(path_to_precicedict):
 def read_line(filehandler, n_expected):
     file_pos = filehandler.tell()
     line_text = filehandler.readline()
-    is_comment, time_idx, n_probes, probe_data = parse_probe_lines(line_text.strip())
+    is_comment, time_idx, n_probes, probe_data = _parse_probe_lines(line_text.strip())
     if not is_comment and n_probes != n_expected:
         filehandler.seek(file_pos)
         sleep(FILE_ACCESS_SLEEP_TIME)
     return is_comment, time_idx, n_probes, probe_data
-
-
-def parse_probe_lines(line_string):
-    if len(line_string) == 0:
-        # print('line of length zero')
-        return False, None, 0, None
-    if line_string[0] == "#":
-        if verbose_mode:
-            print(f"comment line: {line_string}")
-        is_comment = True
-        return is_comment, None, 0, None
-
-    is_comment = False
-    numeric_const_pattern = r"""
-        [-+]? # optional sign
-        (?:
-        (?: \d* \. \d+ ) # .1 .12 .123 etc 9.1 etc 98.1 etc
-        |
-        (?: \d+ \.? ) # 1. 12. 123. etc 1 12 123 etc
-        )
-        # followed by optional exponent part if desired
-        (?: [Ee] [+-]? \d+ ) ?
-    """
-    rx = re.compile(numeric_const_pattern, re.VERBOSE)
-    float_list = rx.findall(line_string)
-    float_list = [float(x) for x in float_list]
-
-    if line_string.count("(") > 0:
-        if verbose_mode:
-            print("vector variable")
-        num_probes = line_string.count("(")
-        assert num_probes == line_string.count(")"), f'corrupt file, number of ( and ) should be equal:" \
-            "{line_string.count(")")}, {line_string.count(")")}'
-        assert (len(float_list) - 1) % num_probes == 0, f'corrupt file, each probe should have the same number of components, {len(float_list)}, {num_probes}'
-    else:
-        num_probes = len(float_list) - 1
-    # comment or not, time idx, number of probes, probe values
-    return is_comment, float_list[0], num_probes, float_list[1:]
