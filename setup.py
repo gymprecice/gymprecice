@@ -29,19 +29,19 @@ with open("README.md") as fh:
             break
 
 # # Specific dependencies.
-# extras = {}
+extras = {}
 
-# # Visualisation dependency groups.
-# testing_group = set(extras.keys())
-# extras["visual"] = list(
-#     set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
-# ) + ["wandb>=0.13.6"]
+# Visualisation dependency groups.
+testing_group = set(extras.keys())
+extras["visual"] = list(
+    set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
+) + ["wandb>=0.13.6"]
 
-# # Testing dependency groups.
-# testing_group = set(extras.keys())
-# extras["testing"] = list(
-#     set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
-# ) + ["pytest==7.0.1", "mock==5.0.1"]
+# Testing dependency groups.
+testing_group = set(extras.keys())
+extras["testing"] = list(
+    set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
+) + ["pytest==7.0.1", "mock==5.0.1"]
 
 setup(
     name='gymprecice',
@@ -52,8 +52,8 @@ setup(
     description='Gym-preCICE is a preCICE adapter that provides a Gymnasium-like API to couple reinforcement learning and physics-based solvers for active control',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    # extras_require=extras,
-    # tests_require=extras["testing"],
+    extras_require=extras,
+    tests_require=extras["testing"],
     install_requires=[
         "gymnasium>=0.26.0",
         "torch==1.12.1",
@@ -63,6 +63,11 @@ setup(
         "psutil>=5.9.2",
     ],
     packages=find_packages(),
+    package_data={
+        "gymprecice": [
+            "envs/openfoam/**/*",
+        ]
+    },
     url="https://github.com/gymprecice/gymprecice/",
     zip_safe=False,
 )
