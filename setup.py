@@ -1,7 +1,8 @@
 import itertools
 import re
 
-from setuptools import setup
+from setuptools import setup, find_packages
+
 
 # adapted from https://stackoverflow.com/a/9079062
 import sys
@@ -27,20 +28,20 @@ with open("README.md") as fh:
         else:
             break
 
-# Specific dependencies.
-extras = {}
+# # Specific dependencies.
+# extras = {}
 
-# Visualisation dependency groups.
-testing_group = set(extras.keys())
-extras["visual"] = list(
-    set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
-) + ["wandb>=0.13.6"]
+# # Visualisation dependency groups.
+# testing_group = set(extras.keys())
+# extras["visual"] = list(
+#     set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
+# ) + ["wandb>=0.13.6"]
 
-# Testing dependency groups.
-testing_group = set(extras.keys())
-extras["testing"] = list(
-    set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
-) + ["pytest==7.0.1", "mock==5.0.1"]
+# # Testing dependency groups.
+# testing_group = set(extras.keys())
+# extras["testing"] = list(
+#     set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
+# ) + ["pytest==7.0.1", "mock==5.0.1"]
 
 setup(
     name='gymprecice',
@@ -51,8 +52,8 @@ setup(
     description='Gym-preCICE is a preCICE adapter that provides a Gymnasium-like API to couple reinforcement learning and physics-based solvers for active control',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    extras_require=extras,
-    tests_require=extras["testing"],
+    # extras_require=extras,
+    # tests_require=extras["testing"],
     install_requires=[
         "gymnasium>=0.26.0",
         "torch==1.12.1",
@@ -61,7 +62,7 @@ setup(
         "xmltodict>=0.13.0",
         "psutil>=5.9.2",
     ],
-    packages=['gymprecice'],
+    packages=find_packages(),
     url="https://github.com/gymprecice/gymprecice/",
     zip_safe=False,
 )
