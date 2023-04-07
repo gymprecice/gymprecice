@@ -14,43 +14,46 @@ from gymprecice.utils.fileutils import open_file
 class JetCylinder2DEnv(Adapter):
     def __init__(self, options, idx=0) -> None:
         super().__init__(options, idx)
-
         self.cylinder_origin = np.array([0, 0, 0.0223788])
         self.cylinder_radius = 0.05
         self.jet_angle = [90, 270]
         self.jet_width = [10, 10]
-        self.max_jet_rate = 2.5e-4
-        self.min_jet_rate = -2.5e-4
-        self.n_probes = 151
+
+        self._min_jet_rate = -2.5e-4
+        self._max_jet_rate = 2.5e-4
+        self._n_probes = 151
+        self._n_forces = 12
+        self._latest_available_sim_time = 0.335
+
+        self.action_interval = 50
+        self.reward_average_time_window = 0.335
+
         self._previous_action = None
-        self._steps_per_action = 50
-        self._control_start_time = 0.335
-        self._reward_average_time = 0.335
-        self._prerun_data_required = True
+        self._prerun_data_required = self._latest_available_sim_time > 0.0
 
         self.action_space = gym.spaces.Box(
-            low=self.min_jet_rate, high=self.max_jet_rate, shape=(1, ), dtype=np.float32)
+            low=self._min_jet_rate, high=self._max_jet_rate, shape=(1, ), dtype=np.float32)
 
         self.observation_space = gym.spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.n_probes,), dtype=np.float32)
+            low=-np.inf, high=np.inf, shape=(self._n_probes,), dtype=np.float32)
 
         # observations and rewards are obtained from post-processing files
         self._observation_info = {
             'filed_name': 'p',
-            'n_probes': self.n_probes,  # number of probes
-            'file_path': f'/postProcessing/probes/{self._control_start_time}/p',
+            'n_probes': self._n_probes,  # number of probes
+            'file_path': f'/postProcessing/probes/{self._latest_available_sim_time}/p',
             'file_handler': None,
-            'data': None  # live data for the controlled period (t > self._control_start_time)
+            'data': None  # live data for the controlled period (t > self._latest_available_sim_time)
         }
         self._reward_info = {
             'filed_name': 'forces',
             'n_forces': 12,  # number of data columns (excluding the time column)
             'Cd_column': 1,
             'Cl_column': 3,
-            'file_path': f'/postProcessing/forceCoeffs/{self._control_start_time}/coefficient.dat',
+            'file_path': f'/postProcessing/forceCoeffs/{self._latest_available_sim_time}/coefficient.dat',
             'file_handler': None,
             'prerun_file_path': '/postProcessing/forceCoeffs/0/coefficient.dat',  # cache data to prevent unnecessary run for the no control period
-            'data': None  # live data for the controlled period (t > self._control_start_time)
+            'data': None  # live data for the controlled period (t > self._latest_available_sim_time)
         }
 
         # find openfoam solver (we have only one openfoam solver)
@@ -74,6 +77,61 @@ class JetCylinder2DEnv(Adapter):
             actuator_coords.append([np.delete(coord, 2) for coord in self.actuator_geometric_data[patch_name]['face_centre']])
         self._set_precice_vectices(actuator_coords)
 
+    @property
+    def n_probes(self):
+        return self._n_probes
+
+    @n_probes.setter
+    def n_probes(self, value):
+        self._n_probes = value
+        self._observation_info['n_probes'] = value
+        self.observation_space = gym.spaces.Box(
+            low=-np.inf, high=np.inf, shape=(value,), dtype=np.float32)
+    
+    @property
+    def n_forces(self):
+        return self._n_forces
+
+    @n_forces.setter
+    def n_forces(self, value):
+        assert value >=3, "Error: number of forceCoeff columns must be greater than 2"
+        self._n_forces = value
+        self._reward_info['n_forces'] = value
+
+    @property
+    def min_jet_rate(self):
+        return self._min_jet_rate
+
+    @min_jet_rate.setter
+    def min_jet_rate(self, value):
+        self._min_jet_rate = value
+        self.action_space = gym.spaces.Box(
+            low=value, high=self._max_jet_rate, shape=(1, ), dtype=np.float32)
+        
+    @property
+    def max_jet_rate(self):
+        return self._max_jet_rate
+
+    @max_jet_rate.setter
+    def max_jet_rate(self, value):
+        self._max_jet_rate = value
+        self.action_space = gym.spaces.Box(
+            low=self._min_jet_rate, high=value, shape=(1, ), dtype=np.float32)
+        
+    @property
+    def latest_available_sim_time(self):
+        return self._latest_available_sim_time
+
+    @latest_available_sim_time.setter
+    def latest_available_sim_time(self, value):
+        if value == 0.0:
+            value = int(value)
+        self._latest_available_sim_time = value
+        self._reward_info['file_path'] = f'/postProcessing/forceCoeffs/{value}/coefficient.dat'
+        self._observation_info['file_path'] = f'/postProcessing/probes/{value}/p'
+        self._prerun_data_required = value > 0.0
+
+    
     def step(self, action):
         return self._smooth_step(action)
 
@@ -108,7 +166,6 @@ class JetCylinder2DEnv(Adapter):
 
         # velocity field of the actuation patches
         U = []
-
         for idx, patch_name in enumerate(self.actuator_geometric_data.keys()):
             patch_ctr = np.array([radius * np.cos(theta0[idx]), radius * np.sin(theta0[idx]), origin[2]])
             magSf = self.actuator_geometric_data[patch_name]['face_area_mag']
@@ -136,14 +193,12 @@ class JetCylinder2DEnv(Adapter):
             if np.isclose(Q_final, patch_flow_rate[idx]):
                 U.append(U_patch)
             else:
-                raise Exception('estimated velocity profile violates mass conservation')
+                raise Exception('Error: not a synthetic jet, Q_jet1 + Q_jet2 must be zero!')
 
         U_profile = np.array([np.delete(item, 2) for sublist in U for item in sublist])
-
         return U_profile
 
     def _probes_to_observation(self):
-
         self._read_probes_from_file()
 
         assert self._observation_info['data'], "Error: probes data is empty!"
@@ -159,15 +214,15 @@ class JetCylinder2DEnv(Adapter):
         assert self._reward_info['data'], "Error: forces data is empty!"
         forces_data = self._reward_info['data']
 
-        n_lookback = int(self._reward_average_time // self._dt) + 1
+        n_lookback = int(self.reward_average_time_window // self._dt) + 1
 
         # get the data within a time_window for computing reward
         if self._time_window == 0:
-            time_bound = [0, self._reward_average_time]
+            time_bound = [0, self.reward_average_time_window]
         else:
             time_bound = [
-                (self._time_window - n_lookback) * self._dt + self._reward_average_time,
-                self._time_window * self._dt + self._reward_average_time
+                (self._time_window - n_lookback) * self._dt + self.reward_average_time_window,
+                self._time_window * self._dt + self.reward_average_time_window
             ]
 
         # avoid the starting again and again from t0 by working in reverse order
@@ -207,15 +262,21 @@ class JetCylinder2DEnv(Adapter):
             self._observation_info['file_handler'] = file_object
             self._observation_info['data'] = []
 
-        probes_time_stamp = 0
-        while not math.isclose(probes_time_stamp, self._t + self._control_start_time):  # read till the end of a time-window
-            while True:
-                is_comment, probes_time_stamp, n_probes, probes_data = \
-                    read_line(self._observation_info['file_handler'], self._observation_info['n_probes'])
-                if not is_comment and n_probes == self._observation_info['n_probes']:
-                    break
-            self._observation_info['data'].append([probes_time_stamp, n_probes, probes_data])
-        assert math.isclose(probes_time_stamp, self._t + self._control_start_time), f"Error: mismatched time data: {probes_time_stamp} vs {self._t}"
+        new_time_stamp = True
+        latest_time_stamp = self._t + self._latest_available_sim_time
+        if self._observation_info['data']:
+            new_time_stamp = self._observation_info['data'][-1][0] != latest_time_stamp
+             
+        if new_time_stamp:
+            time_stamp = 0
+            while not math.isclose(time_stamp, latest_time_stamp):  # read till the end of a time-window
+                while True:
+                    is_comment, time_stamp, n_probes, probes_data = \
+                        read_line(self._observation_info['file_handler'], self._observation_info['n_probes'])
+                    if not is_comment and n_probes == self._observation_info['n_probes']:
+                        break
+                self._observation_info['data'].append([time_stamp, n_probes, probes_data])
+            assert math.isclose(time_stamp, latest_time_stamp), f"Error: mismatched time data: {time_stamp} vs {self._t}"
 
     def _read_forces_from_file(self):
         # sequential read of a single line (last line) of forces file at each RL step
@@ -228,15 +289,17 @@ class JetCylinder2DEnv(Adapter):
             file_object = open_file(data_path)
             self._reward_info['file_handler'] = file_object
 
-            forces_time_stamp = 0
-            while not math.isclose(forces_time_stamp, self._control_start_time):  # read till the end of a time-window
+            latest_time_stamp =  self._latest_available_sim_time            
+
+            time_stamp = 0
+            while not math.isclose(time_stamp, latest_time_stamp):  # read till the end of pre-run data
                 while True:
-                    is_comment, forces_time_stamp, n_forces, forces_data = \
+                    is_comment, time_stamp, n_forces, forces_data = \
                         read_line(self._reward_info['file_handler'], self._reward_info['n_forces'])
                     if not is_comment and n_forces == self._reward_info['n_forces']:
                         break
-                self._reward_info['data'].append([forces_time_stamp, n_forces, forces_data])
-            assert math.isclose(forces_time_stamp, self._control_start_time), f"Error: mismatched time data: {forces_time_stamp} vs {self._t}"
+                self._reward_info['data'].append([time_stamp, n_forces, forces_data])
+            assert math.isclose(time_stamp, latest_time_stamp), f"Error: mismatched time data: {time_stamp} vs {self._t}"
 
             self._prerun_data_required = False
 
@@ -256,28 +319,36 @@ class JetCylinder2DEnv(Adapter):
 
         print(f'reading forces from: {data_path}')
 
-        forces_time_stamp = 0
-        while not math.isclose(forces_time_stamp, self._t + self._control_start_time):  # read till the end of a time-window
-            while True:
-                is_comment, forces_time_stamp, n_forces, forces_data = \
-                    read_line(self._reward_info['file_handler'], self._reward_info['n_forces'])
-                if not is_comment and n_forces == self._reward_info['n_forces']:
-                    break
-            self._reward_info['data'].append([forces_time_stamp, n_forces, forces_data])
-        assert math.isclose(forces_time_stamp, self._t + self._control_start_time), f"Error: mismatched time data: {forces_time_stamp} vs {self._t}"
+        new_time_stamp = True
+        latest_time_stamp = self._t + self._latest_available_sim_time
+        if self._reward_info['data']:
+            new_time_stamp = self._reward_info['data'][-1][0] != latest_time_stamp
+            
+        if new_time_stamp:
+            time_stamp = 0
+            while not math.isclose(time_stamp, latest_time_stamp):  # read till the end of a time-window
+                while True:
+                    is_comment, time_stamp, n_forces, forces_data = \
+                        read_line(self._reward_info['file_handler'], self._reward_info['n_forces'])
+                    if not is_comment and n_forces == self._reward_info['n_forces']:
+                        break
+                self._reward_info['data'].append([time_stamp, n_forces, forces_data])
+            assert math.isclose(time_stamp, latest_time_stamp), f"Error: mismatched time data: {time_stamp} vs {self._t}"
 
     def _smooth_step(self, action):
         if self._previous_action is None:
-            self._previous_action = 0 * action
+            self._previous_action =  0.0 * action
 
         subcycle = 0
-        while subcycle < self._steps_per_action:
-            action_fraction = 1 / (self._steps_per_action - subcycle)
+        while subcycle < self.action_interval:
+            action_fraction = 1 / (self.action_interval - subcycle)
             smoothed_action = self._previous_action + action_fraction * (action - self._previous_action)
+
             if isinstance(smoothed_action, np.ndarray):
                 next_obs, reward, terminated, truncated, info = super().step(smoothed_action)
             else:
                 next_obs, reward, terminated, truncated, info = super().step(smoothed_action.cpu().numpy())
+
             subcycle += 1
             if terminated or truncated:
                 self._previous_action = None
@@ -285,3 +356,4 @@ class JetCylinder2DEnv(Adapter):
             else:
                 self._previous_action = smoothed_action
         return next_obs, reward, terminated, truncated, info
+

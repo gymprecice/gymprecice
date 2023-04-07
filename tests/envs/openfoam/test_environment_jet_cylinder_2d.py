@@ -6,34 +6,35 @@ import numpy as np
 import math
 
 from gymprecice.core import Adapter
-from gymprecice.envs.openfoam.rotating_cylinder_2d.environment import RotatingCylinder2DEnv
-from gymprecice.envs.openfoam.rotating_cylinder_2d import environment_config
+from gymprecice.envs.openfoam.jet_cylinder_2d.environment import JetCylinder2DEnv
+from gymprecice.envs.openfoam.jet_cylinder_2d import environment_config
 from gymprecice.utils.fileutils import make_result_dir, _replace_line
 
 
 @pytest.fixture
 def test_case(tmpdir):
     test_dir = tmpdir.mkdir("test")
-    test_env_dir = test_dir.mkdir("test-rotating-cylinder-env")
+    test_env_dir = test_dir.mkdir("test-jet-cylinder-env")
     chdir(test_env_dir)
 
 
-class TestRotatingCylinder2D(object):
+class TestJetCylinder2D(object):
     def test_base(self):
-        assert RotatingCylinder2DEnv.__base__.__name__ == Adapter.__name__
+        assert JetCylinder2DEnv.__base__.__name__ == Adapter.__name__
 
     def test_setters(self, test_case):
         make_result_dir(environment_config)
-        env = RotatingCylinder2DEnv(environment_config)
+        env = JetCylinder2DEnv(environment_config)
         env.n_probes = 10
         env.n_forces = 4
-        env.min_omega = -1
-        env.max_omega = 1
+        env.min_jet_rate = -1
+        env.max_jet_rate = 1
 
         check = {
             "n_of_probes": env._observation_info["n_probes"] == env.n_probes,
             "n_of_forces": env._reward_info["n_forces"] == env.n_forces,
-            "action_space": (env.action_space.high == env.max_omega and env.action_space.low == env.min_omega),
+            "action_space": (env.action_space.high == env.max_jet_rate \
+                             and env.action_space.low == env.min_jet_rate),
             "obs_space":  env.observation_space.shape == (env.n_probes, ),
         }
         assert all(check.values())
@@ -50,7 +51,7 @@ class TestRotatingCylinder2D(object):
     )
     def test_latest_time(self, test_case, input, expected):
         make_result_dir(environment_config)
-        env = RotatingCylinder2DEnv(environment_config)
+        env = JetCylinder2DEnv(environment_config)
         env.latest_available_sim_time = input
 
         check = {
@@ -74,7 +75,7 @@ class TestRotatingCylinder2D(object):
                       keyword="max-time value", keyword_value=f'\"{input}\"', 
                       end_line_symbol=" />")
         
-        env = RotatingCylinder2DEnv(environment_config)
+        env = JetCylinder2DEnv(environment_config)
         env.n_probes = expected[1]
         obs, _ = env.reset()
 
@@ -88,7 +89,7 @@ class TestRotatingCylinder2D(object):
 
     def test_invalid_step_order(self, test_case):
         make_result_dir(environment_config)
-        env = RotatingCylinder2DEnv(environment_config)
+        env = JetCylinder2DEnv(environment_config)
         
         requests.get.side_effect = Exception
         with pytest.raises(Exception):
@@ -104,7 +105,7 @@ class TestRotatingCylinder2D(object):
                         keyword="max-time value", keyword_value=f'\"{max_time}\"', 
                         end_line_symbol=" />")
         
-        env = RotatingCylinder2DEnv(environment_config)
+        env = JetCylinder2DEnv(environment_config)
         env.n_probes = n_probes
         env.action_interval = action_interval
         env.reset()
@@ -127,31 +128,23 @@ class TestRotatingCylinder2D(object):
         assert all(check.values())
         env.close()
 
-    def test_get_action(test_case):
+    def test_get_action(self, test_case):
         make_result_dir(environment_config)
         input= np.array([-1.0, 1.0])
-        expected = 0.05
-        
+
         max_time = 0.0
         _replace_line(path.join(getcwd(), "precice-config.xml"),
                         keyword="max-time value", keyword_value=f'\"{max_time}\"', 
                         end_line_symbol=" />")
         
-        env = RotatingCylinder2DEnv(environment_config)
+        env = JetCylinder2DEnv(environment_config)
         
         output0 = env._action_to_patch_field(input[0])
         output1 = env._action_to_patch_field(input[1])
-        output0_norm = np.linalg.norm(output0, axis=1)
-        output1_norm = np.linalg.norm(output1, axis=1)
-        
-        check = {
-            "rotating_surface_speed_0": np.all(np.isclose(output0_norm, expected)),
-            "rotating_surface_speed_1": np.all(np.isclose(output1_norm, expected)),
-            "switch_rotating_direction": np.array_equal(output0, np.negative(output1)),
-        }
-        assert all(check.values())
+
+        assert np.array_equal(output0, np.negative(output1))
         env.close()
-    
+
     def test_get_reward(self, test_case):
         make_result_dir(environment_config)
         latest_available_sim_time = 0
@@ -175,7 +168,7 @@ class TestRotatingCylinder2D(object):
 
         expected = 3.205 - 1 - 0.2 * 2
         
-        env = RotatingCylinder2DEnv(environment_config)
+        env = JetCylinder2DEnv(environment_config)
         env.n_forces = n_forces
         env.latest_available_sim_time = latest_available_sim_time
         env.reward_average_time_window = reward_average_time_window
@@ -185,3 +178,4 @@ class TestRotatingCylinder2D(object):
 
         assert math.isclose(output, expected)
         env.close()
+    
