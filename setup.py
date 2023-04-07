@@ -33,15 +33,15 @@ extras = {}
 
 # Visualisation dependency groups.
 testing_group = set(extras.keys())
-extras["visual"] = list(
-    set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
-) + ["wandb>=0.13.6"]
+extras["vis"] = ["wandb>=0.13.6"]
 
 # Testing dependency groups.
 testing_group = set(extras.keys())
-extras["testing"] = list(
-    set(itertools.chain.from_iterable(map(lambda group: extras[group], testing_group)))
-) + ["pytest==7.0.1", "mock==5.0.1"]
+extras["test"] = ["pytest==7.0.1", "mock==5.0.1"]
+
+# pyTorch dependency groups.
+testing_group = set(extras.keys())
+extras["torch"] = ["torch==1.12.1"]
 
 setup(
     name='gymprecice',
@@ -53,10 +53,11 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     extras_require=extras,
-    tests_require=extras["testing"],
+    tests_require=extras["test"],
+    torch_require=extras["torch"],
+    vis_require=extras["vis"],
     install_requires=[
         "gymnasium>=0.26.0",
-        "torch==1.12.1",
         "pyprecice==2.4.0.0",
         "scipy>=1.7.3",
         "xmltodict>=0.13.0",
