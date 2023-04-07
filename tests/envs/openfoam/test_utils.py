@@ -1,6 +1,6 @@
 import pytest
-import requests
-from os import chdir, path, listdir 
+
+from os import chdir
 import numpy as np
 
 from gymprecice.utils.fileutils import open_file

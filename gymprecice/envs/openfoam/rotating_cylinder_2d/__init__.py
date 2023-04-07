@@ -8,4 +8,4 @@ with open(path.join(__path__[0], 'gymprecice-config.json')) as config_file:
 environment_config = json.loads(content)
 environment_config['environment']['src'] = __path__[0]
 
-make_result_dir(environment_config)
+#make_result_dir(environment_config)

@@ -33,7 +33,7 @@ class Adapter(gym.Env):
             self._precice_cfg = options['precice']['precice_config_file_name']
             self._solver_list = options['solvers']['name']
             self._reset_script = options['solvers']['reset_script']
-            self._prerun_script = options['solvers']['prerun_script']
+            self._prerun_script = options['solvers'].get('prerun_script', self._reset_script)
             self._run_script = options['solvers']['run_script']
             self._actuator_list = options['actuators']['name']
         except Exception as e:
@@ -98,23 +98,16 @@ class Adapter(gym.Env):
         p_process = self._launch_subprocess('run_solvers')
         assert p_process is not None, 'Error: slover launch failed!'
         self._solver = p_process
-        self._check_subprocess(self._solver)
+        self._check_subprocess_exists(self._solver)
 
         # initiate precice interface and read single mesh data
         self._init_precice()
-        if self._interface.is_action_required(action_write_initial_data()):
-            self._interface.mark_action_fulfilled(action_write_initial_data())
-
-        self._interface.initialize_data()  # if initialize="True" --> push solver one time-window forward
-
-        self._t = self._dt
-        self._is_data_initialized = True
 
         self._is_reset = True
         obs = self._get_observation()
         print(f'End: reset: {self._env_dir}')
-        info = {}
-        return obs, info  # info is an empty dictionary
+
+        return obs, {}
 
     def step(self, action):
         print(f'step: {self._env_dir}')
@@ -122,9 +115,11 @@ class Adapter(gym.Env):
             raise Exception("Call reset before interacting with the environment.")
 
         write_data = self._get_action(action, self._write_var_list)
-        self._advance(write_data)  # run to complete the next time-window
+        self._advance(write_data)  # (3) complete the previous time-window and take the next time step 
+        
         obs = self._get_observation()
-        reward = self._get_reward()
+        reward = self._get_reward() 
+        
         done = not self._interface.is_coupling_ongoing()
 
         # delete precice object upon done (a workaround to get precice reset)
@@ -132,7 +127,7 @@ class Adapter(gym.Env):
             self._interface.finalize()
             del self._interface
             print("preCICE finalized and its object deleted ...\n")
-            # we need to check here that solver run is finalized
+            # we need to check here that solver subprocess is finalized
             self._solver = self._finalize_subprocess(self._solver)
             # reset pointers
             self._interface = None
@@ -141,8 +136,8 @@ class Adapter(gym.Env):
 
         terminated = done
         truncated = False
-        info = {}
-        return obs, reward, terminated, truncated, info
+        
+        return obs, reward, terminated, truncated, {}
 
     def close(self):
         self._finalize()
@@ -172,8 +167,9 @@ class Adapter(gym.Env):
         self._vertex_ids[mesh_name] = vertex_ids
         self._vertex_coords[mesh_name] = self._vertex_coords_np
 
-        # establish connection with the solver
-        self._dt = self._interface.initialize()
+        self._dt = self._interface.initialize()  # (1) establish connection with the solver
+
+        self._t = self._dt
 
         self._read_ids = {}
         self._write_ids = {}
@@ -183,28 +179,36 @@ class Adapter(gym.Env):
             self._read_ids[read_var] = self._interface.get_data_id(read_var, self._mesh_id[mesh_name])
         for write_var in self._write_var_list:
             self._write_ids[write_var] = self._interface.get_data_id(write_var, self._mesh_id[mesh_name])
+        
+        if self._interface.is_action_required(action_write_initial_data()):
+            self._interface.mark_action_fulfilled(action_write_initial_data())
+
+        self._interface.initialize_data()  # (2) start the first time-window by taking a non-controlled time-step forward
 
     def _advance(self, write_data):
         self._write(write_data)
 
+        
         if self._interface.is_action_required(action_write_iteration_checkpoint()):
             while True:
                 self._interface.mark_action_fulfilled(action_write_iteration_checkpoint())
-                self._interface.advance(self._dt)
+                self._dt = self._interface.advance(self._dt)
                 self._interface.mark_action_fulfilled(action_read_iteration_checkpoint())
 
                 if (self._interface.is_time_window_complete()):
                     break
         else:
-            self._interface.advance(self._dt)
+            self._dt = self._interface.advance(self._dt)
 
         # increase the time before reading the probes/forces for internal consistency checks
         if self._interface.is_time_window_complete():
             self._time_window += 1
-        self._t += self._dt
+        
+        if self._interface.is_coupling_ongoing():
+            self._t += self._dt
 
         # dummy advance to finalize time-window and coupling status
-        if np.isclose(self._t, self._episode_end_time):
+        if np.isclose(self._t, self._episode_end_time) and self._interface.is_coupling_ongoing():
             if self._interface.is_action_required(action_write_iteration_checkpoint()):
                 while True:
                     self._interface.mark_action_fulfilled(action_write_iteration_checkpoint())
@@ -215,7 +219,7 @@ class Adapter(gym.Env):
                         break
             else:
                 self._interface.advance(self._dt)
-
+            
     def _write(self, write_data):
         for write_var in self._write_var_list:
             if write_var in self._vector_variables:
@@ -259,15 +263,10 @@ class Adapter(gym.Env):
                 subproc.append(subprocess.Popen([f"./{self._run_script}"], shell=True, env=subproc_env, cwd=f"{self._env_dir}/{solver}"))
             return subproc
 
-    def _check_subprocess(self, subproc_list):
+    def _check_subprocess_exists(self, subproc_list):
         for subproc, solver in zip(subproc_list, self._solver_list):
-            # check if the spawning process is successful
+            # check if the spawning process exists
             if not psutil.pid_exists(subproc.pid):
-                raise Exception(f'Error: subprocess failed to be launched - f"{self._env_dir}/{solver}" -> {subproc.args[0]}')
-
-            # finalize the subprocess if it is terminated (normally/abnormally)
-            if psutil.Process(subproc.pid).status() == psutil.STATUS_ZOMBIE:
-                print(psutil.Process(subproc.pid), psutil.Process(subproc.pid).status())
                 raise Exception(f'Error: subprocess failed to be launched - f"{self._env_dir}/{solver}" -> {subproc.args[0]}')
 
     def _finalize_subprocess(self, subproc_list):
@@ -290,11 +289,11 @@ class Adapter(gym.Env):
         self._close_files()
         if self._interface is not None:
             try:
-                self.dummy_episode()
+                self._dummy_episode()
             except Exception as e:
                 raise Exception(f"Unsuccessful termination attempt - {e}")
 
-    def dummy_episode(self):
+    def _dummy_episode(self):
         # advance with actions equal to zero till the coupling finish and finalize
         dummy_action = 0.0 * self.action_space.sample()
         done = False

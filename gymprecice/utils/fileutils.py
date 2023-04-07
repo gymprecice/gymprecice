@@ -7,15 +7,23 @@ from os.path import join
 
 from gymprecice.utils.constants import SLEEP_TIME, MAX_ACCESS_WAIT_TIME
 
-def _replace_keyword(file_name, find_keyword, keyword_value, keyword_end=""):
+def _replace_line(file_name, keyword, keyword_value="",
+                     assignment_symbol="=",
+                     end_line_symbol="",
+                     set_counter_postfix=False):
+    
     replacement_cnt = 0
     fin = fileinput.input(file_name, inplace=True)
+    new_line = ""
     for line in fin:
         replaced = False
-        if find_keyword in line and not replaced:
-            new = f'{line.partition(find_keyword)[0]} {find_keyword}={keyword_value}-{replacement_cnt}{keyword_end}'
-            new = new + "\n" if not new.endswith("\n") else new
-            line = new
+        if keyword in line and not replaced:
+            if set_counter_postfix:
+                new_line  = f'{line.partition(keyword)[0]}{keyword}{assignment_symbol}{keyword_value}-{replacement_cnt}{end_line_symbol}'
+            else:
+                new_line  = f'{line.partition(keyword)[0]}{keyword}{assignment_symbol}{keyword_value}{end_line_symbol}'
+            new_line  = new_line  + "\n" if not new_line .endswith("\n") else new_line 
+            line = new_line 
             replaced = True
             replacement_cnt += 1
         sys.stdout.write(line)
@@ -89,6 +97,8 @@ def make_result_dir(options):
 
     keyword = "exchange-directory"
     keyword_value = f'\"{run_dir}/precice-{keyword}'
-    _replace_keyword(precice_config_file_name, keyword, keyword_value, keyword_end="\"/>")
+    _replace_line(precice_config_file_name, keyword,
+                  keyword_value, end_line_symbol="\" />", set_counter_postfix=True
+    )
 
 

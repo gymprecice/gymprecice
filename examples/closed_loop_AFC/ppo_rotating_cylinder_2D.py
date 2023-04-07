@@ -3,6 +3,7 @@ import gymnasium as gym
 from gymprecice.utils.constants import EPSILON, LOG_EPSILON
 from gymprecice.envs.openfoam.rotating_cylinder_2d.environment import RotatingCylinder2DEnv
 from gymprecice.envs.openfoam.rotating_cylinder_2d import environment_config
+from gymprecice.utils.fileutils import make_result_dir
 from gymprecice.utils.multienvutils import worker_with_lock
 from gymnasium.vector.async_vector_env import AsyncVectorEnv
 
@@ -230,8 +231,10 @@ def parse_args():
 
 
 if __name__ == '__main__':
+    make_result_dir(environment_config)
+
     args = parse_args()
-    
+
     # weigh and biases
     wandb_recorder = None
     if args.track:
@@ -269,6 +272,7 @@ if __name__ == '__main__':
     env_fns = []
     for idx in range(args.num_envs):
         env_fns.append(make_env(options=environment_config, idx=idx, wrappers=[gym.wrappers.ClipAction]))
+    
     # env setup
     envs = AsyncVectorEnv(
         env_fns=env_fns,
