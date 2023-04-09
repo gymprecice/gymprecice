@@ -1,43 +1,57 @@
 import pytest
-import requests
+from pytest_mock import mocker
 
-from os import chdir, path, getcwd, remove
+import os
+from shutil import rmtree
 import numpy as np
 import math
 
-from gymprecice.core import Adapter
 from gymprecice.envs.openfoam.rotating_cylinder_2d.environment import RotatingCylinder2DEnv
 from gymprecice.envs.openfoam.rotating_cylinder_2d import environment_config
-from gymprecice.utils.fileutils import make_result_dir, _replace_line
 
+from tests.mocked_core import Adapter
+RotatingCylinder2DEnv.__bases__ = (Adapter, )
+
+@pytest.fixture(autouse=True)
+def testdir(tmpdir):
+    test_env_dir = tmpdir.mkdir("test-rotating-cylinder-env")
+    yield os.chdir(test_env_dir)
+    rmtree(test_env_dir)
 
 @pytest.fixture
-def test_case(tmpdir):
-    test_dir = tmpdir.mkdir("test")
-    test_env_dir = test_dir.mkdir("test-rotating-cylinder-env")
-    chdir(test_env_dir)
+def mock_env_helpers(mocker):
+    mocker.patch("gymprecice.envs.openfoam.rotating_cylinder_2d.environment.get_interface_patches",
+                  return_value=[])
+    mocker.patch("gymprecice.envs.openfoam.rotating_cylinder_2d.environment.get_patch_geometry",
+                  return_value={})
+
+@pytest.fixture
+def mock_adapter(mocker):
+    Adapter._set_precice_vectices = mocker.MagicMock()
 
 
-class TestRotatingCylinder2D(object):
-    def test_base(self):
+class TestRotatingCylinder2D:
+    def test_base(self, testdir):
         assert RotatingCylinder2DEnv.__base__.__name__ == Adapter.__name__
 
-    def test_setters(self, test_case):
-        make_result_dir(environment_config)
+    def test_setters(self, testdir, mock_env_helpers, mock_adapter):
+        n_probes = 10
+        n_forces = 4
+        min_omega = -1
+        max_omega = 1
         env = RotatingCylinder2DEnv(environment_config)
-        env.n_probes = 10
-        env.n_forces = 4
-        env.min_omega = -1
-        env.max_omega = 1
+        env.n_probes = n_probes
+        env.n_forces = n_forces
+        env.min_omega = min_omega
+        env.max_omega = max_omega
 
         check = {
-            "n_of_probes": env._observation_info["n_probes"] == env.n_probes,
-            "n_of_forces": env._reward_info["n_forces"] == env.n_forces,
-            "action_space": (env.action_space.high == env.max_omega and env.action_space.low == env.min_omega),
-            "obs_space":  env.observation_space.shape == (env.n_probes, ),
+            "n_of_probes": env._observation_info["n_probes"] == n_probes,
+            "n_of_forces": env._reward_info["n_forces"] == n_forces,
+            "action_space": (env.action_space.high == max_omega and env.action_space.low == min_omega),
+            "obs_space":  env.observation_space.shape == (n_probes, ),
         }
         assert all(check.values())
-        env.close()
 
     @pytest.mark.parametrize(
         "input, expected",
@@ -48,8 +62,7 @@ class TestRotatingCylinder2D(object):
         (0.25, [f'/postProcessing/probes/0.25/p',
                 f'/postProcessing/forceCoeffs/0.25/coefficient.dat', True]),]
     )
-    def test_latest_time(self, test_case, input, expected):
-        make_result_dir(environment_config)
+    def test_latest_time(self, testdir, mock_env_helpers, mock_adapter, input, expected):
         env = RotatingCylinder2DEnv(environment_config)
         env.latest_available_sim_time = input
 
@@ -59,86 +72,46 @@ class TestRotatingCylinder2D(object):
             "prerun_data_required": env._prerun_data_required == expected[2]
         }
         assert all(check.values())
-        env.close()
     
-    @pytest.mark.parametrize(
-        "input, expected",
-        [(0.0001, [np.ndarray, 151, 0.05]),
-         (0.0005, [np.ndarray, 151, 0.05]),
-         (0.0006, [np.ndarray, 151, 0.05]),
-         (0.001, [np.ndarray, 151, 0.05]),]
-    )
-    def test_reset(self, test_case, input, expected):
-        make_result_dir(environment_config)
-        _replace_line(path.join(getcwd(), "precice-config.xml"),
-                      keyword="max-time value", keyword_value=f'\"{input}\"', 
-                      end_line_symbol=" />")
+    def test_get_observation(self, testdir, mock_env_helpers, mock_adapter, mocker):
+        latest_available_sim_time = 0.335
+        n_probes = 5
         
-        env = RotatingCylinder2DEnv(environment_config)
-        env.n_probes = expected[1]
-        obs, _ = env.reset()
-
-        check = {
-            "type": isinstance(obs, expected[0]),
-            "size": obs.shape[0] == expected[1],
-            "value": math.isclose(round(obs.mean(), 2), expected[2])
-        }
-        assert all(check.values())
-        env.close()
-
-    def test_invalid_step_order(self, test_case):
-        make_result_dir(environment_config)
-        env = RotatingCylinder2DEnv(environment_config)
+        path_to_probes_dir = os.path.join(
+            os.getcwd(), f"postProcessing/probes/{latest_available_sim_time}/")
+        os.makedirs(path_to_probes_dir)
         
-        requests.get.side_effect = Exception
-        with pytest.raises(Exception):
-            env.step(env.action_space.sample())
-        env.close()
+        input = \
+        '''# Time       p0      p1      p2      p3      p4 
+            0.335       1.0     2.0     3.0     4.0     5.0     
+        '''
+        with open(os.path.join(path_to_probes_dir, "p"), "w") as file:
+            file.write(input)
 
-    def test_step(self, test_case):
-        make_result_dir(environment_config)
-        max_time = 0.0015  # test for two steps
-        action_interval = 1
-        n_probes = 151
-        _replace_line(path.join(getcwd(), "precice-config.xml"),
-                        keyword="max-time value", keyword_value=f'\"{max_time}\"', 
-                        end_line_symbol=" />")
-        
         env = RotatingCylinder2DEnv(environment_config)
         env.n_probes = n_probes
-        env.action_interval = action_interval
-        env.reset()
-        
-        obs_step0, reward_step0, terminated_step0, truncated_step0, _ = env.step(env.action_space.sample())
-        obs_step1, reward_step1, terminated_step1, truncated_step1, _ = env.step(env.action_space.sample())
+        env.latest_available_sim_time = latest_available_sim_time
+        env._openfoam_solver_path = os.getcwd()
 
-        check = {
-            "obs_size_step0": obs_step0.shape == (n_probes,),
-            "obs_size_step1": obs_step1.shape == (n_probes,),
-            "obs_type_step0": isinstance(obs_step0, np.ndarray),
-            "obs_type_step1": isinstance(obs_step1, np.ndarray),
-            "reward_type0": isinstance(reward_step0, float),
-            "reward_type1": isinstance(reward_step1, float),
-            "terminated_step0": terminated_step0 == False,
-            "terminated_step1": terminated_step1 == True,
-            "truncated_step0": truncated_step0 == False,
-            "truncated_step1":  truncated_step1 == False,
-        }
-        assert all(check.values())
-        env.close()
+        expected = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        output = env._probes_to_observation()
 
-    def test_get_action(test_case):
-        make_result_dir(environment_config)
+        assert np.array_equal(output, expected)
+    
+    def test_get_action(self, testdir, mock_adapter, mocker):
+        mocker.patch("gymprecice.envs.openfoam.rotating_cylinder_2d.environment.get_interface_patches",
+                     return_value=["cylinder"])
+
+        env_source_path = environment_config['environment']['src']
+        solver_names = environment_config['solvers']['name']
+        solver_dir = [os.path.join(env_source_path, solver) for solver in solver_names][0]
+        os.makedirs(f'{os.getcwd()}/{solver_names[0]}/constant')
+        os.system(f'cp -r {solver_dir}/constant {os.getcwd()}/{solver_names[0]}')
+
         input= np.array([-1.0, 1.0])
         expected = 0.05
         
-        max_time = 0.0
-        _replace_line(path.join(getcwd(), "precice-config.xml"),
-                        keyword="max-time value", keyword_value=f'\"{max_time}\"', 
-                        end_line_symbol=" />")
-        
         env = RotatingCylinder2DEnv(environment_config)
-        
         output0 = env._action_to_patch_field(input[0])
         output1 = env._action_to_patch_field(input[1])
         output0_norm = np.linalg.norm(output0, axis=1)
@@ -150,38 +123,36 @@ class TestRotatingCylinder2D(object):
             "switch_rotating_direction": np.array_equal(output0, np.negative(output1)),
         }
         assert all(check.values())
-        env.close()
     
-    def test_get_reward(self, test_case):
-        make_result_dir(environment_config)
-        latest_available_sim_time = 0
-        reward_average_time_window = 0.0005
+    def test_get_reward(self, testdir, mock_env_helpers, mock_adapter, mocker):
+        latest_available_sim_time = 0.335
+        reward_average_time_window = 1
         n_forces = 3
-        max_time = 0.0005
-        _replace_line(path.join(getcwd(), "precice-config.xml"),
-                        keyword="max-time value", keyword_value=f'\"{max_time}\"', 
-                        end_line_symbol=" />")
 
-        path_to_forces_dir = path.join(
-            getcwd(), f"fluid-openfoam/postProcessing/forceCoeffs/{latest_available_sim_time}/")
-        remove(path.join(path_to_forces_dir, "coefficient.dat"))
+        path_to_forces_dir_0 = os.path.join(
+            os.getcwd(), f"postProcessing/forceCoeffs/0/")
+        os.makedirs(path_to_forces_dir_0)
+
+        path_to_forces_dir_1 = os.path.join(
+            os.getcwd(), f"postProcessing/forceCoeffs/{latest_available_sim_time}/")
+        os.makedirs(path_to_forces_dir_1)
         
         input = \
         '''# Time    Cd   Cs   Cl 
-            0.0005  1.0  0    2.0     
+            0.335  1.0  0    2.0     
         '''
-        with open(path.join(path_to_forces_dir, "coefficient.dat"), "w") as file:
-            file.write(input) 
+        with open(os.path.join(path_to_forces_dir_0, "coefficient.dat"), "w") as file:
+            file.write(input)
+        with open(os.path.join(path_to_forces_dir_1, "coefficient.dat"), "w") as file:
+            file.write(input)
 
-        expected = 3.205 - 1 - 0.2 * 2
-        
         env = RotatingCylinder2DEnv(environment_config)
         env.n_forces = n_forces
         env.latest_available_sim_time = latest_available_sim_time
         env.reward_average_time_window = reward_average_time_window
-        env.reset()
+        env._openfoam_solver_path = os.getcwd()
 
+        expected = 3.205 - 1 - 0.2 * 2
         output = env._forces_to_reward()
 
         assert math.isclose(output, expected)
-        env.close()

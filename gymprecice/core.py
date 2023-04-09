@@ -38,47 +38,36 @@ class Adapter(gym.Env):
             self._actuator_list = options['actuators']['name']
         except Exception as e:
             raise Exception(f'Error: Adapter options are not well defined, {e}')
-
-        try:
-            self._idx = idx
-            self._env_dir = f'env_{self._idx}'
-            self._env_path = os.path.join(os.getcwd(), self._env_dir)
-            make_env_dir(self._env_dir, self._solver_list)
-        except Exception as e:
-            raise Exception(f'Error: Adapter cannot create folders: {e}')
-
-        scalar_variables, vector_variables, mesh_list, controller = get_mesh_data(self._precice_cfg)
-
-        for mesh_name in mesh_list:
-            if 'controller' in mesh_name.lower():
-                controller['mesh_name'] = mesh_name
-                break
-        self._controller = controller
-        self._controller_mesh = self._controller['mesh_name']
-
-        # scaler and vector variables should be used to define the size of action space
-        self._scalar_variables = scalar_variables
-        self._vector_variables = vector_variables
-        # preCICE exchange mesh vertices are not defined yet
+        
+        self._idx = idx
+        self._env_dir = f'env_{self._idx}'
+        self._env_path = os.path.join(os.getcwd(), self._env_dir)
+        self._controller = None
+        self._controller_mesh = None
+        self._scalar_variables = None
+        self._vector_variables = None
         self._precice_mesh_defined = False
         self._mesh_id = None
         self._vertex_ids = None
         self._read_ids = None
         self._write_ids = None
         self._vertex_coords = None
-        self._read_var_list = self._controller[self._controller_mesh]['read']
-        self._write_var_list = self._controller[self._controller_mesh]['write']
-
-        # coupling attributes:
-        self._episode_end_time = get_episode_end_time(self._precice_cfg)
+        self._read_var_list = None
+        self._write_var_list = None
         self._dt = None  # solver time-step size (dictated by preCICE)
         self._interface = None  # preCICE interface
         self._time_window = None
         self._t = None  # episode time
-
         self._solver = None  # mesh-based numerical solver
         self._is_reset = False
         self._first_reset = True
+
+        self._set_mesh_data()
+        self._episode_end_time = get_episode_end_time(self._precice_cfg)
+        try:
+            make_env_dir(self._env_dir, self._solver_list)
+        except Exception as e:
+            raise Exception(f'Error: Adapter cannot create folders: {e}')
 
     # gym methods:
     def reset(self, seed=None, options={}):
@@ -142,8 +131,25 @@ class Adapter(gym.Env):
     def close(self):
         self._finalize()
 
+    def _set_mesh_data(self):
+        scalar_variables, vector_variables, mesh_list, controller = get_mesh_data(self._precice_cfg)
+
+        for mesh_name in mesh_list:
+            if 'controller' in mesh_name.lower():
+                controller['mesh_name'] = mesh_name
+                break
+        self._controller = controller
+        self._controller_mesh = self._controller['mesh_name']
+
+        # TODO: scaler and vector variables should be used to define the size of action space
+        self._scalar_variables = scalar_variables
+        self._vector_variables = vector_variables
+        self._read_var_list = self._controller[self._controller_mesh]['read']
+        self._write_var_list = self._controller[self._controller_mesh]['write']
+
     def _set_precice_vectices(self, actuator_coords):
         # define the set of vertices to exchange data through precice
+        assert actuator_coords, "Error: actuator coords is empty!"
         self._vertex_coords_np = np.array([item for sublist in actuator_coords for item in sublist])
         self._precice_mesh_defined = True
 

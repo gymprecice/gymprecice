@@ -3,7 +3,7 @@ import gymnasium as gym
 from gymprecice.utils.constants import EPSILON, LOG_EPSILON
 from gymprecice.envs.openfoam.jet_cylinder_2d.environment import JetCylinder2DEnv
 from gymprecice.envs.openfoam.jet_cylinder_2d import environment_config
-from gymprecice.utils.fileutils import make_result_dir
+
 from gymprecice.utils.multienvutils import worker_with_lock
 from gymnasium.vector.async_vector_env import AsyncVectorEnv
 
@@ -229,8 +229,6 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    make_result_dir(environment_config)
-    
     args = parse_args()
     
     # weigh and biases

@@ -32,15 +32,15 @@ with open("README.md") as fh:
 extras = {}
 
 # Visualisation dependency groups.
-testing_group = set(extras.keys())
+vis_group = set(extras.keys())
 extras["vis"] = ["wandb>=0.13.6"]
 
 # Testing dependency groups.
-testing_group = set(extras.keys())
-extras["test"] = ["pytest==7.0.1", "mock==5.0.1"]
+test_group = set(extras.keys())
+extras["test"] = ["pytest-mock==3.10.0"]
 
 # pyTorch dependency groups.
-testing_group = set(extras.keys())
+torch_group = set(extras.keys())
 extras["torch"] = ["torch==1.12.1"]
 
 setup(
@@ -70,5 +70,6 @@ setup(
         ]
     },
     url="https://github.com/gymprecice/gymprecice/",
+    test_suite='tests',
     zip_safe=False,
 )
