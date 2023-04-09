@@ -9,7 +9,7 @@ import math
 from gymprecice.envs.openfoam.jet_cylinder_2d.environment import JetCylinder2DEnv
 from gymprecice.envs.openfoam.jet_cylinder_2d import environment_config
 
-from tests.mocked_core import Adapter
+from tests.envs.mocked_core import Adapter
 JetCylinder2DEnv.__bases__ = (Adapter, )
 
 @pytest.fixture(autouse=True)
