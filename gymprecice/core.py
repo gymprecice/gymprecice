@@ -1,10 +1,12 @@
 import gymnasium as gym
-import precice
+
 
 from abc import abstractmethod
+import math
 
-
+import precice
 from precice import action_write_initial_data, action_write_iteration_checkpoint, action_read_iteration_checkpoint
+
 import numpy as np
 
 import psutil
@@ -26,6 +28,7 @@ class Adapter(gym.Env):
     "_get_action", "_get_observation", "_get_reward", "_close_files".
     """
     metadata = {}
+   
 
     def __init__(self, options, idx) -> None:
         super().__init__()
@@ -61,6 +64,7 @@ class Adapter(gym.Env):
         self._solver = None  # mesh-based numerical solver
         self._is_reset = False
         self._first_reset = True
+        self._vertex_coords_np = None
 
         self._set_mesh_data()
         self._episode_end_time = get_episode_end_time(self._precice_cfg)
@@ -157,7 +161,7 @@ class Adapter(gym.Env):
     def _init_precice(self):
         assert self._interface is None, "Error: precice interface re-initialisation attempt!"
         self._interface = precice.Interface("Controller", self._precice_cfg, 0, 1)
-        assert self._precice_mesh_defined is True, "Error: call set_precice_mesh within problem env initialization"
+        #assert self._precice_mesh_defined is True, "Error: call set_precice_mesh within problem env initialization"
 
         self._time_window = 0
         self._mesh_id = {}
@@ -194,7 +198,6 @@ class Adapter(gym.Env):
     def _advance(self, write_data):
         self._write(write_data)
 
-        
         if self._interface.is_action_required(action_write_iteration_checkpoint()):
             while True:
                 self._interface.mark_action_fulfilled(action_write_iteration_checkpoint())
@@ -214,7 +217,7 @@ class Adapter(gym.Env):
             self._t += self._dt
 
         # dummy advance to finalize time-window and coupling status
-        if np.isclose(self._t, self._episode_end_time) and self._interface.is_coupling_ongoing():
+        if math.isclose(self._t, self._episode_end_time) and self._interface.is_coupling_ongoing():
             if self._interface.is_action_required(action_write_iteration_checkpoint()):
                 while True:
                     self._interface.mark_action_fulfilled(action_write_iteration_checkpoint())
@@ -310,7 +313,7 @@ class Adapter(gym.Env):
         self.__del__()
 
     @abstractmethod
-    def _get_action(self, action):
+    def _get_action(self, action, write_var_list):
         raise NotImplementedError
 
     @abstractmethod

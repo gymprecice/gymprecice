@@ -1,0 +1,129 @@
+import pytest
+from pytest_mock import mocker, class_mocker
+
+import os
+from shutil import rmtree
+import numpy as np
+
+import gymnasium as gym
+from tests import mocked_precice
+
+@pytest.fixture(autouse=True)
+def testdir(tmpdir):
+    test_env_dir = tmpdir.mkdir("test-rotating-cylinder-env")
+    yield os.chdir(test_env_dir)
+    rmtree(test_env_dir)
+
+@pytest.fixture
+def patch_adapter_helpers(mocker):
+    mocker.patch("gymprecice.core.make_env_dir", return_value=None)
+    mocker.patch(
+        "gymprecice.core.get_mesh_data",
+        return_value=(
+        None, None, [], {"mesh_name": "dummy_mesh", "dummy_mesh":{'read':[], 'write':[]}}
+        )
+    )
+    mocker.patch("gymprecice.core.get_episode_end_time", return_value=2.0)
+
+@pytest.fixture
+def patch_subprocess(mocker):
+    mocker.patch("gymprecice.core.Adapter._launch_subprocess", return_value=[])
+    mocker.patch("gymprecice.core.Adapter._check_subprocess_exists", return_value=None)
+
+@pytest.fixture(scope="class")
+def mock_precice(class_mocker):
+    class_mocker.patch.dict('sys.modules', {'precice': mocked_precice})
+    from precice import Interface
+
+    Interface.initialize = class_mocker.MagicMock(return_value=float(1.0))
+    Interface.advance = class_mocker.MagicMock(return_value=float(1.0))
+    Interface.finalize = class_mocker.MagicMock()
+    Interface.get_dimensions = class_mocker.MagicMock()
+    Interface.get_mesh_id = class_mocker.MagicMock()
+    Interface.get_data_id = class_mocker.MagicMock()
+    Interface.initialize_data = class_mocker.MagicMock()
+    Interface.set_mesh_vertices = class_mocker.MagicMock()
+    Interface.is_action_required = class_mocker.MagicMock(return_value=False)
+    Interface.mark_action_fulfilled = class_mocker.MagicMock()
+    Interface.is_coupling_ongoing = class_mocker.MagicMock(return_value=True)
+    Interface.is_time_window_complete = class_mocker.MagicMock(return_value=True)
+    Interface.requires_initial_data = class_mocker.MagicMock(return_value=True)
+    Interface.requires_reading_checkpoint = class_mocker.MagicMock(return_value=False)
+    Interface.requires_writing_checkpoint = class_mocker.MagicMock(return_value=False)
+    Interface.read_block_vector_data = class_mocker.MagicMock(return_value=None)
+    Interface.read_vector_data = class_mocker.MagicMock(return_value=None)
+    Interface.read_block_scalar_data = class_mocker.MagicMock(return_value=None)
+    Interface.read_scalar_data = class_mocker.MagicMock(return_value=None)
+    Interface.write_block_vector_data = class_mocker.MagicMock(return_value=None)
+    Interface.write_vector_data = class_mocker.MagicMock(return_value=None)
+    Interface.write_block_scalar_data = class_mocker.MagicMock(return_value=None)
+    Interface.write_scalar_data = class_mocker.MagicMock(return_value=None)
+
+
+dummy_environment_config = {
+    "environment":
+    {
+        "name": "dummy"
+    },
+    "solvers":
+    {
+        "name": ["dummy"],
+        "reset_script": "dummy.sh",
+        "run_script": "dummy.sh"
+    },
+    "actuators":
+    {
+        "name": ["dummy"]
+    },
+    "precice":
+    {
+        "precice_config_file_name": "dummy.xml"
+    }
+}
+
+
+class TestAdapter:
+    def make_env(self):  # a wrapper to prevent 'real precice' from being added to 'sys.module' 
+        from gymprecice.core import Adapter
+        class DummyEnv(Adapter):
+            def __init__(self, options=dummy_environment_config, idx=0):
+                super().__init__(options, idx)
+                self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(151, 3), dtype=np.float32)
+                self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(1, ), dtype=np.float32)
+                self.dummy_obs = self.observation_space.sample()
+            def _get_action(self, *args):
+                pass
+            def _get_observation(self):
+                return self.dummy_obs
+            def _get_reward(self):
+                return 0.5
+            def __del__(self):
+                pass  
+        return DummyEnv()
+
+    def test_reset(self, testdir, patch_adapter_helpers, patch_subprocess, mock_precice):
+        env = self.make_env()
+        output, _ = env.reset()
+        assert np.array_equal(output, env.dummy_obs)
+    
+    def test_step(self, testdir, patch_adapter_helpers, patch_subprocess, mock_precice, class_mocker):
+        env = self.make_env()
+        env.reset()
+        # step0: not terminated
+        obs_step0, reward_step0, terminated_step0, truncated_step0, _ = env.step(0)
+        # step1: terminated
+        from precice import Interface
+        Interface.is_coupling_ongoing = class_mocker.MagicMock(return_value=False)
+        obs_step1, reward_step1, terminated_step1, truncated_step1, _ = env.step(0)
+
+        check = {
+            "obs_step0": np.array_equal(obs_step0, env.dummy_obs),
+            "obs_step1": np.array_equal(obs_step1, env.dummy_obs),
+            "reward_step0": reward_step0 == 0.5,
+            "reward_step1": reward_step1 == 0.5,
+            "terminated_step0": terminated_step0 == False,
+            "terminated_step1": terminated_step1 == True,
+            "truncated_step0": truncated_step0 == False,
+            "truncated_step1":  truncated_step1 == False,
+        }
+        assert all(check.values())

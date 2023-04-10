@@ -1,45 +1,72 @@
 import pytest
-from pytest_mock import mocker
+from pytest_mock import mocker, class_mocker
 
 import os
 from shutil import rmtree
 import numpy as np
 import math
 
-from gymprecice.envs.openfoam.jet_cylinder_2d.environment import JetCylinder2DEnv
-from gymprecice.envs.openfoam.jet_cylinder_2d import environment_config
+from tests.envs import mocked_core
+from tests import mocked_precice
 
-from tests.envs.mocked_core import Adapter
-JetCylinder2DEnv.__bases__ = (Adapter, )
-
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def testdir(tmpdir):
     test_env_dir = tmpdir.mkdir("test-jet-cylinder-env")
     yield os.chdir(test_env_dir)
     rmtree(test_env_dir)
 
+
 @pytest.fixture
-def mock_env_helpers(mocker):
+def patch_env_helpers(mocker):
     mocker.patch("gymprecice.envs.openfoam.jet_cylinder_2d.environment.get_interface_patches",
                   return_value=[])
     mocker.patch("gymprecice.envs.openfoam.jet_cylinder_2d.environment.get_patch_geometry",
                   return_value={})
 
-@pytest.fixture
-def mock_adapter(mocker):
-    Adapter._set_precice_vectices = mocker.MagicMock()
+@pytest.fixture(scope="class")
+def mock_adapter(class_mocker):
+    class_mocker.patch.dict('sys.modules', {'gymprecice.core': mocked_core})
+    from gymprecice.core import Adapter
+
+    Adapter.reset = class_mocker.MagicMock()
+    Adapter.step = class_mocker.MagicMock()
+    Adapter.close = class_mocker.MagicMock()
+    Adapter._set_precice_vectices = class_mocker.MagicMock()
+    Adapter._init_precice = class_mocker.MagicMock()
+    Adapter._advance = class_mocker.MagicMock()
+    Adapter._write = class_mocker.MagicMock()
+    Adapter._launch_subprocess = class_mocker.MagicMock()
+    Adapter._check_subprocess_exists = class_mocker.MagicMock()
+    Adapter._finalize_subprocess = class_mocker.MagicMock()
+    Adapter._dummy_episode = class_mocker.MagicMock()
+    Adapter._finalize = class_mocker.MagicMock()
+    Adapter._get_action = class_mocker.MagicMock()
+    Adapter._get_observation = class_mocker.MagicMock()
+    Adapter. _get_reward = class_mocker.MagicMock()
+
+@pytest.fixture(scope="class")
+def mock_precice(class_mocker):
+    class_mocker.patch.dict('sys.modules', {'precice': mocked_precice})
 
 
 class TestJetCylinder2D:
-    def test_base(self, testdir):
-        assert JetCylinder2DEnv.__base__.__name__ == Adapter.__name__
+    def make_env(self):   # a wrapper to prevent 'real precice' from being added to 'sys.module'
+        from gymprecice.envs.openfoam.jet_cylinder_2d.environment import JetCylinder2DEnv
+        from gymprecice.envs.openfoam.jet_cylinder_2d import environment_config
+        JetCylinder2DEnv.__bases__ = (mocked_core.Adapter, )
 
-    def test_setters(self, testdir, mock_env_helpers, mock_adapter):
+        return JetCylinder2DEnv(environment_config)
+    
+    def test_base(self, testdir, mock_precice):
+        from gymprecice.envs.openfoam.jet_cylinder_2d.environment import JetCylinder2DEnv
+        assert JetCylinder2DEnv.__base__.__name__ == mocked_core.Adapter.__name__
+
+    def test_setters(self, testdir, patch_env_helpers, mock_adapter):
         n_probes = 10
         n_forces = 4
         min_jet_rate = -1
         max_jet_rate = 1
-        env = JetCylinder2DEnv(environment_config)
+        env = self.make_env()
         env.n_probes =  n_probes
         env.n_forces = n_forces
         env.min_jet_rate = min_jet_rate
@@ -62,8 +89,8 @@ class TestJetCylinder2D:
         (0.25, [f'/postProcessing/probes/0.25/p',
                 f'/postProcessing/forceCoeffs/0.25/coefficient.dat', True]),]
     )
-    def test_latest_time(self, testdir, mock_env_helpers, mock_adapter, input, expected):
-        env = JetCylinder2DEnv(environment_config)
+    def test_latest_time(self, testdir, patch_env_helpers, mock_adapter, input, expected):
+        env = self.make_env()
         env.latest_available_sim_time = input
 
         check = {
@@ -73,7 +100,7 @@ class TestJetCylinder2D:
         }
         assert all(check.values())
     
-    def test_get_observation(self, testdir, mock_env_helpers, mock_adapter, mocker):
+    def test_get_observation(self, testdir, patch_env_helpers, mock_adapter):
         latest_available_sim_time = 0.335
         n_probes = 5
         
@@ -88,7 +115,7 @@ class TestJetCylinder2D:
         with open(os.path.join(path_to_probes_dir, "p"), "w") as file:
             file.write(input)
 
-        env = JetCylinder2DEnv(environment_config)
+        env = self.make_env()
         env.n_probes = n_probes
         env.latest_available_sim_time = latest_available_sim_time
         env._openfoam_solver_path = os.getcwd()
@@ -99,6 +126,7 @@ class TestJetCylinder2D:
         assert np.array_equal(output, expected)
     
     def test_get_action(self, testdir, mock_adapter, mocker):
+        from gymprecice.envs.openfoam.jet_cylinder_2d import environment_config
         mocker.patch("gymprecice.envs.openfoam.jet_cylinder_2d.environment.get_interface_patches",
                      return_value=["jet1", "jet2"])
 
@@ -110,13 +138,13 @@ class TestJetCylinder2D:
 
         input= np.array([-1.0, 1.0])
         
-        env = JetCylinder2DEnv(environment_config)        
+        env = self.make_env()        
         output0 = env._action_to_patch_field(input[0])
         output1 = env._action_to_patch_field(input[1])
 
         assert np.array_equal(output0, np.negative(output1))
     
-    def test_get_reward(self, testdir, mock_env_helpers, mock_adapter, mocker):
+    def test_get_reward(self, testdir, patch_env_helpers, mock_adapter):
         latest_available_sim_time = 0.335
         reward_average_time_window = 1
         n_forces = 3
@@ -138,7 +166,7 @@ class TestJetCylinder2D:
         with open(os.path.join(path_to_forces_dir_1, "coefficient.dat"), "w") as file:
             file.write(input)
 
-        env = JetCylinder2DEnv(environment_config)
+        env = self.make_env()
         env.n_forces = n_forces
         env.latest_available_sim_time = latest_available_sim_time
         env.reward_average_time_window = reward_average_time_window

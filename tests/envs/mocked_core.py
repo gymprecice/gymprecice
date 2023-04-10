@@ -3,9 +3,10 @@ from os import path, getcwd
 
 class Adapter(gym.Env):
     """
-    Mock class representing gymprecice adapter in all environment tests.
+    Mock class to represent gymprecice 'Adapter' in all environment tests.
     """
     metadata = {}
+    
     def __init__(self, options, *args) -> None:
         self._solver_list = options['solvers']['name']
         self._actuator_list = options['actuators']['name']
@@ -18,35 +19,32 @@ class Adapter(gym.Env):
     def reset(self, *args):
         raise NotImplementedError
 
-    def step(self, action):
+    def step(self, *args):
         raise NotImplementedError
 
     def close(self):
         raise NotImplementedError
 
-    def _set_precice_vectices(self, actuator_coords):
+    def _set_precice_vectices(self, *args):
        raise NotImplementedError
 
     def _init_precice(self):
         raise NotImplementedError
 
-    def _advance(self, write_data):
+    def _advance(self, *args):
         raise NotImplementedError
  
-    def _write(self, write_data):
+    def _write(self, *args):
        raise NotImplementedError
 
-    def _launch_subprocess(self, cmd):
+    def _launch_subprocess(self, *args):
         raise NotImplementedError
 
-    def _check_subprocess_exists(self, subproc_list):
+    def _check_subprocess_exists(self, *args):
        raise NotImplementedError
 
-    def _finalize_subprocess(self, subproc_list):
+    def _finalize_subprocess(self, *args):
         raise NotImplementedError
-
-    def __del__(self):
-        pass
 
     def _dummy_episode(self):
        raise NotImplementedError
@@ -54,7 +52,7 @@ class Adapter(gym.Env):
     def _finalize(self):
        raise NotImplementedError
 
-    def _get_action(self, action):
+    def _get_action(self, *args):
         raise NotImplementedError
 
     def _get_observation(self):
@@ -64,4 +62,7 @@ class Adapter(gym.Env):
         raise NotImplementedError
 
     def _close_files(self):
-        raise NotImplementedError
+        pass
+    
+    def __del__(self):
+        pass
