@@ -8,11 +8,13 @@ import numpy as np
 import gymnasium as gym
 from tests import mocked_precice
 
+
 @pytest.fixture(autouse=True)
 def testdir(tmpdir):
     test_env_dir = tmpdir.mkdir("test-rotating-cylinder-env")
     yield os.chdir(test_env_dir)
     rmtree(test_env_dir)
+
 
 @pytest.fixture
 def patch_adapter_helpers(mocker):
@@ -20,19 +22,24 @@ def patch_adapter_helpers(mocker):
     mocker.patch(
         "gymprecice.core.get_mesh_data",
         return_value=(
-        None, None, [], {"mesh_name": "dummy_mesh", "dummy_mesh":{'read':[], 'write':[]}}
-        )
+            None,
+            None,
+            [],
+            {"mesh_name": "dummy_mesh", "dummy_mesh": {"read": [], "write": []}},
+        ),
     )
     mocker.patch("gymprecice.core.get_episode_end_time", return_value=2.0)
+
 
 @pytest.fixture
 def patch_subprocess(mocker):
     mocker.patch("gymprecice.core.Adapter._launch_subprocess", return_value=[])
     mocker.patch("gymprecice.core.Adapter._check_subprocess_exists", return_value=None)
 
+
 @pytest.fixture(scope="class")
 def mock_precice(class_mocker):
-    class_mocker.patch.dict('sys.modules', {'precice': mocked_precice})
+    class_mocker.patch.dict("sys.modules", {"precice": mocked_precice})
     from precice import Interface
 
     Interface.initialize = class_mocker.MagicMock(return_value=float(1.0))
@@ -61,60 +68,76 @@ def mock_precice(class_mocker):
 
 
 dummy_environment_config = {
-    "environment":
-    {
-        "name": "dummy"
-    },
-    "solvers":
-    {
+    "environment": {"name": "dummy"},
+    "solvers": {
         "name": ["dummy"],
         "reset_script": "dummy.sh",
-        "run_script": "dummy.sh"
+        "run_script": "dummy.sh",
     },
-    "actuators":
-    {
-        "name": ["dummy"]
-    },
-    "precice":
-    {
-        "precice_config_file_name": "dummy.xml"
-    }
+    "actuators": {"name": ["dummy"]},
+    "precice": {"precice_config_file_name": "dummy.xml"},
 }
 
 
 class TestAdapter:
-    def make_env(self):  # a wrapper to prevent 'real precice' from being added to 'sys.module' 
+    def make_env(
+        self,
+    ):  # a wrapper to prevent 'real precice' from being added to 'sys.module'
         from gymprecice.core import Adapter
+
         class DummyEnv(Adapter):
             def __init__(self, options=dummy_environment_config, idx=0):
                 super().__init__(options, idx)
-                self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(151, 3), dtype=np.float32)
-                self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(1, ), dtype=np.float32)
+                self.observation_space = gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(151, 3), dtype=np.float32
+                )
+                self.action_space = gym.spaces.Box(
+                    low=-1.0, high=1.0, shape=(1,), dtype=np.float32
+                )
                 self.dummy_obs = self.observation_space.sample()
+
             def _get_action(self, *args):
                 pass
+
             def _get_observation(self):
                 return self.dummy_obs
+
             def _get_reward(self):
                 return 0.5
+
             def __del__(self):
-                pass  
+                pass
+
         return DummyEnv()
 
-    def test_reset(self, testdir, patch_adapter_helpers, patch_subprocess, mock_precice):
+    def test_reset(
+        self, testdir, patch_adapter_helpers, patch_subprocess, mock_precice
+    ):
         env = self.make_env()
         output, _ = env.reset()
         assert np.array_equal(output, env.dummy_obs)
-    
-    def test_step(self, testdir, patch_adapter_helpers, patch_subprocess, mock_precice, class_mocker):
+
+    def test_step(
+        self,
+        testdir,
+        patch_adapter_helpers,
+        patch_subprocess,
+        mock_precice,
+        class_mocker,
+    ):
         env = self.make_env()
         env.reset()
         # step0: not terminated
-        obs_step0, reward_step0, terminated_step0, truncated_step0, _ = env.step(env.action_space.sample())
+        obs_step0, reward_step0, terminated_step0, truncated_step0, _ = env.step(
+            env.action_space.sample()
+        )
         # step1: terminated
         from precice import Interface
+
         Interface.is_coupling_ongoing = class_mocker.MagicMock(return_value=False)
-        obs_step1, reward_step1, terminated_step1, truncated_step1, _ = env.step(env.action_space.sample())
+        obs_step1, reward_step1, terminated_step1, truncated_step1, _ = env.step(
+            env.action_space.sample()
+        )
 
         check = {
             "obs_step0": np.array_equal(obs_step0, env.dummy_obs),
@@ -124,6 +147,6 @@ class TestAdapter:
             "terminated_step0": terminated_step0 == False,
             "terminated_step1": terminated_step1 == True,
             "truncated_step0": truncated_step0 == False,
-            "truncated_step1":  truncated_step1 == False,
+            "truncated_step1": truncated_step1 == False,
         }
         assert all(check.values())

@@ -19,6 +19,7 @@ import time
 from typing import Optional
 import argparse
 from distutils.util import strtobool
+
 try:
     from collections.abc import Iterable
 except ImportError:
@@ -50,16 +51,18 @@ class Agent(nn.Module):
             nn.Tanh(),
             layer_init(nn.Linear(64, self.latent_dim)),
             nn.Tanh(),
-            layer_init(nn.Linear(self.latent_dim, 1), std=1.0)
+            layer_init(nn.Linear(self.latent_dim, 1), std=1.0),
         )
 
         self.actor = nn.Sequential(
             layer_init(nn.Linear(self.n_obs, 64)),
             nn.Tanh(),
             layer_init(nn.Linear(64, self.latent_dim)),
-            nn.Tanh()
+            nn.Tanh(),
         )
-        self.actor_mean = layer_init(nn.Linear(self.latent_dim, self.n_actions), std=0.1)
+        self.actor_mean = layer_init(
+            nn.Linear(self.latent_dim, self.n_actions), std=0.1
+        )
         self.std = nn.Parameter(torch.zeros(self.n_actions), requires_grad=True)
 
     def get_value(self, x):
@@ -81,10 +84,14 @@ class Agent(nn.Module):
 
         if action is None:
             squashed_sample = torch.tanh(sample)
-            action = squashed_sample * self.action_scale + self.action_bias  # we scale the sampled action
+            action = (
+                squashed_sample * self.action_scale + self.action_bias
+            )  # we scale the sampled action
 
         # TODO: this should be done only when action is not None
-        squashed_action = 2.0 * (action - self.action_min) / (self.action_max - self.action_min) - 1.0
+        squashed_action = (
+            2.0 * (action - self.action_min) / (self.action_max - self.action_min) - 1.0
+        )
         clip = 1.0 - EPSILON
         squashed_action = torch.clip(squashed_action, -clip, clip)
 
@@ -92,7 +99,11 @@ class Agent(nn.Module):
 
         log_prob = probs.log_prob(gaussian_action)
         # log_prob -= torch.log(self.action_scale * (1 - squashed_action.pow(2)) + EPSILON)
-        log_prob -= 2.0 * (math.log(2.0) - gaussian_action - torch.log(1.0 + torch.exp(-2.0 * gaussian_action)))
+        log_prob -= 2.0 * (
+            math.log(2.0)
+            - gaussian_action
+            - torch.log(1.0 + torch.exp(-2.0 * gaussian_action))
+        )
 
         entropy = probs.entropy().sum(1)
 
@@ -101,7 +112,7 @@ class Agent(nn.Module):
 
 
 class WandBRewardRecoder(gym.Wrapper):
-    """This wrapper will keep track of cumulative rewards and episode lengths """
+    """This wrapper will keep track of cumulative rewards and episode lengths"""
 
     def __init__(self, env: gym.Env, wandb_context=None):
         """This wrapper will keep track of cumulative rewards and episode lengths.
@@ -142,12 +153,14 @@ class WandBRewardRecoder(gym.Wrapper):
                         "episode": self.episode_count,
                     }
                     self.wandb_context.log(metrics_dict, commit=True)
-                print(f"DEBUG print, episode: {self.episode_count}, rewards : {episode_return / episode_length}")
+                print(
+                    f"DEBUG print, episode: {self.episode_count}, rewards : {episode_return / episode_length}"
+                )
 
                 self.episode_count += 1
                 self.episode_returns[i] = 0
                 self.episode_lengths[i] = 0
-        terminated = dones if self.num_envs > 1 else dones[0],
+        terminated = (dones if self.num_envs > 1 else dones[0],)
         truncated = False
         return (
             observations,
@@ -164,60 +177,158 @@ class WandBRewardRecoder(gym.Wrapper):
 def parse_args():
     # Training specific arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--seed", type=int, default=1,
-                        help="seed of the experiment")
-    parser.add_argument("--torch-deterministic", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-                        help="if toggled, `torch.backends.cudnn.deterministic=False`")
-    parser.add_argument("--cuda", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-                        help="if toggled, cuda will be enabled by default")
-    parser.add_argument("--dump-policy", type=bool, default=True,
-                        help="tif toggled, trained policy will be dumped each `dump_policy_freq`")
-    parser.add_argument("--dump-policy-freq", type=int, default=10,
-                        help="the freqency of saving policy on hard-drive")
-    parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-                        help="if toggled, this experiment will be tracked with Weights and Biases")
-    parser.add_argument("--wandb-project-name", type=str, default="RL_CFD",
-                        help="the wandb's project name")
-    parser.add_argument("--wandb-entity", type=str, default="cfddrl",
-                        help="the entity (team) of wandb's project")
+    parser.add_argument("--seed", type=int, default=1, help="seed of the experiment")
+    parser.add_argument(
+        "--torch-deterministic",
+        type=lambda x: bool(strtobool(x)),
+        default=True,
+        nargs="?",
+        const=True,
+        help="if toggled, `torch.backends.cudnn.deterministic=False`",
+    )
+    parser.add_argument(
+        "--cuda",
+        type=lambda x: bool(strtobool(x)),
+        default=True,
+        nargs="?",
+        const=True,
+        help="if toggled, cuda will be enabled by default",
+    )
+    parser.add_argument(
+        "--dump-policy",
+        type=bool,
+        default=True,
+        help="tif toggled, trained policy will be dumped each `dump_policy_freq`",
+    )
+    parser.add_argument(
+        "--dump-policy-freq",
+        type=int,
+        default=10,
+        help="the freqency of saving policy on hard-drive",
+    )
+    parser.add_argument(
+        "--track",
+        type=lambda x: bool(strtobool(x)),
+        default=True,
+        nargs="?",
+        const=True,
+        help="if toggled, this experiment will be tracked with Weights and Biases",
+    )
+    parser.add_argument(
+        "--wandb-project-name",
+        type=str,
+        default="RL_CFD",
+        help="the wandb's project name",
+    )
+    parser.add_argument(
+        "--wandb-entity",
+        type=str,
+        default="cfddrl",
+        help="the entity (team) of wandb's project",
+    )
 
     # Algorithm specific arguments
-    parser.add_argument("--env-id", type=str, default="",
-                        help="the id of the environment")
-    parser.add_argument("--total-timesteps", type=int, default=96000,
-                        help="total timesteps of the experiments")
-    parser.add_argument("--learning-rate", type=float, default=5e-4,
-                        help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=24,
-                        help="the number of parallel game environments")
-    parser.add_argument("--num-steps", type=int, default=80,
-                        help="the number of steps to run in each environment per policy rollout")
-    parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-                        help="Toggle learning rate annealing for policy and value networks")
-    parser.add_argument("--gae", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-                        help="Use GAE for advantage computation")
-    parser.add_argument("--gamma", type=float, default=0.99,
-                        help="the discount factor gamma")
-    parser.add_argument("--gae-lambda", type=float, default=0.95,
-                        help="the lambda for the general advantage estimation")
-    parser.add_argument("--num-minibatches", type=int, default=32,
-                        help="the number of mini-batches")
-    parser.add_argument("--update-epochs", type=int, default=10,
-                        help="the K epochs to update the policy")
-    parser.add_argument("--norm-adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-                        help="Toggles advantages normalization")
-    parser.add_argument("--clip-coef", type=float, default=0.2,
-                        help="the surrogate clipping coefficient")
-    parser.add_argument("--clip-vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-                        help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
-    parser.add_argument("--ent-coef", type=float, default=1e-2,
-                        help="coefficient of the entropy")
-    parser.add_argument("--vf-coef", type=float, default=0.5,
-                        help="coefficient of the value function")
-    parser.add_argument("--max-grad-norm", type=float, default=0.5,
-                        help="the maximum norm for the gradient clipping")
-    parser.add_argument("--target-kl", type=float, default=None,
-                        help="the target KL divergence threshold")
+    parser.add_argument(
+        "--env-id", type=str, default="", help="the id of the environment"
+    )
+    parser.add_argument(
+        "--total-timesteps",
+        type=int,
+        default=96000,
+        help="total timesteps of the experiments",
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=5e-4,
+        help="the learning rate of the optimizer",
+    )
+    parser.add_argument(
+        "--num-envs",
+        type=int,
+        default=24,
+        help="the number of parallel game environments",
+    )
+    parser.add_argument(
+        "--num-steps",
+        type=int,
+        default=80,
+        help="the number of steps to run in each environment per policy rollout",
+    )
+    parser.add_argument(
+        "--anneal-lr",
+        type=lambda x: bool(strtobool(x)),
+        default=True,
+        nargs="?",
+        const=True,
+        help="Toggle learning rate annealing for policy and value networks",
+    )
+    parser.add_argument(
+        "--gae",
+        type=lambda x: bool(strtobool(x)),
+        default=True,
+        nargs="?",
+        const=True,
+        help="Use GAE for advantage computation",
+    )
+    parser.add_argument(
+        "--gamma", type=float, default=0.99, help="the discount factor gamma"
+    )
+    parser.add_argument(
+        "--gae-lambda",
+        type=float,
+        default=0.95,
+        help="the lambda for the general advantage estimation",
+    )
+    parser.add_argument(
+        "--num-minibatches", type=int, default=32, help="the number of mini-batches"
+    )
+    parser.add_argument(
+        "--update-epochs",
+        type=int,
+        default=10,
+        help="the K epochs to update the policy",
+    )
+    parser.add_argument(
+        "--norm-adv",
+        type=lambda x: bool(strtobool(x)),
+        default=True,
+        nargs="?",
+        const=True,
+        help="Toggles advantages normalization",
+    )
+    parser.add_argument(
+        "--clip-coef",
+        type=float,
+        default=0.2,
+        help="the surrogate clipping coefficient",
+    )
+    parser.add_argument(
+        "--clip-vloss",
+        type=lambda x: bool(strtobool(x)),
+        default=True,
+        nargs="?",
+        const=True,
+        help="Toggles whether or not to use a clipped loss for the value function, as per the paper.",
+    )
+    parser.add_argument(
+        "--ent-coef", type=float, default=1e-2, help="coefficient of the entropy"
+    )
+    parser.add_argument(
+        "--vf-coef", type=float, default=0.5, help="coefficient of the value function"
+    )
+    parser.add_argument(
+        "--max-grad-norm",
+        type=float,
+        default=0.5,
+        help="the maximum norm for the gradient clipping",
+    )
+    parser.add_argument(
+        "--target-kl",
+        type=float,
+        default=None,
+        help="the target KL divergence threshold",
+    )
 
     args = parser.parse_args()
     args.batch_size = int(args.num_envs * args.num_steps)
@@ -228,14 +339,15 @@ def parse_args():
     return args
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_args()
-    
+
     # weigh and biases
     wandb_recorder = None
     if args.track:
         try:
             import wandb
+
             run_name = f'{environment_config["environment"].get("name", "training")}_{int(time.time())}'
             wandb_recorder = wandb.init(
                 project=args.wandb_project_name,
@@ -263,20 +375,24 @@ if __name__ == '__main__':
                 else:
                     raise NotImplementedError
             return env
+
         return _make_env
 
     env_fns = []
     for idx in range(args.num_envs):
-        env_fns.append(make_env(options=environment_config, idx=idx, wrappers=[gym.wrappers.ClipAction]))
+        env_fns.append(
+            make_env(
+                options=environment_config, idx=idx, wrappers=[gym.wrappers.ClipAction]
+            )
+        )
 
     # env setup
     envs = AsyncVectorEnv(
-        env_fns=env_fns,
-        context='fork',
-        shared_memory=False,
-        worker=worker_with_lock
+        env_fns=env_fns, context="fork", shared_memory=False, worker=worker_with_lock
     )
-    assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
+    assert isinstance(
+        envs.single_action_space, gym.spaces.Box
+    ), "only continuous action space is supported"
 
     envs = WandBRewardRecoder(envs, wandb_recorder)
 
@@ -291,9 +407,15 @@ if __name__ == '__main__':
     start_time = time.time()
 
     # ALGO Logic: Storage setup --> (timesteps, num_env, n_obs) if obs is 2d then the following will be 4 dimesional
-    obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
-    nxtobs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
-    actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space.shape).to(device)
+    obs = torch.zeros(
+        (args.num_steps, args.num_envs) + envs.single_observation_space.shape
+    ).to(device)
+    nxtobs = torch.zeros(
+        (args.num_steps, args.num_envs) + envs.single_observation_space.shape
+    ).to(device)
+    actions = torch.zeros(
+        (args.num_steps, args.num_envs) + envs.single_action_space.shape
+    ).to(device)
 
     logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
@@ -303,7 +425,7 @@ if __name__ == '__main__':
     next_obs = torch.Tensor(envs.reset()[0]).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
     for update in range(1, args.num_updates + 1):
-        print(f'updateing loop: update number {update}')
+        print(f"updateing loop: update number {update}")
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (update - 1.0) / args.num_updates
@@ -340,8 +462,15 @@ if __name__ == '__main__':
                     else:
                         nextnonterminal = 1.0 - dones[t + 1]
                         nextvalues = values[t + 1]
-                    delta = rewards[t] + args.gamma * nextvalues * nextnonterminal - values[t]
-                    advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
+                    delta = (
+                        rewards[t]
+                        + args.gamma * nextvalues * nextnonterminal
+                        - values[t]
+                    )
+                    advantages[t] = lastgaelam = (
+                        delta
+                        + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
+                    )
                 returns = advantages + values
             else:
                 returns = torch.zeros_like(rewards).to(device)
@@ -372,7 +501,9 @@ if __name__ == '__main__':
                 end = start + args.minibatch_size
                 mb_inds = b_inds[start:end]
 
-                _, _, newlogprob, entropy, newvalue = agent.get_action_and_value(b_obs[mb_inds], b_actions[mb_inds])
+                _, _, newlogprob, entropy, newvalue = agent.get_action_and_value(
+                    b_obs[mb_inds], b_actions[mb_inds]
+                )
 
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
@@ -381,15 +512,21 @@ if __name__ == '__main__':
                     # calculate approx_kl http://joschu.net/blog/kl-approx.html
                     old_approx_kl = (-logratio).mean()
                     approx_kl = ((ratio - 1) - logratio).mean()
-                    clipfracs += [((ratio - 1.0).abs() > args.clip_coef).float().mean().item()]
+                    clipfracs += [
+                        ((ratio - 1.0).abs() > args.clip_coef).float().mean().item()
+                    ]
 
                 mb_advantages = b_advantages[mb_inds]
                 if args.norm_adv:
-                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (
+                        mb_advantages.std() + 1e-8
+                    )
 
                 # Policy loss
                 pg_loss1 = -mb_advantages * ratio
-                pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - args.clip_coef, 1 + args.clip_coef)
+                pg_loss2 = -mb_advantages * torch.clamp(
+                    ratio, 1 - args.clip_coef, 1 + args.clip_coef
+                )
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
                 # Value loss
@@ -436,13 +573,13 @@ if __name__ == '__main__':
             "losses/clipfrac": np.mean(clipfracs),
             "losses/explained_variance": explained_var,
             "global_step": global_step,
-            "charts/SPS": int(global_step / (time.time() - start_time))
+            "charts/SPS": int(global_step / (time.time() - start_time)),
         }
 
         if wandb_recorder is not None:
             wandb_recorder.log(metrics_dict, commit=True)
 
         if args.dump_policy and update % args.dump_policy_freq == 0:
-            torch.save(agent.state_dict(), f'policy_{update}.pt')
+            torch.save(agent.state_dict(), f"policy_{update}.pt")
 
     envs.close()

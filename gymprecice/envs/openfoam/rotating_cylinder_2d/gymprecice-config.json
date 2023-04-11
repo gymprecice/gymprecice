@@ -1,24 +1,20 @@
- {
-    "environment":
-    {
+{
+    "environment": {
         "name": "rotating_cylinder_2d"
     },
-
-    "solvers":
-    {
-        "name": ["fluid-openfoam"],
+    "solvers": {
+        "name": [
+            "fluid-openfoam"
+        ],
         "reset_script": "clean.sh",
         "run_script": "run.sh"
     },
-
-    "actuators":
-    {
-        "name": ["cylinder"]
+    "actuators": {
+        "name": [
+            "cylinder"
+        ]
     },
-
-    "precice":
-    {
+    "precice": {
         "precice_config_file_name": "precice-config.xml"
     }
 }
-

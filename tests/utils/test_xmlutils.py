@@ -1,10 +1,9 @@
 import pytest
 import requests
 
-from gymprecice.utils.xmlutils import (get_episode_end_time, get_mesh_data)
+from gymprecice.utils.xmlutils import get_episode_end_time, get_mesh_data
 
-VALID_XML_CONTENT_0 = \
-'''<?xml version="1.0"?>
+VALID_XML_CONTENT_0 = """<?xml version="1.0"?>
 <precice-configuration>
     ...
     <solver-interface dimensions="2">
@@ -36,20 +35,19 @@ VALID_XML_CONTENT_0 = \
         </coupling-scheme:parallel-explicit>
             ...
     </solver-interface>
-</precice-configuration>'''
+</precice-configuration>"""
 
 EXPECTED_0 = {
-    "scaler_list": ['Pressure'],
-    "vector_list": ['Velocity'],
-    "mesh_lis": ['Fluid-Mesh', 'Controller-Mesh'],
+    "scaler_list": ["Pressure"],
+    "vector_list": ["Velocity"],
+    "mesh_lis": ["Fluid-Mesh", "Controller-Mesh"],
     "controller_dict": {
-        "Fluid-Mesh": {"read": ["Pressure"], "write": []}, 
-        "Controller-Mesh": {"read": [], "write": ["Velocity"]}
-    }
+        "Fluid-Mesh": {"read": ["Pressure"], "write": []},
+        "Controller-Mesh": {"read": [], "write": ["Velocity"]},
+    },
 }
 
-VALID_XML_CONTENT_1 = \
-'''<?xml version="1.0"?>
+VALID_XML_CONTENT_1 = """<?xml version="1.0"?>
 <precice-configuration>
     ...
     <solver-interface dimensions="2">
@@ -88,18 +86,19 @@ VALID_XML_CONTENT_1 = \
         </participant>
         ...
     </solver-interface>
-</precice-configuration>'''
+</precice-configuration>"""
 
 EXPECTED_1 = {
-    "scaler_list": ['Pressure', 'Displacement'],
-    "vector_list": ['Velocity', 'Force'],
-    "mesh_lis": ['Fluid-Mesh', 'Solid-Mesh', 'Controller-Mesh'],
+    "scaler_list": ["Pressure", "Displacement"],
+    "vector_list": ["Velocity", "Force"],
+    "mesh_lis": ["Fluid-Mesh", "Solid-Mesh", "Controller-Mesh"],
     "controller_dict": {
-        "Fluid-Mesh": {"read": ["Pressure"], "write": []}, 
+        "Fluid-Mesh": {"read": ["Pressure"], "write": []},
         "Solid-Mesh": {"read": ["Displacement"], "write": []},
-        "Controller-Mesh": {"read": [], "write": ["Velocity", "Force"]}
-    }
+        "Controller-Mesh": {"read": [], "write": ["Velocity", "Force"]},
+    },
 }
+
 
 def test_valid_get_episode_end_time(tmpdir):
     test_dir = tmpdir.mkdir("test")
@@ -107,6 +106,7 @@ def test_valid_get_episode_end_time(tmpdir):
     valid_input.write(VALID_XML_CONTENT_0)
     episode_end_time = get_episode_end_time(valid_input)
     assert episode_end_time == 2.335
+
 
 @pytest.mark.parametrize(
     "test_input, expected",
@@ -122,16 +122,16 @@ def test_valid_get_mesh_data(tmpdir, test_input, expected):
         "scaler_list": scaler_list,
         "vector_list": vector_list,
         "mesh_lis": mesh_list,
-        "controller_dict": controller_dict
+        "controller_dict": controller_dict,
     }
     assert output == expected
+
 
 def test_invalid_get_mesh_data(tmpdir):
     test_dir = tmpdir.mkdir("test")
     invalid_input = test_dir.join("precice-config.xml")
 
-    invalid_xml_content = \
-    '''<?xml version="1.0"?>
+    invalid_xml_content = """<?xml version="1.0"?>
     <precice-configuration>
         ...
         <solver-interface dimensions="2">
@@ -145,7 +145,7 @@ def test_invalid_get_mesh_data(tmpdir):
             </participant>
             ...
         </solver-interface>
-    </precice-configuration>'''
+    </precice-configuration>"""
     invalid_input.write(invalid_xml_content)
 
     requests.get.side_effect = AssertionError

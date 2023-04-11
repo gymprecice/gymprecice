@@ -17,68 +17,67 @@ class Interface:
         raise NotImplementedError
 
     def advance(self, *args):
-       raise NotImplementedError
+        raise NotImplementedError
 
     def finalize(self):
         raise NotImplementedError
 
     def get_dimensions(self):
         raise NotImplementedError
-    
+
     def get_mesh_id(self):
         raise NotImplementedError
-    
+
     def get_data_id(self, *args):
         raise NotImplementedError
-    
+
     def initialize_data(self, *args):
         raise NotImplementedError
-    
+
     def set_mesh_vertices(self, *args):
         raise NotImplementedError
 
     def is_action_required(self):
         raise NotImplementedError
-    
+
     def imark_action_fulfilled(self):
         raise NotImplementedError
-    
+
     def is_coupling_ongoing(self):
         raise NotImplementedError
 
     def is_time_window_complete(self):
-       raise NotImplementedError
+        raise NotImplementedError
 
     def requires_initial_data(self):
-       raise NotImplementedError
+        raise NotImplementedError
 
     def requires_reading_checkpoint(self):
-       raise NotImplementedError
+        raise NotImplementedError
 
     def requires_writing_checkpoint(self):
-       raise NotImplementedError
-    
-    def read_block_vector_data (self, *args):
         raise NotImplementedError
-    
-    def read_vector_data (self, *args):
+
+    def read_block_vector_data(self, *args):
         raise NotImplementedError
-    
-    def read_block_scalar_data (self, *args):
-       raise NotImplementedError
-    
-    def read_scalar_data (self, *args):
+
+    def read_vector_data(self, *args):
         raise NotImplementedError
-    
+
+    def read_block_scalar_data(self, *args):
+        raise NotImplementedError
+
+    def read_scalar_data(self, *args):
+        raise NotImplementedError
+
     def write_block_vector_data(self, *args):
         raise NotImplementedError
-    
+
     def write_vector_data(self, *args):
         raise NotImplementedError
-    
+
     def write_block_scalar_data(self, *args):
-       raise NotImplementedError
-    
+        raise NotImplementedError
+
     def write_scalar_data(self, *args):
-       raise NotImplementedError
-    
+        raise NotImplementedError

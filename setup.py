@@ -6,6 +6,7 @@ from setuptools import setup, find_packages
 
 # adapted from https://stackoverflow.com/a/9079062
 import sys
+
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     raise Exception("Error: gymprecice only supports Python 3.7 and higher.")
 
@@ -44,14 +45,14 @@ torch_group = set(extras.keys())
 extras["torch"] = ["torch==1.12.1"]
 
 setup(
-    name='gymprecice',
+    name="gymprecice",
     version=VERSION,
     license="MIT",
-    author='Mosayeb Shams (lead-developer), Ahmed. H. Elsheikh (co-developer and supervisor)',
-    author_email='m.shams@hw.ac.uk, a.elsheikh@hw.ac.uk',
-    description='Gym-preCICE is a preCICE adapter that provides a Gymnasium-like API to couple reinforcement learning and physics-based solvers for active control',
+    author="Mosayeb Shams (lead-developer), Ahmed. H. Elsheikh (co-developer and supervisor)",
+    author_email="m.shams@hw.ac.uk, a.elsheikh@hw.ac.uk",
+    description="Gym-preCICE is a preCICE adapter that provides a Gymnasium-like API to couple reinforcement learning and physics-based solvers for active control",
     long_description=long_description,
-    long_description_content_type='text/markdown',
+    long_description_content_type="text/markdown",
     extras_require=extras,
     tests_require=extras["test"],
     torch_require=extras["torch"],
@@ -70,6 +71,6 @@ setup(
         ]
     },
     url="https://github.com/gymprecice/gymprecice/",
-    test_suite='tests',
+    test_suite="tests",
     zip_safe=False,
 )
