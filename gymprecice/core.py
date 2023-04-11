@@ -1,21 +1,22 @@
 import gymnasium as gym
-
+import precice
+from precice import (action_write_initial_data,
+                     action_write_iteration_checkpoint,
+                     action_read_iteration_checkpoint)
 
 from abc import abstractmethod
 import math
-
-import precice
-from precice import action_write_initial_data, action_write_iteration_checkpoint, action_read_iteration_checkpoint
-
 import numpy as np
-
 import psutil
 import subprocess
-
 import os
+import logging
 
 from gymprecice.utils.xmlutils import get_mesh_data, get_episode_end_time
 from gymprecice.utils.fileutils import make_env_dir
+
+logger = logging.getLogger(__name__)
+logger.setLevel(level=logging.INFO)
 
 
 class Adapter(gym.Env):
@@ -39,8 +40,9 @@ class Adapter(gym.Env):
             self._prerun_script = options['solvers'].get('prerun_script', self._reset_script)
             self._run_script = options['solvers']['run_script']
             self._actuator_list = options['actuators']['name']
-        except Exception as e:
-            raise Exception(f'Error: Adapter options are not well defined, {e}')
+        except KeyError as err:
+            logger.error(f'Invalid key {err} in options')
+            raise err
         
         self._idx = idx
         self._env_dir = f'env_{self._idx}'
@@ -65,31 +67,34 @@ class Adapter(gym.Env):
         self._is_reset = False
         self._first_reset = True
         self._vertex_coords_np = None
+        self._steps_beyond_terminated = None
 
         self._set_mesh_data()
         self._episode_end_time = get_episode_end_time(self._precice_cfg)
         try:
             make_env_dir(self._env_dir, self._solver_list)
-        except Exception as e:
-            raise Exception(f'Error: Adapter cannot create folders: {e}')
-
+        except Exception as err:
+            logger.error(f"Can't create folders: {err}")
+            raise err
+        
     # gym methods:
     def reset(self, seed=None, options={}):
         super().reset(seed=seed)
-
+        logger.debug(f'Reset {self._env_dir} - start')
+        
         if self._first_reset is True:
             self._launch_subprocess('prerun_solvers')
             self._first_reset = False
 
-        print(f'reset: {self._env_dir}')
+        
         self._close_files()
         # reset mesh-based solver
         self._launch_subprocess('reset_solvers')
 
         # run mesh-based solver
-        assert self._solver is None, 'Error: solver_run pointer is not cleared!'
+        assert self._solver is None, 'solver_run pointer is not cleared!'
         p_process = self._launch_subprocess('run_solvers')
-        assert p_process is not None, 'Error: slover launch failed!'
+        assert p_process is not None, 'slover launch failed!'
         self._solver = p_process
         self._check_subprocess_exists(self._solver)
 
@@ -98,14 +103,14 @@ class Adapter(gym.Env):
 
         self._is_reset = True
         obs = self._get_observation()
-        print(f'End: reset: {self._env_dir}')
 
+        logger.debug(f'Reset {self._env_dir} - end')
         return obs, {}
 
     def step(self, action):
-        print(f'step: {self._env_dir}')
-        if not self._is_reset:
-            raise Exception("Call reset before interacting with the environment.")
+        logger.debug(f'Step {self._env_dir} - start')
+        assert self.action_space.contains(action), f"{action!r} ({type(action)}) invalid"
+        assert self._is_reset, "Call reset before using step method."
 
         write_data = self._get_action(action, self._write_var_list)
         self._advance(write_data)  # (3) complete the previous time-window and take the next time step 
@@ -113,24 +118,22 @@ class Adapter(gym.Env):
         obs = self._get_observation()
         reward = self._get_reward() 
         
-        done = not self._interface.is_coupling_ongoing()
+        terminated = not self._interface.is_coupling_ongoing()
 
-        # delete precice object upon done (a workaround to get precice reset)
-        if done:
+        # delete precice object upon termination (a workaround to get precice reset)
+        if terminated:
             self._interface.finalize()
             del self._interface
-            print("preCICE finalized and its object deleted ...\n")
+            logger.info("preCICE finalized and its object deleted ...\n")
             # we need to check here that solver subprocess is finalized
             self._solver = self._finalize_subprocess(self._solver)
             # reset pointers
             self._interface = None
             self._solver_full_reset = False
             self._is_reset = False
-
-        terminated = done
-        truncated = False
         
-        return obs, reward, terminated, truncated, {}
+        logger.debug(f'Step {self._env_dir} - end')
+        return obs, reward, terminated, False, {}
 
     def close(self):
         self._finalize()
@@ -145,7 +148,6 @@ class Adapter(gym.Env):
         self._controller = controller
         self._controller_mesh = self._controller['mesh_name']
 
-        # TODO: scaler and vector variables should be used to define the size of action space
         self._scalar_variables = scalar_variables
         self._vector_variables = vector_variables
         self._read_var_list = self._controller[self._controller_mesh]['read']
@@ -153,15 +155,14 @@ class Adapter(gym.Env):
 
     def _set_precice_vectices(self, actuator_coords):
         # define the set of vertices to exchange data through precice
-        assert actuator_coords, "Error: actuator coords is empty!"
+        assert actuator_coords, "actuator coords is empty!"
         self._vertex_coords_np = np.array([item for sublist in actuator_coords for item in sublist])
         self._precice_mesh_defined = True
 
     # preCICE related methods:
     def _init_precice(self):
-        assert self._interface is None, "Error: precice interface re-initialisation attempt!"
+        assert self._interface is None, "preCICE-interface re-initialisation attempt!"
         self._interface = precice.Interface("Controller", self._precice_cfg, 0, 1)
-        #assert self._precice_mesh_defined is True, "Error: call set_precice_mesh within problem env initialization"
 
         self._time_window = 0
         self._mesh_id = {}
@@ -242,28 +243,32 @@ class Adapter(gym.Env):
 
     def _launch_subprocess(self, cmd):
         assert cmd in ['reset_solvers', 'prerun_solvers', 'run_solvers'], \
-            "Error: invalid shell command - supported commands: 'reset_solvers', 'prerun_solvers', and 'run_solvers'"
+            "Invalid shell command - supported commands: 'reset_solvers', 'prerun_solvers', and 'run_solvers'"
         subproc_env = {key: variable for key, variable in os.environ.items() if "MPI" not in key}
         if cmd == 'reset_solvers':
             for solver in self._solver_list:
                 try:
                     completed_process = subprocess.run([f"./{self._reset_script}"], shell=True, env=subproc_env, cwd=f"{self._env_dir}/{solver}")
-                except Exception as e:
-                    raise Exception(f'failed to run {cmd} - {self._reset_script} from the folder f"{self._env_dir}/{solver}"')
+                except Exception as err:
+                    logger.error(f'Failed to run {cmd} - {self._reset_script} from the folder f"{self._env_dir}/{solver}"')
+                    raise err
 
             if completed_process.returncode != 0:
-                raise Exception(f"run is not successful - {completed_process}")
+                raise Exception(f"Subprocess was not successful - {completed_process}")
+           
             return None
 
         elif cmd == 'prerun_solvers':
             for solver in self._solver_list:
                 try:
                     completed_process = subprocess.run([f"./{self._prerun_script}"], shell=True, env=subproc_env, cwd=f"{self._env_dir}/{solver}")
-                except Exception as e:
-                    raise Exception(f'failed to run {cmd} - {self._prerun_script} from the folder f"{self._env_dir}/{solver}"')
+                except Exception as err:
+                    logger.error(f'Failed to run {cmd} - {self._prerun_script} from the folder f"{self._env_dir}/{solver}"')
+                    raise err
 
             if completed_process.returncode != 0:
-                raise Exception(f"run is not successful - {completed_process}")
+                raise Exception(f"Subprocess was not successful - {completed_process}")
+            
             return None
 
         elif cmd == 'run_solvers':
@@ -276,21 +281,21 @@ class Adapter(gym.Env):
         for subproc, solver in zip(subproc_list, self._solver_list):
             # check if the spawning process exists
             if not psutil.pid_exists(subproc.pid):
-                raise Exception(f'Error: subprocess failed to be launched - f"{self._env_dir}/{solver}" -> {subproc.args[0]}')
+                raise Exception(f'Failed subprocess - f"{self._env_dir}/{solver}" -> {subproc.args[0]}')
 
     def _finalize_subprocess(self, subproc_list):
         for subproc, solver in zip(subproc_list, self._solver_list):
             if subproc and psutil.pid_exists(subproc.pid):
                 if psutil.Process(subproc.pid).status() != psutil.STATUS_ZOMBIE:
-                    print("subprocess status is not zombie - waiting to finish ...")
+                    logger.info("Subprocess status is not zombie - waiting to finish ...")
                     exit_signal = subproc.wait()
                 else:
-                    print("subprocess status is zombie - cleaning up ...")
+                    logger.info("Subprocess status is zombie - cleaning up ...")
                     exit_signal = subproc.poll()
                 # check the subprocess exit signal
                 if exit_signal != 0:
-                    raise Exception(f'subprocess failed to complete its shell command - f"{self._env_dir}/{solver}" -> {subproc.args[0]}')
-                print(f'subprocess successfully completed its shell command: f"{self._env_dir}/{solver}" -> {subproc.args[0]}')
+                    raise Exception(f'Subprocess failed to complete its shell command - f"{self._env_dir}/{solver}" -> {subproc.args[0]}')
+                logger.info(f'Subprocess successfully completed its shell command: f"{self._env_dir}/{solver}" -> {subproc.args[0]}')
         return None
 
     def __del__(self):
@@ -299,8 +304,9 @@ class Adapter(gym.Env):
         if self._interface is not None:
             try:
                 self._dummy_episode()
-            except Exception as e:
-                raise Exception(f"Unsuccessful termination attempt - {e}")
+            except Exception as err:
+                logger.error(f'Unsuccessful termination attempt - {err}')
+                raise err
 
     def _dummy_episode(self):
         # advance with actions equal to zero till the coupling finish and finalize

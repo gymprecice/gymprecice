@@ -1,8 +1,10 @@
 import xmltodict
-import pprint
 import copy
+import logging
 
-verbose_mode = False
+logger = logging.getLogger(__name__)
+logger.setLevel(level=logging.INFO)
+
 
 def _load_file(filename):
     content = None
@@ -22,22 +24,19 @@ def get_episode_end_time(filename):
         if key.rpartition(':')[0].lower() == "coupling-scheme":
             max_time = solver_interface[key]['max-time']['@value']
             break
-    assert max_time is not None, f"Error: could not find max-time keyword in {filename}"
+    assert max_time is not None, f"Can't find max-time keyword in {filename}"
 
     return float(max_time)
-
 
 def get_mesh_data(filename):
     content = _load_file(filename)
     xml_tree = xmltodict.parse(content, process_namespaces=False, dict_constructor=dict)
-    if verbose_mode:
-        pprint.pprint(xml_tree, sort_dicts=False, width=120)
 
     solver_interface = xml_tree['precice-configuration']['solver-interface']
     mesh_list = []
     if 'mesh' in solver_interface.keys():
-        assert type(solver_interface['mesh']) == \
-        list, "This version does not support single-mesh coupling. Please provide mesh for all participants"
+        assert type(solver_interface['mesh']) == list, \
+            "single-mesh coupling is not supported. Please define mesh in precice-config.xml for all the participants"
 
         for item_ in solver_interface['mesh']:
             mesh_list.append(item_['@name'])
@@ -60,8 +59,6 @@ def get_mesh_data(filename):
     for item_ in xml_tree['precice-configuration']['solver-interface']['participant']:
         if 'controller' in item_['@name'].lower():
             controller = copy.deepcopy(item_)
-            if verbose_mode:
-                print(controller)
             break
     
     controller_dict = {}

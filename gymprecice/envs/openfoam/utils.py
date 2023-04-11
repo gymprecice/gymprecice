@@ -1,13 +1,12 @@
-from gymprecice.utils.constants import FILE_ACCESS_SLEEP_TIME
 import re
 from time import sleep
 import os
 import numpy as np
-
-verbose_mode = False
-
 import struct
 from collections import namedtuple
+
+from gymprecice.utils.constants import FILE_ACCESS_SLEEP_TIME
+
 Boundary = namedtuple('Boundary', 'type, num, start, id')
 
 
@@ -280,7 +279,6 @@ def _boundary_face_area(path, patch):
                 face_normals.append(n)
                 face_vector_areas.append(sum_area * n)
         return np.array(face_vector_areas), np.array(face_areas), np.array(face_normals)
-
     except KeyError:
         return ()
 
@@ -290,8 +288,6 @@ def _parse_probe_lines(line_string):
         # print('line of length zero')
         return False, None, 0, None
     if line_string[0] == "#":
-        if verbose_mode:
-            print(f"comment line: {line_string}")
         is_comment = True
         return is_comment, None, 0, None
 
@@ -311,12 +307,11 @@ def _parse_probe_lines(line_string):
     float_list = [float(x) for x in float_list]
 
     if line_string.count("(") > 0:
-        if verbose_mode:
-            print("vector variable")
         num_probes = line_string.count("(")
-        assert num_probes == line_string.count(")"), f'corrupt file, number of ( and ) should be equal:" \
-            "{line_string.count(")")}, {line_string.count(")")}'
-        assert (len(float_list) - 1) % num_probes == 0, f'corrupt file, each probe should have the same number of components, {len(float_list)}, {num_probes}'
+        assert num_probes == line_string.count(")"), \
+            f'corrupt file, number of ( and ) should be equal:" "{line_string.count(")")}, {line_string.count(")")}'
+        assert (len(float_list) - 1) % num_probes == 0, \
+            f'corrupt file, each probe should have the same number of components, {len(float_list)}, {num_probes}'
     else:
         num_probes = len(float_list) - 1
     # comment or not, time idx, number of probes, probe values

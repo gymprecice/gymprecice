@@ -4,8 +4,13 @@ from datetime import datetime
 import fileinput
 import sys
 from os.path import join
+import logging
 
 from gymprecice.utils.constants import SLEEP_TIME, MAX_ACCESS_WAIT_TIME
+
+logger = logging.getLogger(__name__)
+logger.setLevel(level=logging.INFO)
+
 
 def _replace_line(file_name, keyword, keyword_value="",
                      assignment_symbol="=",
@@ -38,9 +43,10 @@ def make_env_dir(env_dir, solver_list):
                 os.makedirs(os.path.join(os.getcwd(), env_dir, solver))
                 os.system(f'cp -rs {solver_case_dir} {env_dir}')
             else:
-                raise Exception
-        except Exception as e:
-            raise Exception(f'Failed to create symbolic links to solver files: {e}')
+                raise OSError
+        except Exception as err:
+            logger.error('Failed to create symbolic links to solver files')
+            raise err
     sleep(SLEEP_TIME)
 
 
@@ -77,21 +83,24 @@ def make_result_dir(options):
 
     try:
         os.makedirs(run_dir, exist_ok=True)
-    except Exception as e:
-        raise Exception(f'failed to create run directory: {e}')
+    except Exception as err:
+        logger.error(f'Failed to create run directory')
+        raise err
 
     # copy base case to run dir
     try:
         for solver_dir in solver_dirs:
             os.system(f'cp -r {solver_dir} {run_dir}')
-    except Exception as e:
-        raise Exception(f'Failed to copy base case to run direrctory: {e}')
+    except Exception as err:
+        logger.error(f'Failed to copy base case to run direrctory')
+        raise err
 
     # copy precice config file to run dir
     try:
         os.system(f'cp {precice_config_file} {run_dir}')
-    except Exception as e:
-        raise Exception(f'Failed to copy precice config file to run dir: {e}')
+    except Exception as err:
+        logger.error(f'Failed to copy precice config file to run dir')
+        raise err
 
     os.chdir(str(run_dir))
 

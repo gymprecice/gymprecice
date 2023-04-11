@@ -1,6 +1,8 @@
 import gymnasium as gym
 
 from gymprecice.utils.constants import EPSILON, LOG_EPSILON
+
+
 from gymprecice.envs.openfoam.rotating_cylinder_2d.environment import RotatingCylinder2DEnv
 from gymprecice.envs.openfoam.rotating_cylinder_2d import environment_config
 
@@ -24,6 +26,19 @@ try:
 except ImportError:
     Iterable = (tuple, list)
 
+# ## only to check loggers 
+# import logging
+# env_logger = logging.getLogger('gymprecice.core')
+# env_logger.setLevel(level=logging.DEBUG)
+# # create console handler and set level to debug
+# ch = logging.StreamHandler()
+# ch.setLevel(logging.DEBUG)
+# # create formatter
+# formatter = logging.Formatter('---[%(name)s] %(message)s')
+# # add formatter to ch
+# ch.setFormatter(formatter)
+# # add ch to env_logger
+# env_logger.addHandler(ch)
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)

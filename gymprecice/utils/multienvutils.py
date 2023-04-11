@@ -1,7 +1,7 @@
-
 import sys
 
 from gymprecice.utils.constants import LOCK
+
 
 def worker_with_lock(index, env_fn, pipe, parent_pipe, shared_memory, error_queue):
     assert shared_memory is None

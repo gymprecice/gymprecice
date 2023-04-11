@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
-action_read_iteration_checkpoint = MagicMock(return_value=1)
-action_write_iteration_checkpoint = MagicMock(return_value=2)
+action_read_iteration_checkpoint = MagicMock()
+action_write_iteration_checkpoint = MagicMock()
 action_write_initial_data = MagicMock()
 
 

@@ -110,11 +110,11 @@ class TestAdapter:
         env = self.make_env()
         env.reset()
         # step0: not terminated
-        obs_step0, reward_step0, terminated_step0, truncated_step0, _ = env.step(0)
+        obs_step0, reward_step0, terminated_step0, truncated_step0, _ = env.step(env.action_space.sample())
         # step1: terminated
         from precice import Interface
         Interface.is_coupling_ongoing = class_mocker.MagicMock(return_value=False)
-        obs_step1, reward_step1, terminated_step1, truncated_step1, _ = env.step(0)
+        obs_step1, reward_step1, terminated_step1, truncated_step1, _ = env.step(env.action_space.sample())
 
         check = {
             "obs_step0": np.array_equal(obs_step0, env.dummy_obs),

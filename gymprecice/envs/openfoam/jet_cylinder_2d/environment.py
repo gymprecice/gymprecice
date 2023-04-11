@@ -1,19 +1,24 @@
-from gymprecice.core import Adapter
 import gymnasium as gym
-from os.path import join
+from gymprecice.core import Adapter
 
+from os.path import join
 import numpy as np
 import math
 from scipy import signal
+import logging
 
 from gymprecice.envs.openfoam.utils import get_interface_patches, get_patch_geometry
 from gymprecice.envs.openfoam.utils import read_line
 from gymprecice.utils.fileutils import open_file
 
+logger = logging.getLogger(__name__)
+logger.setLevel(level=logging.INFO)
+
 
 class JetCylinder2DEnv(Adapter):
     def __init__(self, options, idx=0) -> None:
         super().__init__(options, idx)
+        
         self.cylinder_origin = np.array([0, 0, 0.0223788])
         self.cylinder_radius = 0.05
         self.jet_angle = [90, 270]
@@ -94,7 +99,7 @@ class JetCylinder2DEnv(Adapter):
 
     @n_forces.setter
     def n_forces(self, value):
-        assert value >=3, "Error: number of forceCoeff columns must be greater than 2"
+        assert value >=3, "Number of forceCoeff columns must be greater than 2"
         self._n_forces = value
         self._reward_info['n_forces'] = value
 
@@ -154,8 +159,9 @@ class JetCylinder2DEnv(Adapter):
             if self._reward_info['file_handler'] is not None:
                 self._reward_info['file_handler'].close()
                 self._reward_info['file_handler'] = None
-        except Exception as e:
-            raise Exception(f'Error: could not close probes/forces file: {e}')
+        except Exception as err:
+            logger.error(f"Can't close probes/forces file")
+            raise err
 
     def _action_to_patch_field(self, action):
         theta0 = [np.radians(x) for x in self.jet_angle]
@@ -193,7 +199,7 @@ class JetCylinder2DEnv(Adapter):
             if np.isclose(Q_final, patch_flow_rate[idx]):
                 U.append(U_patch)
             else:
-                raise Exception('Error: not a synthetic jet, Q_jet1 + Q_jet2 must be zero!')
+                raise Exception('Not a synthetic jet: Q_jet1 + Q_jet2 is not zero')
 
         U_profile = np.array([np.delete(item, 2) for sublist in U for item in sublist])
         return U_profile
@@ -201,7 +207,7 @@ class JetCylinder2DEnv(Adapter):
     def _probes_to_observation(self):
         self._read_probes_from_file()
 
-        assert self._observation_info['data'], "Error: probes data is empty!"
+        assert self._observation_info['data'], "probes-data is empty!"
         probes_data = self._observation_info['data']
 
         latest_time_data = np.array(probes_data[-1][2])  # only the last timestep and remove the time and size columns
@@ -211,7 +217,7 @@ class JetCylinder2DEnv(Adapter):
     def _forces_to_reward(self):
         self._read_forces_from_file()
 
-        assert self._reward_info['data'], "Error: forces data is empty!"
+        assert self._reward_info['data'], "forces-data is empty!"
         forces_data = self._reward_info['data']
 
         n_lookback = int(self.reward_average_time_window // self._dt) + 1
@@ -255,7 +261,7 @@ class JetCylinder2DEnv(Adapter):
         # sequential read of a single line (last line) of probes file at each RL-Gym step
         data_path = f"{self._openfoam_solver_path}{self._observation_info['file_path']}"
 
-        print(f'reading pressure probes from: {data_path}')
+        logger.debug(f'reading pressure probes from: {data_path}')
 
         if self._observation_info['file_handler'] is None:
             file_object = open_file(data_path)
@@ -276,7 +282,7 @@ class JetCylinder2DEnv(Adapter):
                     if not is_comment and n_probes == self._observation_info['n_probes']:
                         break
                 self._observation_info['data'].append([time_stamp, n_probes, probes_data])
-            assert math.isclose(time_stamp, latest_time_stamp), f"Error: mismatched time data: {time_stamp} vs {self._t}"
+            assert math.isclose(time_stamp, latest_time_stamp), f"Mismatched time data: {time_stamp} vs {self._t}"
 
     def _read_forces_from_file(self):
         # sequential read of a single line (last line) of forces file at each RL step
@@ -284,7 +290,7 @@ class JetCylinder2DEnv(Adapter):
             self._reward_info['data'] = []
 
             data_path = f"{self._openfoam_solver_path}{self._reward_info['prerun_file_path']}"
-            print(f'reading pre-run forces from: {data_path}')
+            logger.debug(f'reading pre-run forces from: {data_path}')
 
             file_object = open_file(data_path)
             self._reward_info['file_handler'] = file_object
@@ -299,7 +305,7 @@ class JetCylinder2DEnv(Adapter):
                     if not is_comment and n_forces == self._reward_info['n_forces']:
                         break
                 self._reward_info['data'].append([time_stamp, n_forces, forces_data])
-            assert math.isclose(time_stamp, latest_time_stamp), f"Error: mismatched time data: {time_stamp} vs {self._t}"
+            assert math.isclose(time_stamp, latest_time_stamp), f"Mismatched time data: {time_stamp} vs {self._t}"
 
             self._prerun_data_required = False
 
@@ -317,7 +323,7 @@ class JetCylinder2DEnv(Adapter):
                 self._reward_info['file_handler'] = file_object
                 self._reward_info['data'] = []
 
-        print(f'reading forces from: {data_path}')
+        logger.debug(f'reading forces from: {data_path}')
 
         new_time_stamp = True
         latest_time_stamp = self._t + self._latest_available_sim_time
@@ -333,7 +339,7 @@ class JetCylinder2DEnv(Adapter):
                     if not is_comment and n_forces == self._reward_info['n_forces']:
                         break
                 self._reward_info['data'].append([time_stamp, n_forces, forces_data])
-            assert math.isclose(time_stamp, latest_time_stamp), f"Error: mismatched time data: {time_stamp} vs {self._t}"
+            assert math.isclose(time_stamp, latest_time_stamp), f"Mismatched time data: {time_stamp} vs {self._t}"
 
     def _smooth_step(self, action):
         if self._previous_action is None:
@@ -356,4 +362,3 @@ class JetCylinder2DEnv(Adapter):
             else:
                 self._previous_action = smoothed_action
         return next_obs, reward, terminated, truncated, info
-
