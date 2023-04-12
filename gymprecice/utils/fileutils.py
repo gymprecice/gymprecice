@@ -1,44 +1,24 @@
 import os
 from time import sleep
 from datetime import datetime
-import fileinput
-import sys
 from os.path import join
 import logging
+from typing import Tuple, Optional, List
 
 from gymprecice.utils.constants import SLEEP_TIME, MAX_ACCESS_WAIT_TIME
+from gymprecice.utils.xmlutils import _replace_keyword
 
 logger = logging.getLogger(__name__)
 logger.setLevel(level=logging.INFO)
 
 
-def _replace_line(
-    file_name,
-    keyword,
-    keyword_value="",
-    assignment_symbol="=",
-    end_line_symbol="",
-    set_counter_postfix=False,
-):
-    replacement_cnt = 0
-    fin = fileinput.input(file_name, inplace=True)
-    new_line = ""
-    for line in fin:
-        replaced = False
-        if keyword in line and not replaced:
-            if set_counter_postfix:
-                new_line = f"{line.partition(keyword)[0]}{keyword}{assignment_symbol}{keyword_value}-{replacement_cnt}{end_line_symbol}"
-            else:
-                new_line = f"{line.partition(keyword)[0]}{keyword}{assignment_symbol}{keyword_value}{end_line_symbol}"
-            new_line = new_line + "\n" if not new_line.endswith("\n") else new_line
-            line = new_line
-            replaced = True
-            replacement_cnt += 1
-        sys.stdout.write(line)
-    fin.close()
+def make_env_dir(env_dir: str = None, solver_list: list = None) -> None:
+    """Create a directory with all necessary solver and config files to represent a full training environment.
 
-
-def make_env_dir(env_dir, solver_list):
+    Args:
+        env_dir (str): envirenment directory path
+        solver_list (list): list of solvers reside in the environment.
+    """
     os.system(f"rm -rf {os.path.join(os.getcwd(), env_dir)}")
     for solver in solver_list:
         solver_case_dir = os.path.join(os.getcwd(), solver)
@@ -54,13 +34,13 @@ def make_env_dir(env_dir, solver_list):
     sleep(SLEEP_TIME)
 
 
-def open_file(file_name):
-    # wait till the file is available
+def open_file(file: str = None):
+    """Open dynamic files."""
     max_attempts = int(MAX_ACCESS_WAIT_TIME / 1e-6)
     acceess_counter = 0
     while True:
         try:
-            file_object = open(file_name)
+            file_object = open(file)
             break
         except IOError:
             acceess_counter += 1
@@ -68,13 +48,32 @@ def open_file(file_name):
                 continue
             else:
                 # break after trying max_attempts
-                raise IOError(
-                    f"Could not access {file_name} after {max_attempts} attempts"
-                )
+                raise IOError(f"Could not access {file} after {max_attempts} attempts")
     return file_object
 
 
-def make_result_dir(options):
+def make_result_dir(options: dict = None) -> None:
+    """Create a time-stamped result directory.
+
+    Args:
+        options (dict): environment configuration dictionary with the following format:\n
+        {
+            "environment": {
+                "name": ""
+            },
+            "solvers": {
+                "name": [],
+                "reset_script": "",
+                "run_script": "",
+            },
+            "actuators": {
+                "name": []
+            },
+            "precice": {
+                "precice_config_file_name": ""
+            },
+        }
+    """
     env_name = options["environment"]["name"]
     env_source_path = options["environment"]["src"]
     result_path = options["environment"].get("result_save_path", os.getcwd())
@@ -111,11 +110,10 @@ def make_result_dir(options):
     os.chdir(str(run_dir))
 
     keyword = "exchange-directory"
-    keyword_value = f'"{run_dir}/precice-{keyword}'
-    _replace_line(
+    keyword_value = f"{run_dir}/precice-{keyword}"
+    _replace_keyword(
         precice_config_file_name,
         keyword,
         keyword_value,
-        end_line_symbol='" />',
-        set_counter_postfix=True,
+        place_counter_postfix=True,
     )

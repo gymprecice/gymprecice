@@ -4,6 +4,8 @@ from gymprecice.utils.constants import LOCK
 
 
 def worker_with_lock(index, env_fn, pipe, parent_pipe, shared_memory, error_queue):
+    """Lock 'reset' to prevent simultaneous access to preCICE upon initialisation in multi-environment training.
+    """
     assert shared_memory is None
     env = env_fn()
     parent_pipe.close()

@@ -1,15 +1,12 @@
 import gymnasium as gym
+from gymnasium.vector.async_vector_env import AsyncVectorEnv
 
 from gymprecice.utils.constants import EPSILON, LOG_EPSILON
-
-
 from gymprecice.envs.openfoam.rotating_cylinder_2d.environment import (
     RotatingCylinder2DEnv,
 )
 from gymprecice.envs.openfoam.rotating_cylinder_2d import environment_config
-
 from gymprecice.utils.multienvutils import worker_with_lock
-from gymnasium.vector.async_vector_env import AsyncVectorEnv
 
 import torch
 import torch.nn as nn
@@ -19,6 +16,7 @@ from torch.distributions import Normal
 import numpy as np
 import math
 import time
+import logging
 
 from typing import Optional
 import argparse
@@ -29,19 +27,8 @@ try:
 except ImportError:
     Iterable = (tuple, list)
 
-# ## only to check loggers
-# import logging
-# env_logger = logging.getLogger('gymprecice.core')
-# env_logger.setLevel(level=logging.DEBUG)
-# # create console handler and set level to debug
-# ch = logging.StreamHandler()
-# ch.setLevel(logging.DEBUG)
-# # create formatter
-# formatter = logging.Formatter('---[%(name)s] %(message)s')
-# # add formatter to ch
-# ch.setFormatter(formatter)
-# # add ch to env_logger
-# env_logger.addHandler(ch)
+logger = logging.getLogger(__name__)
+logger.setLevel(level=logging.INFO)
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -361,7 +348,6 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-
     # weigh and biases
     wandb_recorder = None
     if args.track:
@@ -378,8 +364,9 @@ if __name__ == "__main__":
                 monitor_gym=False,
                 save_code=True,
             )
-        except ModuleNotFoundError:
-            print("Warning: 'wandb' module not found.")
+        except ImportError as err:
+            logger.error("wandb is not installed, run `pip install gymprecice[vis]`")
+            raise err
 
     def make_env(options, idx, wrappers=None):
         def _make_env():

@@ -29,25 +29,25 @@ ActType = TypeVar("ActType")
 class Adapter(ABC, gym.Env):
     r"""The main Gym-preCICE class for coupling Reinforcement Learning (RL) controllers and PDE-based numerical solvers.
 
-    Gym-preCICE adapter is a generic base class that provides a common Gymnasium (aka "OpenAI Gym")-like API to couple single- or multi-physics 
-    numerical solvers (referred to as "physics simulation engine") and Reinforcement Learning Agents (referred to as "controller") using 
+    Gym-preCICE adapter is a generic base class that provides a common Gymnasium (aka "OpenAI Gym")-like API to couple single- or multi-physics
+    numerical solvers (referred to as "physics simulation engine") and Reinforcement Learning Agents (referred to as "controller") using
     preCICE coupling library.
 
     The main application of Gym-preCICE adapter lies in closed- and open-loop active control of physics simulations.
 
-    To control any case-specific physics simulation engine supported by preCICE, users of Gym-preCICE adapter need to define a 
-    class (referred to as "environment") that inherits from this adapter and override its four abstract methods to adapt with the underlying behaviour 
+    To control any case-specific physics simulation engine supported by preCICE, users of Gym-preCICE adapter need to define a
+    class (referred to as "environment") that inherits from this adapter and override its four abstract methods to adapt with the underlying behaviour
     of the "behind-the-scene" physics simulation engine.
-    
+
     The main abstract API methods that users of this adapter need to know and override in a case-specific environment are:
 
-    - :meth:`_get_action` - Maps actions received from the controller into appropriate values or boundary fields to be communicated 
+    - :meth:`_get_action` - Maps actions received from the controller into appropriate values or boundary fields to be communicated
       with the physics simulation engine.
       Returns a dictionary containing all bouundry values need to be communicated with the physics simulation engine via preCICE.
     - :meth:`_get_observation` - Maps data read from the physics simulation engine to appropriate observation input for the controller.
-      Returns an element of the environment's :attr:`observation_space`, e.g. a numpy array containing probe (sensor) pressure data within a 
+      Returns an element of the environment's :attr:`observation_space`, e.g. a numpy array containing probe (sensor) pressure data within a
       controlled flow field.
-    - :meth:`_get_reward` - Computes and returns an instantaneous reward signal (a scalar value) achieved as a result of taking an action in 
+    - :meth:`_get_reward` - Computes and returns an instantaneous reward signal (a scalar value) achieved as a result of taking an action in
       the physics simulation engine.
     - :meth:`_close_external_resources` - Closes resources used by the physics simulation engine, e.g. a probe file or a database.
 
@@ -355,7 +355,7 @@ class Adapter(ABC, gym.Env):
                 raise Exception(f"Invalid variable type: {write_var}")
 
     def _launch_subprocess(self, cmd: str):
-        """Pre-run, reset, or launch physics simulation engine as a subprocess.
+        """Pre-run, reset, or run the physics simulation engine as a subprocess.
 
         Args:
             cmd (str): 'reset_solvers', 'prerun_solvers', or 'run_solvers'
@@ -457,16 +457,6 @@ class Adapter(ABC, gym.Env):
                     f'Subprocess successfully completed its shell command: f"{self._env_dir}/{solver}"'
                 )
 
-    def __del__(self):
-        """Close all external resources, and if preCICE is still on, gracefully ends the coupling."""
-        self._close_external_resources()
-        if self._interface is not None:
-            try:
-                self._dummy_episode()
-            except Exception as err:
-                logger.error(f"Unsuccessful termination attempt - {err}")
-                raise err
-
     def _dummy_episode(self):
         """Run the physics simulation engine for a dummy episode to end the coupling gracefully."""
         dummy_action = 0.0 * self.action_space.sample()
@@ -477,6 +467,16 @@ class Adapter(ABC, gym.Env):
     def _finalize(self) -> None:
         """Wrap del method."""
         self.__del__()
+
+    def __del__(self):
+        """Close all external resources, and if preCICE is still on, gracefully ends the coupling."""
+        self._close_external_resources()
+        if self._interface is not None:
+            try:
+                self._dummy_episode()
+            except Exception as err:
+                logger.error(f"Unsuccessful termination attempt - {err}")
+                raise err
 
     @abstractmethod
     def _get_action(self, action: ActType, write_var_list: List) -> dict:
