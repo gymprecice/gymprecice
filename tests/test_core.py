@@ -104,6 +104,9 @@ class TestAdapter:
 
             def _get_reward(self):
                 return 0.5
+            
+            def _close_external_resources(self):
+                pass
 
             def __del__(self):
                 pass

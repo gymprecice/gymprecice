@@ -1,14 +1,13 @@
 import gymnasium as gym
+
+from abc import ABC, abstractmethod
 from os import path, getcwd
 
 
-class Adapter(gym.Env):
+class Adapter(ABC, gym.Env):
     """
     Mock class to represent gymprecice 'Adapter' in all environment tests.
     """
-
-    metadata = {}
-
     def __init__(self, options, *args) -> None:
         self._solver_list = options["solvers"]["name"]
         self._actuator_list = options["actuators"]["name"]
@@ -54,16 +53,20 @@ class Adapter(gym.Env):
     def _finalize(self):
         raise NotImplementedError
 
+    @abstractmethod
     def _get_action(self, *args):
         raise NotImplementedError
 
+    @abstractmethod
     def _get_observation(self):
         raise NotImplementedError
 
+    @abstractmethod
     def _get_reward(self):
         raise NotImplementedError
 
-    def _close_files(self):
+    @abstractmethod
+    def _close_external_resources(self):
         pass
 
     def __del__(self):

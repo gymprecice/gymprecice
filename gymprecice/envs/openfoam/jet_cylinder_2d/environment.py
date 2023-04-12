@@ -166,7 +166,7 @@ class JetCylinder2DEnv(Adapter):
     def _get_reward(self):
         return self._forces_to_reward()
 
-    def _close_files(self):
+    def _close_external_resources(self):
         # close probes and forces files
         try:
             if self._observation_info["file_handler"] is not None:
