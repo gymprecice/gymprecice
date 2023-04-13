@@ -63,7 +63,7 @@ class Adapter(ABC, gym.Env):
 
     def __init__(self, options, idx) -> None:
         try:
-            self._precice_cfg = options["precice"]["precice_config_file_name"]
+            self._precice_cfg = options["precice"]["config_file"]
             self._solver_list = options["solvers"]["name"]
             self._reset_script = options["solvers"]["reset_script"]
             self._prerun_script = options["solvers"].get(

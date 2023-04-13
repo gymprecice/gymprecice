@@ -4,6 +4,7 @@ from datetime import datetime
 from os.path import join
 import logging
 from typing import Tuple, Optional, List
+import json
 
 from gymprecice.utils.constants import SLEEP_TIME, MAX_ACCESS_WAIT_TIME
 from gymprecice.utils.xmlutils import _replace_keyword
@@ -52,14 +53,19 @@ def open_file(file: str = None):
     return file_object
 
 
-def make_result_dir(options: dict = None) -> None:
+def make_result_dir() -> dict:
     """Create a time-stamped result directory.
 
-    Args:
-        options (dict): environment configuration dictionary with the following format:\n
+    Note:
+        "precice-config.xml" is the precice configuration file that should be located in "physics-simulation-engine" directory of your problem case.\n
+        "gymprecice-config.json" is the environment configuration file that should be located in "physics-simulation-engine" directory of your problem case.
+        
+        "gymprecice-config.json" has the following format: \n
+        
         {
             "environment": {
-                "name": ""
+                "name": "",
+                "result_save_path": "",  // This keyword is optional
             },
             "solvers": {
                 "name": [],
@@ -68,20 +74,26 @@ def make_result_dir(options: dict = None) -> None:
             },
             "actuators": {
                 "name": []
-            },
-            "precice": {
-                "precice_config_file_name": ""
-            },
+            }
         }
     """
-    env_name = options["environment"]["name"]
-    env_source_path = options["environment"]["src"]
-    result_path = options["environment"].get("result_save_path", os.getcwd())
+    precice_config_name = "precice-config.xml"
+    gymprecice_config_name = "gymprecice-config.json"
 
+    sim_engine =  join(os.getcwd(), "physics-simulation-engine")
+    precice_config = join(sim_engine, precice_config_name)
+    gymprecice_config =  join(sim_engine, gymprecice_config_name)
+
+    with open(gymprecice_config) as config_file:
+        content = config_file.read()
+    options = json.loads(content)
+    options.update({"precice":{"config_file": precice_config_name}})
+
+    result_path = options["environment"].get("results_path", os.getcwd())
+    env_name = options["environment"]["name"]
     solver_names = options["solvers"]["name"]
-    precice_config_file_name = options["precice"]["precice_config_file_name"]
-    solver_dirs = [join(env_source_path, solver) for solver in solver_names]
-    precice_config_file = join(env_source_path, precice_config_file_name)
+    solver_dirs = [join(sim_engine, solver) for solver in solver_names]
+    
     time_str = datetime.now().strftime("%d%m%Y_%H%M%S")
     run_dir_name = f"{env_name}_controller_training_{time_str}"
     run_dir = join(result_path, "gymprecice-run", run_dir_name)
@@ -92,7 +104,6 @@ def make_result_dir(options: dict = None) -> None:
         logger.error(f"Failed to create run directory")
         raise err
 
-    # copy base case to run dir
     try:
         for solver_dir in solver_dirs:
             os.system(f"cp -r {solver_dir} {run_dir}")
@@ -100,9 +111,8 @@ def make_result_dir(options: dict = None) -> None:
         logger.error(f"Failed to copy base case to run direrctory")
         raise err
 
-    # copy precice config file to run dir
     try:
-        os.system(f"cp {precice_config_file} {run_dir}")
+        os.system(f"cp {precice_config} {run_dir}")
     except Exception as err:
         logger.error(f"Failed to copy precice config file to run dir")
         raise err
@@ -112,8 +122,10 @@ def make_result_dir(options: dict = None) -> None:
     keyword = "exchange-directory"
     keyword_value = f"{run_dir}/precice-{keyword}"
     _replace_keyword(
-        precice_config_file_name,
+        precice_config_name,
         keyword,
         keyword_value,
         place_counter_postfix=True,
     )
+
+    return options

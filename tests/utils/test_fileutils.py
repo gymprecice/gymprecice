@@ -1,7 +1,7 @@
 import pytest
-import requests
 
-from os import chdir, path, listdir
+from shutil import rmtree
+from os import chdir, path, listdir, makedirs
 
 from gymprecice.utils.constants import MAX_ACCESS_WAIT_TIME
 from gymprecice.utils.fileutils import open_file, make_env_dir, make_result_dir
@@ -9,39 +9,37 @@ from gymprecice.utils.fileutils import open_file, make_env_dir, make_result_dir
 FILE_CONTENT = "content"
 
 
-def test_vaild_open_file(tmpdir):
+@pytest.fixture
+def testdir(tmpdir):
     test_dir = tmpdir.mkdir("test")
-    valid_input = test_dir.join("open_file.txt")
-    valid_input.write(FILE_CONTENT)
-    output = open_file(valid_input)
+    yield chdir(test_dir)
+    rmtree(test_dir)
+
+
+def test_vaild_open_file(testdir):
+    with open("open_file.txt", "w") as file:
+        file.write(FILE_CONTENT)
+    output = open_file("open_file.txt")
     assert output.readline() == FILE_CONTENT
 
 
-def test_invalid_open_file(tmpdir):
-    test_dir = tmpdir.mkdir("test")
-    invalid_input = test_dir.join("open_file_IOError.txt")  # file does not exist
-    requests.get.side_effect = IOError
+def test_invalid_open_file(testdir):
     with pytest.raises(IOError):
-        open_file(invalid_input)
+        open_file("open_a_file_which_doesnot_exists_IOError.txt")
 
 
-def test_valid_make_env_dir(tmpdir):
-    test_dir = tmpdir.mkdir("test")
-    chdir(test_dir)
+def test_valid_make_env_dir(testdir):
+    makedirs("fluid-openfoam/content", exist_ok=True)
+    with open("fluid-openfoam/content/info.txt", "w") as file:
+        file.write(FILE_CONTENT)
 
-    fluid_openfoam_dir = test_dir.mkdir("fluid-openfoam")
-    fluid_openfoam_content = fluid_openfoam_dir.mkdir("content")
-    fluid_openfoam_content_file = fluid_openfoam_content.join("info.txt")
-    fluid_openfoam_content_file.write(FILE_CONTENT)
+    makedirs("solid-fenics/content", exist_ok=True)
+    with open("solid-fenics/content/info.txt", "w") as file:
+        file.write(FILE_CONTENT)
 
-    solid_fenics_dir = test_dir.mkdir("solid-fenics")
-    solid_fenics_content = solid_fenics_dir.mkdir("content")
-    solid_fenics_content_file = solid_fenics_content.join("info.txt")
-    solid_fenics_content_file.write(FILE_CONTENT)
-
-    valid_input_0 = test_dir.mkdir("env_0")
-    valid_input_1 = ["fluid-openfoam", "solid-fenics"]
-    make_env_dir(valid_input_0, valid_input_1)
+    makedirs("env_0", exist_ok=True)
+    valid_solver_list = ["fluid-openfoam", "solid-fenics"]
+    make_env_dir("env_0", valid_solver_list)
 
     output = {
         "soft_link_1_bool": path.islink("env_0/fluid-openfoam/content/info.txt"),
@@ -50,59 +48,55 @@ def test_valid_make_env_dir(tmpdir):
     assert all(output.values())
 
 
-def test_invalid_make_env_dir(tmpdir):
-    test_dir = tmpdir.mkdir("test")
-    chdir(test_dir)
+def test_invalid_make_env_dir(testdir):
+    makedirs("fluid-openfoam/content", exist_ok=True)
+    with open("fluid-openfoam/content/info.txt", "w") as file:
+        file.write(FILE_CONTENT)
 
-    fluid_openfoam_dir = test_dir.mkdir("fluid-openfoam")
-    fluid_openfoam_content = fluid_openfoam_dir.mkdir("content")
-    fluid_openfoam_content_file = fluid_openfoam_content.join("info.txt")
-    fluid_openfoam_content_file.write(FILE_CONTENT)
-
-    valid_input = test_dir.mkdir("env_0")
-    invalid_input = ["fluid-openfoam", "invalid-solver"]
-
-    requests.get.side_effect = Exception
+    makedirs("env_0", exist_ok=True)
+    invalid_solver_list = ["fluid-openfoam", "no-solver-dir-provided"]
     with pytest.raises(Exception):
-        make_env_dir(valid_input, invalid_input)
+        make_env_dir("env_0", invalid_solver_list)
 
 
-def test_valid_make_result_dir(tmpdir):
-    test_dir = tmpdir.mkdir("test")
-    chdir(test_dir)
-
-    test_env_dir = test_dir.mkdir("test_env_dir")
-    valid_input = {
-        "environment": {"name": "test_env"},
-        "solvers": {
-            "name": ["fluid-openfoam", "solid-fenics"],
+def test_valid_make_result_dir(testdir):
+    makedirs("physics-simulation-engine", exist_ok=True)
+    
+    valid_environment_config = """
+    {
+        "environment": {
+            "name": "dummy_env"
         },
-        "precice": {"precice_config_file_name": "precice-config.xml"},
-    }
-    valid_input["environment"]["src"] = test_env_dir
+        "solvers": {"name": ["fluid-openfoam", "solid-fenics"],
+            "reset_script": "clean.sh",
+            "run_script": "run.sh"
+        },
+        "actuators": {
+            "name": ["actuator1", "actuator2"]
+        }
+    }"""
+    with open("physics-simulation-engine/gymprecice-config.json", "w") as file:
+        file.write(valid_environment_config)
 
     xml_content = """<?xml version="1.0"?>
     ...
         <m2n:sockets from="Controller" to="Fluid" exchange-directory=""/>
         <m2n:sockets from="Controller" to="Solid" exchange-directory=""/>
     ..."""
+    with open("physics-simulation-engine/precice-config.xml", "w") as file:
+        file.write(xml_content)
 
-    precice_config_file = test_env_dir.join("precice-config.xml")
-    precice_config_file.write(xml_content)
+    makedirs("physics-simulation-engine/fluid-openfoam/content", exist_ok=True)
+    with open("physics-simulation-engine/fluid-openfoam/content/info.txt", "w") as file:
+        file.write(FILE_CONTENT)
+        
+    makedirs("physics-simulation-engine/solid-fenics/content", exist_ok=True)
+    with open("physics-simulation-engine/solid-fenics/content/info.txt", "w") as file:
+        file.write(FILE_CONTENT)
 
-    fluid_openfoam_dir = test_env_dir.mkdir("fluid-openfoam")
-    fluid_openfoam_content = fluid_openfoam_dir.mkdir("content")
-    fluid_openfoam_content_file = fluid_openfoam_content.join("info.txt")
-    fluid_openfoam_content_file.write(FILE_CONTENT)
-
-    solid_fenics_dir = test_env_dir.mkdir("solid-fenics")
-    solid_fenics_content = solid_fenics_dir.mkdir("content")
-    solid_fenics_content_file = solid_fenics_content.join("info.txt")
-    solid_fenics_content_file.write(FILE_CONTENT)
-
-    make_result_dir(valid_input)
-
-    chdir(test_dir)
+    make_result_dir()
+    
+    chdir("../..")
     run_dir = path.join("gymprecice-run", listdir("gymprecice-run")[0])
 
     output = {

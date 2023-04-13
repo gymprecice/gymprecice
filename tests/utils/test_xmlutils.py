@@ -1,5 +1,7 @@
 import pytest
-import requests
+
+from shutil import rmtree
+from os import chdir
 
 from gymprecice.utils.xmlutils import get_episode_end_time, get_mesh_data
 
@@ -99,25 +101,30 @@ EXPECTED_1 = {
     },
 }
 
-
-def test_valid_get_episode_end_time(tmpdir):
+@pytest.fixture
+def testdir(tmpdir):
     test_dir = tmpdir.mkdir("test")
-    valid_input = test_dir.join("precice-config.xml")
-    valid_input.write(VALID_XML_CONTENT_0)
-    episode_end_time = get_episode_end_time(valid_input)
+    yield chdir(test_dir)
+    rmtree(test_dir)
+
+
+def test_valid_get_episode_end_time(testdir):
+    with open("precice-config.xml", "w") as file:
+        file.write(VALID_XML_CONTENT_0)
+
+    episode_end_time = get_episode_end_time("precice-config.xml")
     assert episode_end_time == 2.335
 
 
 @pytest.mark.parametrize(
-    "test_input, expected",
+    "input, expected",
     [(VALID_XML_CONTENT_0, EXPECTED_0), (VALID_XML_CONTENT_1, EXPECTED_1)],
 )
-def test_valid_get_mesh_data(tmpdir, test_input, expected):
-    test_dir = tmpdir.mkdir("test")
-    valid_input = test_dir.join("precice-config.xml")
-    valid_input.write(test_input)
+def test_valid_get_mesh_data(testdir, input, expected):
+    with open("precice-config.xml", "w") as file:
+        file.write(input)
 
-    scaler_list, vector_list, mesh_list, controller_dict = get_mesh_data(valid_input)
+    scaler_list, vector_list, mesh_list, controller_dict = get_mesh_data("precice-config.xml")
     output = {
         "scaler_list": scaler_list,
         "vector_list": vector_list,
@@ -127,10 +134,7 @@ def test_valid_get_mesh_data(tmpdir, test_input, expected):
     assert output == expected
 
 
-def test_invalid_get_mesh_data(tmpdir):
-    test_dir = tmpdir.mkdir("test")
-    invalid_input = test_dir.join("precice-config.xml")
-
+def test_invalid_get_mesh_data(testdir):
     invalid_xml_content = """<?xml version="1.0"?>
     <precice-configuration>
         ...
@@ -146,8 +150,8 @@ def test_invalid_get_mesh_data(tmpdir):
             ...
         </solver-interface>
     </precice-configuration>"""
-    invalid_input.write(invalid_xml_content)
+    with open("precice-config.xml", "w") as file:
+        file.write(invalid_xml_content)
 
-    requests.get.side_effect = AssertionError
     with pytest.raises(AssertionError):
-        get_mesh_data(invalid_input)
+        get_mesh_data("precice-config.xml")

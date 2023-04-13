@@ -1,7 +1,7 @@
 import pytest
 from pytest_mock import mocker, class_mocker
 
-import os
+from os import chdir
 from shutil import rmtree
 import numpy as np
 
@@ -11,9 +11,9 @@ from tests import mocked_precice
 
 @pytest.fixture(autouse=True)
 def testdir(tmpdir):
-    test_env_dir = tmpdir.mkdir("test-rotating-cylinder-env")
-    yield os.chdir(test_env_dir)
-    rmtree(test_env_dir)
+    test_dir = tmpdir.mkdir("test")
+    yield chdir(test_dir)
+    rmtree(test_dir)
 
 
 @pytest.fixture
@@ -75,7 +75,7 @@ dummy_environment_config = {
         "run_script": "dummy.sh",
     },
     "actuators": {"name": ["dummy"]},
-    "precice": {"precice_config_file_name": "dummy.xml"},
+    "precice": {"config_file": "dummy.xml"},
 }
 
 
