@@ -51,29 +51,7 @@ It is also possible to test individual modules by providing the path to the resp
 pytest ./tests/test_core.py
 ```
 ### Usage
-Users of the adapter need to define their control problem in a simple structure consisting of three key components ([please see gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials/tree/master/closed_loop_AFC/rotating_control_cylinder)):
-- `physics-simulation-engine`: a directory containing PDE-based solver case(s), `gymprecice-config.json` file for the adapter configuration, and `precice-config.xml` file for configuring the preCICE coupling library.
-- `environment.py`: a Python script defining a class inherited from Gym-preCICE adapter to expose the underlying behaviour of the physics-simulation-engine to the controller.
-- `controller.py`: a Python script defining the controller algorithm that interacts with the environment. This may, for instance, be the Proximal Policy Optimisation (PPO) algorithm, the Soft-Actor-Critic (SAC) algorithm, or a simple sinusoidal signal control.
-
-```bash
-control-problem
-├── controller.py
-├── envrionment.py
-└── physics-simulation-engine
-    ├── gymprecice-config.json
-    ├── precice-config.json
-    ├── solver-1
-    ├── solver-2
-    └── solver-n
-```
-To run the control case, you need to switch to the root directory of the control case, here, `control-problem`, and run
- ```bash
- python3 -u controller.py
- ```
-By default, the output will be saved in a directory called `gymprecice-run` that is located in the root directory of the control case. However, it is possible to specify a different path for the result directory via `gymprecice-config.json` file.
-
-Check out the [Quickstart](https://github.com/gymprecice/gymprecice-tutorials) in our gymprecice-tutorials repository to launch a control case.
+Please refer to [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials/tree/main) for the details on how to use the adapter. You can check out the [Quickstart](https://github.com/gymprecice/gymprecice-tutorials) in our [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials/tree/main) repository to launch a control case.
 
 ## Contributions
 
@@ -83,7 +61,7 @@ gymprecice is currently developed and maintained by:
 - Ahmed H. Elsheikh(@ahmed-h-elsheikh) - Co developer and Supervisor 
 
 ## Citation
-If you use Gym-preCICE, please cite its technical paper with the following bibtex entry:
+If you use Gym-preCICE, please consider citing its technical paper:
 
 ```
 @misc{,
