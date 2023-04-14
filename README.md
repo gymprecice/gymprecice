@@ -5,7 +5,7 @@
 Gym-preCICE is a Python [preCICE](https://github.com/precice/precice) adapter fully compliant with the 
 [Gymnasium API](https://github.com/Farama-Foundation/Gymnasium), aka [OpenAI Gym](https://github.com/openai/gym), 
 to facilitate employing and developing reinforcement learning algorithms for single- and multi-physics active control applications. 
-In a Reinforcement Learning-interaction cycle, Gym-preCICE takes advantage of coupling tool preCICE, an open-source library for multi-physics coupling, to handle information exchange between a Reinforcement Learning agent ("controller") and external mesh-based solvers ("physics-simulation-engine") within reinforcement learning interaction cycles. The primary use of Gym-preCICE adapter is for closed- and open-loop active control of physics simulations.
+In a Reinforcement Learning-interaction cycle, Gym-preCICE takes advantage of coupling tool preCICE, an open-source library for multi-physics coupling, to handle information exchange between a Reinforcement Learning agent ("controller") and external mesh-based solvers ("physics-simulation-engine"). The primary use of Gym-preCICE adapter is for closed- and open-loop active control of physics simulations.
 
 ## Installation
 
@@ -67,11 +67,11 @@ control-problem
     ├── solver-2
     └── solver-n
 ```
-To run the control case, you need to switch to the root directory (here, `control-problem`) and run
+To run the control case, you need to switch to the root directory of the control case, here, `control-problem`, and run
  ```bash
  python3 -u controller.py
  ```
-By default, the output will be saved in a directory called `gymprecice-run` that is located in the root directory of the control case. However, it is possible to specify a different path for the result directory via `gymprecice-config.jsom` file.
+By default, the output will be saved in a directory called `gymprecice-run` that is located in the root directory of the control case. However, it is possible to specify a different path for the result directory via `gymprecice-config.json` file.
 
 Check out the [Quickstart](https://github.com/gymprecice/gymprecice-tutorials) in our gymprecice-tutorials repository to launch a control case.
 
