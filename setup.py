@@ -49,12 +49,12 @@ def deps_list(*pkgs):
 
 extras = {}
 extras["style"] = deps_list("black")
-extras["training"] = deps_list("wandb")
-extras["testing"] = deps_list("pytest", "pytest-mock")
+extras["train"] = deps_list("wandb")
+extras["test"] = deps_list("pytest", "pytest-mock")
 extras["torch"] = deps_list("torch")
 
 extras["dev"] = (
-    extras["style"] + extras["test"] + extras["training"] + extras["torch"]
+    extras["style"] + extras["test"] + extras["train"] + extras["torch"]
 )
 
 install_requires = [
