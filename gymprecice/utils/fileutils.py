@@ -5,6 +5,7 @@ from os.path import join
 import logging
 from typing import Tuple, Optional, List
 import json
+import shutil
 
 from gymprecice.utils.constants import SLEEP_TIME, MAX_ACCESS_WAIT_TIME
 from gymprecice.utils.xmlutils import _replace_keyword
@@ -53,8 +54,15 @@ def open_file(file: str = None):
     return file_object
 
 
-def make_result_dir() -> dict:
-    """Create a time-stamped result directory.
+def make_result_dir(time_stamped: Optional[bool] = True, suffix: Optional[str] = None) -> dict:
+    """Create a directory to save train/prediction results.
+
+    Args:
+        time_stamped (optional bool): If the directory name gets time-stamped. 
+        Warning regarding Data-loss: When set to False, the function will overwrite any directory with the same environment name in `gymprecice-run`, 
+        unless a distinctive suffix is provided.
+        suffix (optional str): if time_stamped is False, then add the suffix to result directory name. 
+
 
     Note:
         "precice-config.xml" is the precice configuration file that should be located in "physics-simulation-engine" directory of your problem case.\n
@@ -77,6 +85,7 @@ def make_result_dir() -> dict:
             }
         }
     """
+    run_dir = None
     precice_config_name = "precice-config.xml"
     gymprecice_config_name = "gymprecice-config.json"
 
@@ -93,12 +102,18 @@ def make_result_dir() -> dict:
     env_name = options["environment"]["name"]
     solver_names = options["solvers"]["name"]
     solver_dirs = [join(sim_engine, solver) for solver in solver_names]
-    
-    time_str = datetime.now().strftime("%d%m%Y_%H%M%S")
-    run_dir_name = f"{env_name}_controller_training_{time_str}"
-    run_dir = join(result_path, "gymprecice-run", run_dir_name)
+
+    if time_stamped:
+        time_str = datetime.now().strftime("%d%m%Y_%H%M%S")
+        run_dir = join(result_path, "gymprecice-run", f"{env_name}_{time_str}")
+    else:
+        if suffix is None:
+            run_dir = join(result_path, "gymprecice-run", f"{env_name}")
+        else:
+            run_dir = join(result_path, "gymprecice-run", f"{env_name}_{suffix}")
 
     try:
+        shutil.rmtree(run_dir)
         os.makedirs(run_dir, exist_ok=True)
     except Exception as err:
         logger.error(f"Failed to create run directory")
