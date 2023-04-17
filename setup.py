@@ -28,17 +28,21 @@ with open("README.md") as fh:
 
 # All dependencies
 _deps = [
+    # core
     "gymnasium==0.28.0",
     "pyprecice==2.4.0.0",
-    "torch==1.12.1",
-    "scipy>=1.7.3",
-    "numpy",
     "xmltodict>=0.13.0",
     "psutil>=5.9.2",
+    # testing 
+    "pytest ==7.1.3",
+    "pytest-mock==3.10.0",
+    # tutorial
+    "matplotlib >=3.0",
+    "torch==1.12.1",
+    "scipy>=1.7.3",
+    # style
     "black~=23.1",
-    "pytest",
-    "pytest-mock",
-    "requests",
+    # training
     "wandb>=0.13.6",
 ]
 
@@ -48,20 +52,15 @@ def deps_list(*pkgs):
     return [deps[pkg] for pkg in pkgs]
 
 extras = {}
+extras["testing"] = deps_list("pytest", "pytest-mock")
+extras["tutorial"] = deps_list("torch", "matplotlib", "scipy")
 extras["style"] = deps_list("black")
-extras["train"] = deps_list("wandb")
-extras["test"] = deps_list("pytest", "pytest-mock")
-extras["torch"] = deps_list("torch")
+extras["training"] = deps_list("wandb")
 
-extras["dev"] = (
-    extras["style"] + extras["test"] + extras["train"] + extras["torch"]
-)
 
 install_requires = [
     deps["gymnasium"],
     deps["pyprecice"],
-    deps["scipy"],
-    deps["numpy"],
     deps["xmltodict"],
     deps["psutil"],
 ]
@@ -81,17 +80,12 @@ setup(
     install_requires=install_requires,
     extras_require=extras,
     test_suite="tests",
-    classifiers=[
-        "Private :: Do Not Upload" 
+    classifiers = [
         "Development Status :: 4 - Beta",
-        "Intended Audience :: Developers",
-        "Intended Audience :: Education",
+        "License :: OSI Approved :: MIT License",
         "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: MIT",
-        "Operating System :: Linux",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
-        "Topic :: Scientific/Engineering :: Artificial Intelligence",
-        "Topic :: Scientific/Engineering :: Active Flow Control",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",     
     ],
 )

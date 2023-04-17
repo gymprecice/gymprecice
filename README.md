@@ -24,24 +24,23 @@ We support and test for Python 3.8 on Linux. We recommend installing Gym-preCICE
  conda create -n gymprecice python=3.8
  conda activate gymprecice
 ```
-- clone the repository, switch to the root directory, and install the adapter:
+- install the adapter:
 ```bash
-git clone --single-branch --branch main https://github.com/gymprecice/gymprecice
-cd gymprecice
-pip install .
+python3 -m pip install gymprecice
 ```
 - run a simple test to check `gymprecice` installation (this should pass silently without any error/warning messages):
 ```bash
 python3 -c "import gymprecice"
 ```
-The above installation does not include extra dependencies such as `torch`, `pytest`, etc. You can install these dependencies like `pip install .[torch]` or use `pip install .[all]` to install all extra dependencies. 
+The above installation does not include extra dependencies to run tests or tutorials. You can install these dependencies like `python3 -m pip install gymprecice[testing]`, or 
+`python3 -m pip install gymprecice[tutorial]`, or use `python3 -m pip install gymprecice[all]` to install all extra dependencies. 
 
 ### Testing
-We use `pytest` testing framework to write and execute unit tests for all modules in our package.  
-- switch to the root directory (`gymprecice`) and install testing dependencies:
+We use `pytest` testing framework to write and execute unit tests for all modules in our package. You need to install 
+required dependencies before running any test:
 ```bash
-pip install .[testing]
-```
+python3 -m pip install gymprecice[testing]
+``` 
 - run the full test suits:
 ```
 pytest ./tests
@@ -51,7 +50,11 @@ It is also possible to test individual modules by providing the path to the resp
 pytest ./tests/test_core.py
 ```
 ### Usage
-Please refer to [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials/tree/main) for the details on how to use the adapter. You can check out the [Quickstart](https://github.com/gymprecice/gymprecice-tutorials) in our [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials/tree/main) repository to launch a control case.
+Please refer to [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials) for the details on how to use the adapter. You can check out the [Quickstart](https://github.com/gymprecice/gymprecice-tutorials/tree/main/quickstart) in our [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials) repository to launch a control case. You need to install 
+required dependencies before running any tutorial:
+```bash
+python3 -m pip install gymprecice[tutorial]
+``` 
 
 ## Contributions
 
