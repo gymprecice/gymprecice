@@ -2,6 +2,7 @@
 !.gitignore
 !.pre-commit-config.yaml
 !.flake8
+!.github
 *.log
 log.*
 *__pycache__/

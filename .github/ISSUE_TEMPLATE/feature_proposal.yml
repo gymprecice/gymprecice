@@ -1,0 +1,47 @@
+name: Proposal
+description: Propose changes that are not fixing bugs
+title: "[Proposal] Proposal title"
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: A clear and brief description of the proposal.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: |
+        Kindly provide a summary of the motivation(s) behind the proposal.
+
+  - type: textarea
+    id: pitch
+    attributes:
+      label: Pitch
+      description: A clear and brief description of the desired outcome.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: A clear and brief description of any alternative approaches.
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Include any additional context related to the feature request.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: >
+            I have checked that there is no similar [issue](https://github.com/gymprecice/gymprecice/issues) in
+            the repository
+          required: true
