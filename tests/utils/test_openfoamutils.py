@@ -1,12 +1,12 @@
-import pytest
-
 from os import chdir
+
 import numpy as np
+import pytest
 
 from gymprecice.utils.fileutils import open_file
 from gymprecice.utils.openfoamutils import (
-    get_patch_geometry,
     get_interface_patches,
+    get_patch_geometry,
     read_line,
 )
 
@@ -19,8 +19,7 @@ def test_case(tmpdir):
     test_openfoam_constant_dir = test_openfoam_dir.mkdir("constant")
     test_openfoam_polymesh_dir = test_openfoam_constant_dir.mkdir("polyMesh")
 
-    boundary = """
-4
+    boundary = """4
 (
     inlet
     {
@@ -51,8 +50,7 @@ def test_case(tmpdir):
 )"""
     test_openfoam_polymesh_dir.join("boundary").write(boundary)
 
-    faces = """
-11
+    faces = """11
 (
 4(2 8 9 3)
 4(0 6 8 2)
@@ -68,8 +66,7 @@ def test_case(tmpdir):
 )"""
     test_openfoam_polymesh_dir.join("faces").write(faces)
 
-    points = """
-12
+    points = """12
 (
 (0 0 -0.5)
 (1 0 -0.5)

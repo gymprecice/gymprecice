@@ -1,23 +1,24 @@
-import gymnasium as gym
+"""Core API for environments."""
+import logging
+import math
+import os
+import subprocess
+from abc import ABC, abstractmethod
+from typing import List, Optional, Tuple, TypeVar
 
+import gymnasium as gym
+import numpy as np
 import precice
+import psutil
 from precice import (
+    action_read_iteration_checkpoint,
     action_write_initial_data,
     action_write_iteration_checkpoint,
-    action_read_iteration_checkpoint,
 )
 
-from abc import abstractmethod, ABC
-import math
-import numpy as np
-import psutil
-import subprocess
-import os
-import logging
-from typing import Tuple, TypeVar, Optional, List
-
-from gymprecice.utils.xmlutils import get_mesh_data, get_episode_end_time
 from gymprecice.utils.fileutils import make_env_dir
+from gymprecice.utils.xmlutils import get_episode_end_time, get_mesh_data
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(level=logging.INFO)
@@ -56,12 +57,18 @@ class Adapter(ABC, gym.Env):
     - :meth:`reset` - Establishes a connection between the controller and the environment via preCICE, and resets the environment to an initial state.
       Returns the first observation for the controller in an episode.
     - :meth:`step` - Updates the environment state using actions received from the controller.
-      Returns the next observation for the controller, an instantaneous reward signal, and if the enviroment has terminated due to the latest action.
+      Returns the next observation for the controller, an instantaneous reward signal, and if the environment has terminated due to the latest action.
     - :meth:`close` - Closes the environment by switching off the coupling and releasing all resources used by preCICE and the physics simulation engine.
 
     """
 
-    def __init__(self, options, idx) -> None:
+    def __init__(self, options: dict = None, idx: int = 0) -> None:
+        """Setup generic attributes.
+
+        Args:
+            options (dict): environment configuration.
+            idx (int): environment index number.
+        """
         try:
             self._precice_cfg = options["precice"]["config_file"]
             self._solver_list = options["solvers"]["name"]
@@ -117,7 +124,7 @@ class Adapter(ABC, gym.Env):
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ) -> Tuple[ObsType, dict]:
-        """Resets the environment, couples the environment with the controller, and returns the initial observation.
+        r"""Resets the environment, couples the environment with the controller, and returns the initial observation.
 
         Args:
             seed (optional int): The seed that is used to initialize the environment's PRNG (`np_random`).
@@ -156,7 +163,7 @@ class Adapter(ABC, gym.Env):
         return obs, {}
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, bool, dict]:
-        """Runs one timestep of the environment dynamics using the controller actions.
+        r"""Runs one timestep of the environment dynamics using the controller actions.
 
         Args:
             action (ActType): an action provided by the controller to update the environment state.
@@ -282,8 +289,7 @@ class Adapter(ABC, gym.Env):
         self._is_reset = True
 
     def _advance(self, write_data: List[str]) -> None:
-        """Communicate boundary field values (obtained from mapping the controller action) with the physics simulation engine,
-        and advances its dynamics one step forwards in time.
+        """Communicate boundary field values (obtained from mapping the controller action) with the physics simulation engine, and advances its dynamics one step forwards in time.
 
         Args:
             write_data (List[str]): list of variable names that their values need to be communicated with the physics simulation engine via preCICE.
@@ -355,7 +361,7 @@ class Adapter(ABC, gym.Env):
                 raise Exception(f"Invalid variable type: {write_var}")
 
     def _launch_subprocess(self, cmd: str):
-        """Pre-run, reset, or run the physics simulation engine as a subprocess.
+        r"""Pre-run, reset, or run the physics simulation engine as a subprocess.
 
         Args:
             cmd (str): 'reset_solvers', 'prerun_solvers', or 'run_solvers'
@@ -493,7 +499,7 @@ class Adapter(ABC, gym.Env):
 
     @abstractmethod
     def _get_observation(self) -> ObsType:
-        """Receive partial observation information from the the physics simulation engine to be fed into the controller.
+        r"""Receive partial observation information from the the physics simulation engine to be fed into the controller.
 
         Returns:
             ObsType: an element of the environment's :attr:`observation_space`.

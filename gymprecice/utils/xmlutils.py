@@ -1,9 +1,15 @@
-import xmltodict
+"""A set of common utilities used for processing xml files, specifically precice-config.xml.
+
+These are not intended as API functions, and will not remain stable over time.
+"""
 import copy
-import logging
 import fileinput
+import logging
 import sys
-from typing import Tuple, Optional, List
+from typing import List, Optional, Tuple
+
+import xmltodict
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(level=logging.INFO)

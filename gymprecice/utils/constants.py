@@ -1,5 +1,7 @@
+"""A set of constant values to be used within the environments."""
 import math
 import multiprocessing as mp
+
 
 LOCK = mp.Lock()
 EPSILON = 1e-6

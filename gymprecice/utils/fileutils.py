@@ -1,20 +1,25 @@
+"""A set of common utilities used for file management within the environments.
+
+These are not intended as API functions, and will not remain stable over time.
+"""
+import json
+import logging
 import os
-from time import sleep
+import shutil
 from datetime import datetime
 from os.path import join
-import logging
-from typing import Tuple, Optional, List
-import json
-import shutil
+from time import sleep
+from typing import List, Optional, TextIO
 
-from gymprecice.utils.constants import SLEEP_TIME, MAX_ACCESS_WAIT_TIME
+from gymprecice.utils.constants import MAX_ACCESS_WAIT_TIME, SLEEP_TIME
 from gymprecice.utils.xmlutils import _replace_keyword
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(level=logging.INFO)
 
 
-def make_env_dir(env_dir: str = None, solver_list: list = None) -> None:
+def make_env_dir(env_dir: str = None, solver_list: List = None) -> None:
     """Create a directory with all necessary solver and config files to represent a full training environment.
 
     Args:
@@ -36,7 +41,7 @@ def make_env_dir(env_dir: str = None, solver_list: list = None) -> None:
     sleep(SLEEP_TIME)
 
 
-def open_file(file: str = None):
+def open_file(file: str = None) -> TextIO:
     """Open dynamic files."""
     max_attempts = int(MAX_ACCESS_WAIT_TIME / 1e-6)
     acceess_counter = 0
@@ -44,32 +49,34 @@ def open_file(file: str = None):
         try:
             file_object = open(file)
             break
-        except IOError:
+        except OSError:
             acceess_counter += 1
             if acceess_counter < max_attempts:
                 continue
             else:
                 # break after trying max_attempts
-                raise IOError(f"Could not access {file} after {max_attempts} attempts")
+                raise OSError(f"Could not access {file} after {max_attempts} attempts")
     return file_object
 
 
-def make_result_dir(time_stamped: Optional[bool] = True, suffix: Optional[str] = None) -> dict:
-    """Create a directory to save train/prediction results.
+def make_result_dir(
+    time_stamped: Optional[bool] = True, suffix: Optional[str] = None
+) -> dict:
+    r"""Create a directory to save train/prediction results.
 
     Args:
-        time_stamped (optional bool): If the directory name gets time-stamped. 
-        Warning regarding Data-loss: When set to False, the function will overwrite any directory with the same environment name in `gymprecice-run`, 
+        time_stamped (optional bool): If the directory name gets time-stamped.
+        Warning regarding Data-loss: When set to False, the function will overwrite any directory with the same environment name in `gymprecice-run`,
         unless a distinctive suffix is provided.
-        suffix (optional str): if time_stamped is False, then add the suffix to result directory name. 
+        suffix (optional str): if time_stamped is False, then add the suffix to result directory name.
 
 
     Note:
         "precice-config.xml" is the precice configuration file that should be located in "physics-simulation-engine" directory of your problem case.\n
         "gymprecice-config.json" is the environment configuration file that should be located in "physics-simulation-engine" directory of your problem case.
-        
+
         "gymprecice-config.json" has the following format: \n
-        
+
         {
             "environment": {
                 "name": "",
@@ -89,14 +96,14 @@ def make_result_dir(time_stamped: Optional[bool] = True, suffix: Optional[str] =
     precice_config_name = "precice-config.xml"
     gymprecice_config_name = "gymprecice-config.json"
 
-    sim_engine =  join(os.getcwd(), "physics-simulation-engine")
+    sim_engine = join(os.getcwd(), "physics-simulation-engine")
     precice_config = join(sim_engine, precice_config_name)
-    gymprecice_config =  join(sim_engine, gymprecice_config_name)
+    gymprecice_config = join(sim_engine, gymprecice_config_name)
 
     with open(gymprecice_config) as config_file:
         content = config_file.read()
     options = json.loads(content)
-    options.update({"precice":{"config_file": precice_config_name}})
+    options.update({"precice": {"config_file": precice_config_name}})
 
     result_path = options["environment"].get("results_path", os.getcwd())
     env_name = options["environment"]["name"]
@@ -116,20 +123,20 @@ def make_result_dir(time_stamped: Optional[bool] = True, suffix: Optional[str] =
         shutil.rmtree(run_dir, ignore_errors=True)
         os.makedirs(run_dir, exist_ok=True)
     except Exception as err:
-        logger.error(f"Failed to create run directory")
+        logger.error(f"Failed to create {run_dir}")
         raise err
 
     try:
         for solver_dir in solver_dirs:
             os.system(f"cp -r {solver_dir} {run_dir}")
     except Exception as err:
-        logger.error(f"Failed to copy base case to run direrctory")
+        logger.error(f"Failed to copy base case to {run_dir}")
         raise err
 
     try:
         os.system(f"cp {precice_config} {run_dir}")
     except Exception as err:
-        logger.error(f"Failed to copy precice config file to run dir")
+        logger.error(f"Failed to copy precice config file to {run_dir}")
         raise err
 
     os.chdir(str(run_dir))

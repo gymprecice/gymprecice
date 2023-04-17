@@ -1,6 +1,8 @@
+"""Setups the project."""
 import re
-from setuptools import setup, find_packages
 import sys
+
+from setuptools import find_packages, setup
 
 
 # adapted from https://stackoverflow.com/a/9079062
@@ -33,7 +35,7 @@ _deps = [
     "pyprecice==2.4.0.0",
     "xmltodict>=0.13.0",
     "psutil>=5.9.2",
-    # testing 
+    # testing
     "pytest==7.1.3",
     "pytest-mock==3.10.0",
     # tutorial
@@ -46,10 +48,15 @@ _deps = [
     "wandb>=0.13.6",
 ]
 
-deps = {b: a for a, b in (re.findall(r"^(([^!=<>~]+)(?:[!=<>~].*)?$)", x)[0] for x in _deps)}
+deps = {
+    b: a for a, b in (re.findall(r"^(([^!=<>~]+)(?:[!=<>~].*)?$)", x)[0] for x in _deps)
+}
+
 
 def deps_list(*pkgs):
+    """List packages from their names."""
     return [deps[pkg] for pkg in pkgs]
+
 
 extras = {}
 extras["testing"] = deps_list("pytest", "pytest-mock")
@@ -80,12 +87,12 @@ setup(
     install_requires=install_requires,
     extras_require=extras,
     test_suite="tests",
-    classifiers = [
+    classifiers=[
         "Development Status :: 4 - Beta",
         "License :: OSI Approved :: MIT License",
         "Intended Audience :: Science/Research",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
-        "Topic :: Scientific/Engineering :: Artificial Intelligence",     
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
 )

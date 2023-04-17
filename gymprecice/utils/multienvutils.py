@@ -1,11 +1,15 @@
+"""A worker function that restricts access to preCICE to only one environment at a time during multi-environment reset.
+
+The function is adapted from https://github.com/Farama-Foundation/Gymnasium/blob/main/gymnasium/vector/async_vector_env.py
+This not intended as API functions, and will not remain stable over time.
+"""
 import sys
 
 from gymprecice.utils.constants import LOCK
 
 
 def worker_with_lock(index, env_fn, pipe, parent_pipe, shared_memory, error_queue):
-    """Lock 'reset' to prevent simultaneous access to preCICE upon initialisation in multi-environment training.
-    """
+    """Limit access to preCICE to only one environment during reset."""
     assert shared_memory is None
     env = env_fn()
     parent_pipe.close()

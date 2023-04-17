@@ -1,9 +1,10 @@
+from os import chdir
+from shutil import rmtree
+
 import pytest
 
-from shutil import rmtree
-from os import chdir
-
 from gymprecice.utils.xmlutils import get_episode_end_time, get_mesh_data
+
 
 VALID_XML_CONTENT_0 = """<?xml version="1.0"?>
 <precice-configuration>
@@ -101,6 +102,7 @@ EXPECTED_1 = {
     },
 }
 
+
 @pytest.fixture
 def testdir(tmpdir):
     test_dir = tmpdir.mkdir("test")
@@ -124,7 +126,9 @@ def test_valid_get_mesh_data(testdir, input, expected):
     with open("precice-config.xml", "w") as file:
         file.write(input)
 
-    scaler_list, vector_list, mesh_list, controller_dict = get_mesh_data("precice-config.xml")
+    scaler_list, vector_list, mesh_list, controller_dict = get_mesh_data(
+        "precice-config.xml"
+    )
     output = {
         "scaler_list": scaler_list,
         "vector_list": vector_list,

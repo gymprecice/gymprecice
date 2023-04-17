@@ -1,30 +1,32 @@
-import re
-from time import sleep
+"""A set of common utilities used for the envronment that their physics-simulation-engine contains OpenFOAM solvers.
+
+The following methods are adapted from https://github.com/xu-xianghua/ofpp:
+_is_integer; _is_binary_format; _parse_boundary_content; _parse_faces_content; _parse_points_content; _parse_mesh_file; _parse_mesh_data; _boundary_face_centre; _boundary_face_area
+These are not intended as API functions, and will not remain stable over time.
+"""
 import os
-import numpy as np
+import re
 import struct
 from collections import namedtuple
+from time import sleep
+from typing import List, TextIO, Tuple
+
+import numpy as np
 
 from gymprecice.utils.constants import FILE_ACCESS_SLEEP_TIME
+
 
 Boundary = namedtuple("Boundary", "type, num, start, id")
 
 
 def _is_integer(s):
     try:
-        x = int(s)
         return True
     except ValueError:
         return False
 
 
 def _is_binary_format(content, maxline=20):
-    """
-    parse file header to judge the format is binary or not
-    :param content: file content in line list
-    :param maxline: maximum lines to parse
-    :return: binary format or not
-    """
     for lc in content[:maxline]:
         if b"format" in lc:
             if b"binary" in lc:
@@ -34,15 +36,7 @@ def _is_binary_format(content, maxline=20):
 
 
 def _parse_boundary_content(content, is_binary=None, skip=0):
-    """
-    parse boundary from content
-    :param content: file contents
-    :param is_binary: binary format or not, not used
-    :param skip: skip lines
-    :return: boundary dict
-    """
     bd = {}
-    num_boundary = 0
     n = skip
     bid = 0
     in_boundary_field = False
@@ -59,7 +53,6 @@ def _parse_boundary_content(content, is_binary=None, skip=0):
         lc = content[n]
         if not in_boundary_field:
             if _is_integer(lc.strip()):
-                num_boundary = int(lc.strip())
                 in_boundary_field = True
                 if content[n + 1].startswith(b"("):
                     n += 2
@@ -107,13 +100,6 @@ def _parse_boundary_content(content, is_binary=None, skip=0):
 
 
 def _parse_faces_content(content, is_binary, skip=0):
-    """
-    parse faces from content
-    :param content: file contents
-    :param is_binary: binary format or not
-    :param skip: skip lines
-    :return: faces as list
-    """
     n = skip
     while n < len(content):
         lc = content[n]
@@ -128,11 +114,11 @@ def _parse_faces_content(content, is_binary, skip=0):
                 buf = b"".join(content[n + 1 :])
                 disp = struct.calcsize("c")
                 idx = struct.unpack(
-                    "{}i".format(num), buf[disp : num * struct.calcsize("i") + disp]
+                    f"{num}i", buf[disp : num * struct.calcsize("i") + disp]
                 )
                 disp = 3 * struct.calcsize("c") + 2 * struct.calcsize("i")
                 pp = struct.unpack(
-                    "{}i".format(idx[-1]),
+                    f"{idx[-1]}i",
                     buf[
                         disp
                         + num * struct.calcsize("i") : disp
@@ -148,13 +134,6 @@ def _parse_faces_content(content, is_binary, skip=0):
 
 
 def _parse_points_content(content, is_binary, skip=0):
-    """
-    parse points from content
-    :param content: file contents
-    :param is_binary: binary format or not
-    :param skip: skip lines
-    :return: points coordinates as numpy.array
-    """
     n = skip
     while n < len(content):
         lc = content[n]
@@ -170,7 +149,7 @@ def _parse_points_content(content, is_binary, skip=0):
                 disp = struct.calcsize("c")
                 vv = np.array(
                     struct.unpack(
-                        "{}d".format(num * 3),
+                        f"{num * 3}d",
                         buf[disp : num * 3 * struct.calcsize("d") + disp],
                     )
                 )
@@ -181,12 +160,6 @@ def _parse_points_content(content, is_binary, skip=0):
 
 
 def _parse_mesh_file(fn, parser):
-    """
-    parse mesh file
-    :param fn: boundary file name
-    :param parser: parser of the mesh
-    :return: mesh data
-    """
     try:
         with open(fn, "rb") as f:
             content = f.readlines()
@@ -197,11 +170,6 @@ def _parse_mesh_file(fn, parser):
 
 
 def _parse_mesh_data(path):
-    """
-    parse mesh data from mesh files
-    :param path: path of mesh files
-    :return: none
-    """
     boundary = _parse_mesh_file(os.path.join(path, "boundary"), _parse_boundary_content)
     points = _parse_mesh_file(os.path.join(path, "points"), _parse_points_content)
     faces = _parse_mesh_file(os.path.join(path, "faces"), _parse_faces_content)
@@ -210,10 +178,6 @@ def _parse_mesh_data(path):
 
 
 def _boundary_face_centre(path, patch):
-    """
-    return coordinate of faces on boundary patch
-    :param patch: boundary name, byte str
-    """
     boundary, points, faces = _parse_mesh_data(path)
 
     try:
@@ -254,10 +218,6 @@ def _boundary_face_centre(path, patch):
 
 
 def _boundary_face_area(path, patch):
-    """
-    return coordinate of faces on boundary patch
-    :param patch: boundary name, byte str
-    """
     boundary, points, faces = _parse_mesh_data(path)
 
     try:
@@ -344,7 +304,8 @@ def _parse_probe_lines(line_string):
     return is_comment, float_list[0], num_probes, float_list[1:]
 
 
-def get_patch_geometry(case_path, patches):
+def get_patch_geometry(case_path: str = None, patches: List[str] = None):
+    """Read the geometric properties of the interface boundaries (actuator patches that communicate data with the controller)."""
     path = os.path.join(case_path, "constant/polyMesh/")
     patch_data = {}
     for patch in patches:
@@ -359,23 +320,11 @@ def get_patch_geometry(case_path, patches):
     return patch_data
 
 
-def get_interface_patches(path_to_precicedict):
-    """
-    Extract patch names of the interface boundaries.
-
-    Parameters
-    ----------
-    path_to_preciceDict : path to the precideDict file in OpenFOAM case.
-
-    Returns
-    -------
-    name_list : str list
-        List of names of interface patches.
-
-    """
+def get_interface_patches(path_to_precicedict: str = None) -> List[str]:
+    """Extract names of the interface boundaries (actuator patches that communicate data with the controller)."""
     # read the file content as a string
     precicedict_str = None
-    with open(path_to_precicedict, "r") as filehandle:
+    with open(path_to_precicedict) as filehandle:
         precicedict_str = filehandle.readlines()
     precicedict_str = "\n".join(precicedict_str)
 
@@ -388,7 +337,15 @@ def get_interface_patches(path_to_precicedict):
     return name_list
 
 
-def read_line(filehandler, n_expected):
+def read_line(
+    filehandler: TextIO = None, n_expected: int = None
+) -> Tuple[bool, int, int, List[float]]:
+    """Read the latest line from a dynamic file written by OpenFOAM function objects.
+
+    Args:
+        filehandler (TextIO): file handler to an OpenFOAM function object file.
+        n_expected (int): number of data columns (excluding the time column) written by the OpenFOAM function object.
+    """
     file_pos = filehandler.tell()
     line_text = filehandler.readline()
     is_comment, time_idx, n_probes, probe_data = _parse_probe_lines(line_text.strip())

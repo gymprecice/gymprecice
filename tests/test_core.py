@@ -1,11 +1,10 @@
-import pytest
-from pytest_mock import mocker, class_mocker
-
 from os import chdir
 from shutil import rmtree
-import numpy as np
 
 import gymnasium as gym
+import numpy as np
+import pytest
+
 from tests import mocked_precice
 
 
@@ -104,7 +103,7 @@ class TestAdapter:
 
             def _get_reward(self):
                 return 0.5
-            
+
             def _close_external_resources(self):
                 pass
 
@@ -147,9 +146,9 @@ class TestAdapter:
             "obs_step1": np.array_equal(obs_step1, env.dummy_obs),
             "reward_step0": reward_step0 == 0.5,
             "reward_step1": reward_step1 == 0.5,
-            "terminated_step0": terminated_step0 == False,
-            "terminated_step1": terminated_step1 == True,
-            "truncated_step0": truncated_step0 == False,
-            "truncated_step1": truncated_step1 == False,
+            "terminated_step0": not terminated_step0,
+            "terminated_step1": terminated_step1,
+            "truncated_step0": not truncated_step0,
+            "truncated_step1": not truncated_step1,
         }
         assert all(check.values())

@@ -1,10 +1,10 @@
+from os import chdir, listdir, makedirs, path
+from shutil import rmtree
+
 import pytest
 
-from shutil import rmtree
-from os import chdir, path, listdir, makedirs
+from gymprecice.utils.fileutils import make_env_dir, make_result_dir, open_file
 
-from gymprecice.utils.constants import MAX_ACCESS_WAIT_TIME
-from gymprecice.utils.fileutils import open_file, make_env_dir, make_result_dir
 
 FILE_CONTENT = "content"
 
@@ -61,7 +61,7 @@ def test_invalid_make_env_dir(testdir):
 
 def test_valid_make_result_dir(testdir):
     makedirs("physics-simulation-engine", exist_ok=True)
-    
+
     valid_environment_config = """
     {
         "environment": {
@@ -89,13 +89,13 @@ def test_valid_make_result_dir(testdir):
     makedirs("physics-simulation-engine/fluid-openfoam/content", exist_ok=True)
     with open("physics-simulation-engine/fluid-openfoam/content/info.txt", "w") as file:
         file.write(FILE_CONTENT)
-        
+
     makedirs("physics-simulation-engine/solid-fenics/content", exist_ok=True)
     with open("physics-simulation-engine/solid-fenics/content/info.txt", "w") as file:
         file.write(FILE_CONTENT)
 
     make_result_dir()
-    
+
     chdir("../..")
     run_dir = path.join("gymprecice-run", listdir("gymprecice-run")[0])
 
