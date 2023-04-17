@@ -113,7 +113,7 @@ def make_result_dir(time_stamped: Optional[bool] = True, suffix: Optional[str] =
             run_dir = join(result_path, "gymprecice-run", f"{env_name}_{suffix}")
 
     try:
-        shutil.rmtree(run_dir)
+        shutil.rmtree(run_dir, ignore_errors=True)
         os.makedirs(run_dir, exist_ok=True)
     except Exception as err:
         logger.error(f"Failed to create run directory")
