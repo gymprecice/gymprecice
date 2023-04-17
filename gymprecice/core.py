@@ -4,7 +4,7 @@ import math
 import os
 import subprocess
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple, TypeVar
+from typing import Dict, List, Optional, Tuple, TypeVar
 
 import gymnasium as gym
 import numpy as np
@@ -62,7 +62,7 @@ class Adapter(ABC, gym.Env):
 
     """
 
-    def __init__(self, options: dict = None, idx: int = 0) -> None:
+    def __init__(self, options: Dict = None, idx: int = 0) -> None:
         """Setup generic attributes.
 
         Args:
@@ -186,6 +186,7 @@ class Adapter(ABC, gym.Env):
         assert self.action_space.contains(
             action
         ), f"{action!r} ({type(action)}) invalid"
+        assert self._interface is not None, "Set preCICE interface!"
 
         # (1) map the controller actions to boundary fields for the physics simulation engine
         write_data = self._get_action(action, self._write_var_list)
@@ -249,15 +250,20 @@ class Adapter(ABC, gym.Env):
     # preCICE related methods:
     def _init_precice(self) -> None:
         """Couple the physics simulation engine and the controller via preCICE, and runs the physics simulation engine one-step forward."""
+        assert self._interface is None, "preCICE-interface re-initialisation attempt!"
+        assert self._controller is not None, "Can't find the controller name!"
+        assert self._read_var_list is not None, "Set list of variables to be read!"
+        assert self._write_var_list is not None, "Set list of variables to be written!"
+
         self._time_window = 0
         self._mesh_id = {}
         self._vertex_coords = {}
         self._vertex_ids = {}
         self._read_ids = {}
         self._write_ids = {}
+
         mesh_name = self._controller["mesh_name"]
 
-        assert self._interface is None, "preCICE-interface re-initialisation attempt!"
         self._interface = precice.Interface("Controller", self._precice_cfg, 0, 1)
 
         # (1) set spatial mesh coupling data
@@ -294,6 +300,8 @@ class Adapter(ABC, gym.Env):
         Args:
             write_data (List[str]): list of variable names that their values need to be communicated with the physics simulation engine via preCICE.
         """
+        assert self._interface is not None, "Set preCICE interface!"
+
         self._write(write_data)
 
         if self._interface.is_action_required(action_write_iteration_checkpoint()):
@@ -344,6 +352,11 @@ class Adapter(ABC, gym.Env):
         Args:
             write_data (List[str]): list of variable names that their values need to be communicated with the physics simulation engine via preCICE.
         """
+        assert self._interface is not None, "Set preCICE interface!"
+        assert self._vertex_ids is not None, "Set vertex-ids of coupling interfaces!"
+        assert self._write_var_list is not None, "Set list of variables to be written!"
+        assert self._write_ids is not None, "Set ids of variables to be written!"
+
         for write_var in self._write_var_list:
             if write_var in self._vector_variables:
                 self._interface.write_block_vector_data(
@@ -371,6 +384,7 @@ class Adapter(ABC, gym.Env):
             "prerun_solvers",
             "run_solvers",
         ], "Invalid command name"
+        completed_process = None
 
         subproc_env = {
             key: variable for key, variable in os.environ.items() if "MPI" not in key
@@ -391,8 +405,11 @@ class Adapter(ABC, gym.Env):
                     )
                     raise err
 
-            if completed_process.returncode != 0:
-                raise Exception(f"Subprocess was not successful - {completed_process}")
+                assert completed_process is not None
+                if completed_process.returncode != 0:
+                    raise Exception(
+                        f"Subprocess was not successful - {completed_process}"
+                    )
 
         elif cmd == "prerun_solvers":
             for solver in self._solver_list:
@@ -409,8 +426,11 @@ class Adapter(ABC, gym.Env):
                     )
                     raise err
 
-            if completed_process.returncode != 0:
-                raise Exception(f"Subprocess was not successful - {completed_process}")
+                assert completed_process is not None
+                if completed_process.returncode != 0:
+                    raise Exception(
+                        f"Subprocess was not successful - {completed_process}"
+                    )
 
         elif cmd == "run_solvers":
             subproc = []

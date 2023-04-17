@@ -179,6 +179,9 @@ def _parse_mesh_data(path):
 
 def _boundary_face_centre(path, patch):
     boundary, points, faces = _parse_mesh_data(path)
+    assert boundary is not None
+    assert points is not None
+    assert faces is not None
 
     try:
         b = boundary[patch]
@@ -219,6 +222,9 @@ def _boundary_face_centre(path, patch):
 
 def _boundary_face_area(path, patch):
     boundary, points, faces = _parse_mesh_data(path)
+    assert boundary is not None
+    assert points is not None
+    assert faces is not None
 
     try:
         b = boundary[patch]

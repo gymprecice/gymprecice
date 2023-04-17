@@ -12,7 +12,7 @@ from time import sleep
 from typing import List, Optional, TextIO
 
 from gymprecice.utils.constants import MAX_ACCESS_WAIT_TIME, SLEEP_TIME
-from gymprecice.utils.xmlutils import _replace_keyword
+from gymprecice.utils.xmlutils import replace_keyword
 
 
 logger = logging.getLogger(__name__)
@@ -143,7 +143,7 @@ def make_result_dir(
 
     keyword = "exchange-directory"
     keyword_value = f"{run_dir}/precice-{keyword}"
-    _replace_keyword(
+    replace_keyword(
         precice_config_name,
         keyword,
         keyword_value,

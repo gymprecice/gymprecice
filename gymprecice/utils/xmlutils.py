@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(level=logging.INFO)
 
 
-def _replace_keyword(
+def replace_keyword(
     file: str = "precice-config.xml",
     keyword: str = None,
     value: str = None,
@@ -128,6 +128,7 @@ def get_mesh_data(file: str = "precice-config.xml") -> Tuple[List, List, List, d
         for item_ in solver_interface["data:vector"]:
             vector_variables.append(item_["@name"])
 
+    controller = {}
     # we only have one controller within our participants
     for item_ in xml_tree["precice-configuration"]["solver-interface"]["participant"]:
         if "controller" in item_["@name"].lower():

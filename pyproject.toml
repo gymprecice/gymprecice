@@ -81,3 +81,15 @@ extra_standard_library = ["typing_extensions"]
 indent = 4
 lines_after_imports = 2
 multi_line_output = 3
+
+[tool.pyright]
+include = ["gymprecice/**", "tests/**"]
+exclude = ["**/__pycache__"]
+strict = []
+typeCheckingMode = "basic"
+pythonVersion = "3.8"
+pythonPlatform = "All"
+enableTypeIgnoreComments = true
+reportGeneralTypeIssues = "none"
+reportPrivateUsage = "warning"
+reportUnboundVariable = "warning"
