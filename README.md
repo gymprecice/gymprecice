@@ -2,9 +2,9 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 ## Gym-preCICE
 
-Gym-preCICE is a Python [preCICE](https://github.com/precice/precice) adapter fully compliant with the 
-[Gymnasium API](https://github.com/Farama-Foundation/Gymnasium), aka [OpenAI Gym](https://github.com/openai/gym), 
-to facilitate employing and developing reinforcement learning algorithms for single- and multi-physics active control applications. 
+Gym-preCICE is a Python [preCICE](https://github.com/precice/precice) adapter fully compliant with the
+[Gymnasium API](https://github.com/Farama-Foundation/Gymnasium), aka [OpenAI Gym](https://github.com/openai/gym),
+to facilitate employing and developing reinforcement learning algorithms for single- and multi-physics active control applications.
 In a Reinforcement Learning-interaction cycle, Gym-preCICE takes advantage of coupling tool preCICE, an open-source library for multi-physics coupling, to handle information exchange between a Reinforcement Learning agent ("controller") and external mesh-based solvers ("physics-simulation-engine"). The primary use of Gym-preCICE adapter is for closed- and open-loop active control of physics simulations.
 
 ## Installation
@@ -32,15 +32,15 @@ python3 -m pip install gymprecice
 ```bash
 python3 -c "import gymprecice"
 ```
-The above installation does not include extra dependencies to run tests or tutorials. You can install these dependencies like `python3 -m pip install gymprecice[testing]`, or 
-`python3 -m pip install gymprecice[tutorial]`, or use `python3 -m pip install gymprecice[all]` to install all extra dependencies. 
+The above installation does not include extra dependencies to run tests or tutorials. You can install these dependencies like `python3 -m pip install gymprecice[testing]`, or
+`python3 -m pip install gymprecice[tutorial]`, or use `python3 -m pip install gymprecice[all]` to install all extra dependencies.
 
 ### Testing
-We use `pytest` testing framework to write and execute unit tests for all modules in our package. You need to install 
+We use `pytest` testing framework to write and execute unit tests for all modules in our package. You need to install
 required dependencies before running any test:
 ```bash
 python3 -m pip install gymprecice[testing]
-``` 
+```
 - run the full test suits:
 ```
 pytest ./tests
@@ -50,18 +50,18 @@ It is also possible to test individual modules by providing the path to the resp
 pytest ./tests/test_core.py
 ```
 ### Usage
-Please refer to [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials) for the details on how to use the adapter. You can check out the [Quickstart](https://github.com/gymprecice/gymprecice-tutorials/tree/main/quickstart) in our [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials) repository to launch a control case. You need to install 
+Please refer to [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials) for the details on how to use the adapter. You can check out the [Quickstart](https://github.com/gymprecice/gymprecice-tutorials/tree/main/quickstart) in our [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials) repository to launch a control case. You need to install
 required dependencies before running any tutorial:
 ```bash
 python3 -m pip install gymprecice[tutorial]
-``` 
+```
 
 ## Contributions
 
-gymprecice is currently developed and maintained by: 
+gymprecice is currently developed and maintained by:
 
 - Mosayeb Shams (@mosayebshams) - Lead developer
-- Ahmed H. Elsheikh(@ahmed-h-elsheikh) - Co developer and Supervisor 
+- Ahmed H. Elsheikh(@ahmed-h-elsheikh) - Co developer and Supervisor
 
 ## Citation
 If you use Gym-preCICE, please consider citing its technical paper:
