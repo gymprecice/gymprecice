@@ -34,10 +34,10 @@ _deps = [
     "xmltodict>=0.13.0",
     "psutil>=5.9.2",
     # testing 
-    "pytest ==7.1.3",
+    "pytest==7.1.3",
     "pytest-mock==3.10.0",
     # tutorial
-    "matplotlib >=3.0",
+    "matplotlib>=3.0",
     "torch==1.12.1",
     "scipy>=1.7.3",
     # style
