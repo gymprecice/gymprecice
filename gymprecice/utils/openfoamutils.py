@@ -1,8 +1,33 @@
 """A set of common utilities used for the envronment that their physics-simulation-engine contains OpenFOAM solvers.
 
-The following methods are adapted from https://github.com/xu-xianghua/ofpp:
-_is_integer; _is_binary_format; _parse_boundary_content; _parse_faces_content; _parse_points_content; _parse_mesh_file; _parse_mesh_data; _boundary_face_centre; _boundary_face_area
 These are not intended as API functions, and will not remain stable over time.
+
+These methods are adapted from https://github.com/xu-xianghua/ofpp:
+_is_integer, _is_binary_format, _parse_boundary_content, _parse_faces_content, _parse_points_content, _parse_mesh_file, and _parse_mesh_data,
+
+under the following license:
+
+MIT License
+
+Copyright (c) 2017 dayigu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 """
 import os
 import re
@@ -21,6 +46,7 @@ Boundary = namedtuple("Boundary", "type, num, start, id")
 
 def _is_integer(s):
     try:
+        int(s)
         return True
     except ValueError:
         return False
@@ -165,7 +191,6 @@ def _parse_mesh_file(fn, parser):
             content = f.readlines()
             return parser(content, _is_binary_format(content))
     except FileNotFoundError:
-        print("file not found: %s" % fn)
         return None
 
 
@@ -215,7 +240,6 @@ def _boundary_face_centre(path, patch):
                 else:
                     return face_centres.append(center_point)
         return np.array(face_centres)
-
     except KeyError:
         return ()
 
