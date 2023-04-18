@@ -1,6 +1,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/gymprecice/gymprecice/blob/master/LICENSE.md)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Run Pre-Commit: passing](https://github.com/gymprecice/gymprecice/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/gymprecice/gymprecice/actions/workflows/pre-commit.yml)
+[![pre-Commit Check](https://github.com/gymprecice/gymprecice/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/gymprecice/gymprecice/actions/workflows/pre-commit.yml)
 ## Gym-preCICE
 
 Gym-preCICE is a Python [preCICE](https://github.com/precice/precice) adapter fully compliant with the
