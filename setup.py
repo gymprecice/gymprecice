@@ -28,7 +28,7 @@ with open("README.md") as fh:
 _deps = [
     # core
     "gymnasium==0.28.0",
-    "pyprecice==2.4.0.0",
+    "pyprecice==2.5.0",
     "xmltodict>=0.13.0",
     "psutil>=5.9.2",
     # testing
