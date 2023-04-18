@@ -1,16 +1,12 @@
 """Setups the project."""
 import re
-import sys
 
 from setuptools import find_packages, setup
 
 
-# adapted from https://stackoverflow.com/a/9079062
-if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] != 8):
-    raise Exception("Error: gymprecice only supports Python 3.8.")
-
 with open("gymprecice/version.py") as file:
-    full_version = file.read()
+    module_docstring = file.readline()
+    full_version = file.readline()
     assert (
         re.match(r'VERSION = "\d\.\d+\.\d+"\n', full_version).group(0) == full_version
     ), f"Unexpected version: {full_version}"
@@ -82,7 +78,7 @@ setup(
     author_email="m.shams@hw.ac.uk, a.elsheikh@hw.ac.uk",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    python_requires="==3.8.*",
+    python_requires=">=3.7",
     packages=find_packages(),
     install_requires=install_requires,
     extras_require=extras,

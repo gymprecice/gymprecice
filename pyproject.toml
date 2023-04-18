@@ -10,7 +10,7 @@ version = "0.0.1"
 authors = [{ name = "Mosayeb Shams (lead developer)", email = "m.shams@hw.ac.uk" }, { name = "Ahmed H. Elsheikh (co-developer and supervisor)", email = "a.elsheikh@hw.ac.uk" }]
 description = "A preCICE adapter that provides a Gymnasium-like API to couple reinforcement learning and physics-based solvers for active control."
 readme = "README.md"
-requires-python = "== 3.8"
+requires-python = ">= 3.7"
 
 license = { text = "MIT License" }
 keywords = ["Reinforcement Learning", "RL", "AI", "gymnasium", "gym", "preCICE", "precice", "Active Flow Control", "Active Control"]

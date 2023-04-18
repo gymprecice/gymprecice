@@ -18,7 +18,7 @@ In a Reinforcement Learning-interaction cycle, Gym-preCICE takes advantage of co
 **preCICE Python bindings**: Installed by default. Refer to [the python language bindings for preCICE](https://github.com/precice/python-bindings) for information.
 
 ### Installing the package
-We support and test for Python 3.8 on Linux. We recommend installing Gym-preCICE within a virtual environment using [conda](https://www.anaconda.com/products/distribution#Downloads) with `Python 3.8`:
+We support and test for Python versions 3.7 and higher on Linux. We recommend installing Gym-preCICE within a virtual environment using [conda](https://www.anaconda.com/products/distribution#Downloads):
 
 - create and activate a conda virtual environment:
 ```bash
