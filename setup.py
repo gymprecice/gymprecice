@@ -1,7 +1,7 @@
 """Setups the project."""
 import re
 
-from setuptools import find_packages, setup
+from setuptools import setup
 
 
 with open("gymprecice/version.py") as file:
