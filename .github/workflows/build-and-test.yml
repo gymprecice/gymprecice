@@ -32,7 +32,7 @@ jobs:
       run:  |
         mkdir -p precice
         echo "from setuptools import setup" >> precice/setup.py
-        echo "setup(name='pyprecice', version='2.5.0')" >> precice/setup.py
+        echo "setup(name='pyprecice', version='2.5.0.1')" >> precice/setup.py
         python3 -m pip install ./precice/
     - name: Install dependencies
       run:  |
@@ -41,5 +41,4 @@ jobs:
         pip install -r requirements.txt
     - name: Test with pytest
       run: |
-        pip install pytest pytest-mock
         pytest
