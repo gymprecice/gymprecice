@@ -60,10 +60,12 @@ python3 -m pip install gymprecice[tutorial]
 
 ## Contributions
 
-gymprecice is currently developed and maintained by:
+Gym-preCICE is currently developed and maintained by:
 
 - Mosayeb Shams (@mosayebshams) - Lead developer
 - Ahmed H. Elsheikh(@ahmed-h-elsheikh) - Co developer and Supervisor
+
+This work was supported by the Engineering and Physical Sciences Research Council grant number EP/V048899/1.
 
 ## Citation
 If you use Gym-preCICE, please consider citing its technical paper:
