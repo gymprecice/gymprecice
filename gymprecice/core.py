@@ -302,13 +302,12 @@ class Adapter(ABC, gym.Env):
         """
         assert self._interface is not None, "Set preCICE interface!"
 
-        self._write(write_data)
-
         if self._interface.is_action_required(action_write_iteration_checkpoint()):
             while True:
                 self._interface.mark_action_fulfilled(
                     action_write_iteration_checkpoint()
                 )
+                self._write(write_data)
                 self._dt = self._interface.advance(self._dt)
                 self._interface.mark_action_fulfilled(
                     action_read_iteration_checkpoint()
@@ -317,6 +316,7 @@ class Adapter(ABC, gym.Env):
                 if self._interface.is_time_window_complete():
                     break
         else:
+            self._write(write_data)
             self._dt = self._interface.advance(self._dt)
 
         # increase the time before reading the probes/forces for internal consistency checks
