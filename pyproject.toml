@@ -39,7 +39,7 @@ testing = [
     "pytest-mock==3.10.0",
 ]
 tutorial = [
-    "torch==1.12.1",
+    "torch==1.13.1",
     "matplotlib >=3.0",
     "scipy>=1.7.3",
 ]

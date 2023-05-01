@@ -71,12 +71,12 @@ class Adapter(ABC, gym.Env):
         """
         try:
             self._precice_config = options["precice"]["config_file"]
-            self._solver_list = options["solvers"]["name"]
-            self._reset_script = options["solvers"]["reset_script"]
-            self._prerun_script = options["solvers"].get(
+            self._solver_list = options["physics_simulation_engine"]["solvers"]
+            self._reset_script = options["physics_simulation_engine"]["reset_script"]
+            self._prerun_script = options["physics_simulation_engine"].get(
                 "prerun_script", self._reset_script
             )
-            self._run_script = options["solvers"]["run_script"]
+            self._run_script = options["physics_simulation_engine"]["run_script"]
             self._controller_config = options["controller"]
         except KeyError as err:
             logger.error(f"Invalid key {err} in options")
@@ -588,7 +588,9 @@ class Adapter(ABC, gym.Env):
                 raise err
 
     @abstractmethod
-    def _get_action(self, action: ActType, write_var_list: List[str]) -> dict:
+    def _get_action(
+        self, action: ActType = None, write_var_list: List[str] = None
+    ) -> dict:
         """Map actions received from the controller into appropriate boundary fields to be communicated with the physics simulation engine.
 
         Args:
@@ -602,7 +604,7 @@ class Adapter(ABC, gym.Env):
 
     @abstractmethod
     def _get_observation(
-        self, read_data: dict = {}, read_var_list: List[str] = []
+        self, read_data: dict = None, read_var_list: List[str] = None
     ) -> ObsType:
         r"""Receive partial observation information from the the physics simulation engine to be fed into the controller.
 
