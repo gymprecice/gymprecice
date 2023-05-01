@@ -301,7 +301,7 @@ def _parse_probe_lines(line_string):
     if len(line_string) == 0:
         # print('line of length zero')
         return False, None, 0, None
-    if line_string[0] == "#":
+    if line_string[0] == "#" or line_string.split()[0] == "Time":
         is_comment = True
         return is_comment, None, 0, None
 
@@ -379,7 +379,7 @@ def read_line(
     file_pos = filehandler.tell()
     line_text = filehandler.readline()
     is_comment, time_idx, n_probes, probe_data = _parse_probe_lines(line_text.strip())
-    if not is_comment and n_probes != n_expected:
+    if not is_comment and n_probes != n_expected and line_text != "\n":
         filehandler.seek(file_pos)
         sleep(FILE_ACCESS_SLEEP_TIME)
     return is_comment, time_idx, n_probes, probe_data

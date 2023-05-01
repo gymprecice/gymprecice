@@ -107,7 +107,7 @@ def make_result_dir(
 
     result_path = options["environment"].get("results_path", os.getcwd())
     env_name = options["environment"]["name"]
-    solver_names = options["solvers"]["name"]
+    solver_names = options["physics_simulation_engine"]["solvers"]
     solver_dirs = [join(sim_engine, solver) for solver in solver_names]
 
     if time_stamped:

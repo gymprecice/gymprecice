@@ -70,14 +70,14 @@ class Adapter(ABC, gym.Env):
             idx (int): environment index number.
         """
         try:
-            self._precice_cfg = options["precice"]["config_file"]
-            self._solver_list = options["solvers"]["name"]
-            self._reset_script = options["solvers"]["reset_script"]
-            self._prerun_script = options["solvers"].get(
+            self._precice_config = options["precice"]["config_file"]
+            self._solver_list = options["physics_simulation_engine"]["solvers"]
+            self._reset_script = options["physics_simulation_engine"]["reset_script"]
+            self._prerun_script = options["physics_simulation_engine"].get(
                 "prerun_script", self._reset_script
             )
-            self._run_script = options["solvers"]["run_script"]
-            self._actuator_list = options["actuators"]["name"]
+            self._run_script = options["physics_simulation_engine"]["run_script"]
+            self._controller_config = options["controller"]
         except KeyError as err:
             logger.error(f"Invalid key {err} in options")
             raise err
@@ -110,7 +110,7 @@ class Adapter(ABC, gym.Env):
         self._steps_beyond_terminated = None
 
         self._set_mesh_data()
-        self._episode_end_time = get_episode_end_time(self._precice_cfg)
+        self._episode_end_time = get_episode_end_time(self._precice_config)
         try:
             make_env_dir(self._env_dir, self._solver_list)
         except Exception as err:
@@ -145,18 +145,18 @@ class Adapter(ABC, gym.Env):
             self._first_reset = False
 
         self._close_external_resources()
-        # (1) reset the physics simulation engine
+        # (1) reset physics simulation engine
         self._launch_subprocess("reset_solvers")
         assert self._solver is None, "solver_run pointer is not cleared!"
-        # (2) start the physics simulation engine as a subprocess
+        # (2) start physics simulation engine as a subprocess
         p_process = self._launch_subprocess("run_solvers")
         assert p_process is not None, "slover launch failed!"
         self._solver = p_process
         self._check_subprocess_exists(self._solver)
-        # (3) couple the physics simulation engine and the controller via preCICE, and run the physics simulation engine one-step forward
-        self._init_precice()
-        # (4) receive partial observation from the physics simulation engine
-        obs = self._get_observation()
+        # (3) couple physics simulation engine and controller via preCICE, and run physics simulation engine one-step forward
+        init_data = self._init_precice()
+        # (4) receive partial observation from physics simulation engine
+        obs = self._get_observation(init_data, self._read_var_list)
 
         logger.debug(f"Reset {self._env_dir} - end")
 
@@ -188,17 +188,17 @@ class Adapter(ABC, gym.Env):
         ), f"{action!r} ({type(action)}) invalid"
         assert self._interface is not None, "Set preCICE interface!"
 
-        # (1) map the controller actions to boundary fields for the physics simulation engine
+        # (1) map control actions to surface boundary values on actuation inrefaces within physics simulation engine
         write_data = self._get_action(action, self._write_var_list)
-        # (2) complete the previous time-window and run the physics simulation engine one-step forward using the mapped controller actions
-        self._advance(write_data)
-        # (3) receive the new state (partial observation) from the physics simulation engine
-        obs = self._get_observation()
-        # (4) receive the instantaneous reward signal for the controller actions
+        # (2) complete the previous time-window and run physics simulation engine one-step forward using the mapped controller actions
+        read_data = self._advance(write_data)
+        # (3) receive the new state (partial observation) from physics simulation engine
+        observation = self._get_observation(read_data, self._read_var_list)
+        # (4) receive the instantaneous reward signal for controller actions
         reward = self._get_reward()
-        # (5) check if the physics simulation engine is still running
-        terminated = not self._interface.is_coupling_ongoing()
-        # (6) if the physics simulation engine has reached the end of episode time, then finalize coupling and prepare for a reset
+        # (5) check if physics simulation engine has reached its end-time
+        terminated = self._is_episode_terminated()
+        # (6) if physics simulation engine has reached the end of episode time, then finalize coupling and prepare for a reset
         if terminated:
             self._interface.finalize()
             del self._interface
@@ -210,7 +210,7 @@ class Adapter(ABC, gym.Env):
 
         logger.debug(f"Step {self._env_dir} - end")
 
-        return obs, reward, terminated, False, {}
+        return observation, reward, terminated, False, {}
 
     def close(self) -> None:
         """Close the environment by switching off the coupling and releasing all resources used by preCICE and the physics simulation engine."""
@@ -219,7 +219,7 @@ class Adapter(ABC, gym.Env):
     def _set_mesh_data(self) -> None:
         """Collect name and type of boundary variables need to be communicated between the controller and the physics simulation engine."""
         scalar_variables, vector_variables, mesh_list, controller = get_mesh_data(
-            self._precice_cfg
+            self._precice_config
         )
 
         for mesh_name in mesh_list:
@@ -231,20 +231,49 @@ class Adapter(ABC, gym.Env):
         self._controller_mesh = self._controller["mesh_name"]
         self._scalar_variables = scalar_variables
         self._vector_variables = vector_variables
-        self._read_var_list = self._controller[self._controller_mesh]["read"]
-        self._write_var_list = self._controller[self._controller_mesh]["write"]
+        read_var_list = self._controller[self._controller_mesh]["read"]
+        write_var_list = self._controller[self._controller_mesh]["write"]
 
-    def _set_precice_vectices(self, actuator_coords: List[np.array]) -> None:
-        """Receive mesh coordinates of the controlled boundaries (actuators) of the physics simulation engine.
+        assert write_var_list == list(
+            {
+                self._controller_config["write_to"][interface]
+                for interface in self._controller_config["write_to"]
+            }
+        )
+        assert read_var_list == list(
+            {
+                self._controller_config["read_from"][interface]
+                for interface in self._controller_config["read_from"]
+            }
+        )
+
+        # add interface suffix to read and write variables
+        self._read_var_list = [
+            f'{self._controller_config["read_from"][interface]}-{interface}'
+            for interface in self._controller_config["read_from"]
+        ]
+        self._write_var_list = [
+            f'{self._controller_config["write_to"][interface]}-{interface}'
+            for interface in self._controller_config["write_to"]
+        ]
+
+    def _set_precice_vectices(self, patch_coords: dict) -> None:
+        """Receive mesh coordinates of the controlled boundaries (actuators) on the physics simulation engine.
 
         Args:
-            actuator_coords (List[np.array]): mesh coordinates of the controlled boundaries (actuators). These coordinates can be either
+            patch_coords : mesh coordinates of the controlled boundaries (actuators). These coordinates can be either
             face centres or point-based vertices of the actuator patches depending on the preCICE coupling setting.
         """
-        assert actuator_coords, "actuator coords is empty!"
-        self._vertex_coords_np = np.array(
-            [item for sublist in actuator_coords for item in sublist]
-        )
+        self._vertex_coords_np = {}
+        for interface in self._controller_config["read_from"]:
+            self._vertex_coords_np[interface] = np.array(
+                [item for item in patch_coords["read_from"][interface]]
+            )
+
+        for interface in self._controller_config["write_to"]:
+            self._vertex_coords_np[interface] = np.array(
+                [item for item in patch_coords["write_to"][interface]]
+            )
         self._precice_mesh_defined = True
 
     # preCICE related methods:
@@ -252,8 +281,15 @@ class Adapter(ABC, gym.Env):
         """Couple the physics simulation engine and the controller via preCICE, and runs the physics simulation engine one-step forward."""
         assert self._interface is None, "preCICE-interface re-initialisation attempt!"
         assert self._controller is not None, "Can't find the controller name!"
-        assert self._read_var_list is not None, "Set list of variables to be read!"
-        assert self._write_var_list is not None, "Set list of variables to be written!"
+        assert (
+            self._read_var_list is not None
+        ), "Can't find list of variables to be read!"
+        assert (
+            self._write_var_list is not None
+        ), "Can't find list of variables to be written!"
+        assert (
+            self._vertex_coords_np is not None
+        ), "Can't find vertecies of controlled boundaries (actuators)!"
 
         self._time_window = 0
         self._mesh_id = {}
@@ -261,31 +297,36 @@ class Adapter(ABC, gym.Env):
         self._vertex_ids = {}
         self._read_ids = {}
         self._write_ids = {}
-
         mesh_name = self._controller["mesh_name"]
 
-        self._interface = precice.Interface("Controller", self._precice_cfg, 0, 1)
+        self._interface = precice.Interface("Controller", self._precice_config, 0, 1)
 
         # (1) set spatial mesh coupling data
         mesh_id = self._interface.get_mesh_id(mesh_name)
         self._mesh_id[mesh_name] = mesh_id
-        vertex_ids = self._interface.set_mesh_vertices(mesh_id, self._vertex_coords_np)
-        self._vertex_ids[mesh_name] = vertex_ids
-        self._vertex_coords[mesh_name] = self._vertex_coords_np
 
-        # (2) establish connection with the physics simulation engine
+        for (
+            key,
+            value,
+        ) in self._vertex_coords_np.items():
+            # for boundary in self._actuator_list:
+            vertex_ids = self._interface.set_mesh_vertices(mesh_id, value)
+            self._vertex_ids[key] = vertex_ids
+            self._vertex_coords[key] = value
+
+        # (2) establish connection with physics simulation engine
         self._dt = self._interface.initialize()
         self._t = self._dt
 
         # (3) set read/write coupling data
         mesh_name = self._controller["mesh_name"]
         for read_var in self._read_var_list:
-            self._read_ids[read_var] = self._interface.get_data_id(
-                read_var, self._mesh_id[mesh_name]
+            self._read_ids[read_var.rpartition("-")[0]] = self._interface.get_data_id(
+                read_var.rpartition("-")[0], self._mesh_id[mesh_name]
             )
         for write_var in self._write_var_list:
-            self._write_ids[write_var] = self._interface.get_data_id(
-                write_var, self._mesh_id[mesh_name]
+            self._write_ids[write_var.rpartition("-")[0]] = self._interface.get_data_id(
+                write_var.rpartition("-")[0], self._mesh_id[mesh_name]
             )
         if self._interface.is_action_required(action_write_initial_data()):
             self._interface.mark_action_fulfilled(action_write_initial_data())
@@ -294,6 +335,8 @@ class Adapter(ABC, gym.Env):
         self._interface.initialize_data()
         self._is_reset = True
 
+        return self._read()
+
     def _advance(self, write_data: List[str]) -> None:
         """Communicate boundary field values (obtained from mapping the controller action) with the physics simulation engine, and advances its dynamics one step forwards in time.
 
@@ -301,7 +344,7 @@ class Adapter(ABC, gym.Env):
             write_data (List[str]): list of variable names that their values need to be communicated with the physics simulation engine via preCICE.
         """
         assert self._interface is not None, "Set preCICE interface!"
-
+        read_data = {}
         if self._interface.is_action_required(action_write_iteration_checkpoint()):
             while True:
                 self._interface.mark_action_fulfilled(
@@ -309,15 +352,16 @@ class Adapter(ABC, gym.Env):
                 )
                 self._write(write_data)
                 self._dt = self._interface.advance(self._dt)
+                read_data = self._read()
                 self._interface.mark_action_fulfilled(
                     action_read_iteration_checkpoint()
                 )
-
                 if self._interface.is_time_window_complete():
                     break
         else:
             self._write(write_data)
             self._dt = self._interface.advance(self._dt)
+            read_data = self._read()
 
         # increase the time before reading the probes/forces for internal consistency checks
         if self._interface.is_time_window_complete():
@@ -346,6 +390,13 @@ class Adapter(ABC, gym.Env):
             else:
                 self._interface.advance(self._dt)
 
+        return read_data
+
+    def _is_episode_terminated(self):
+        assert self._interface is not None, "Set preCICE interface!"
+        terminated = not self._interface.is_coupling_ongoing()
+        return terminated
+
     def _write(self, write_data: List[str]) -> None:
         """Write boundary field values (obtained from mapping the controller action) to preCICE buffer.
 
@@ -357,21 +408,53 @@ class Adapter(ABC, gym.Env):
         assert self._write_var_list is not None, "Set list of variables to be written!"
         assert self._write_ids is not None, "Set ids of variables to be written!"
 
-        for write_var in self._write_var_list:
+        for interface, write_var in self._controller_config["write_to"].items():
             if write_var in self._vector_variables:
                 self._interface.write_block_vector_data(
                     self._write_ids[write_var],
-                    self._vertex_ids[self._controller_mesh],
-                    write_data[write_var],
+                    self._vertex_ids[interface],
+                    write_data[f"{write_var}-{interface}"],
                 )
             elif write_var in self._scalar_variables:
                 self._interface.write_block_scalar_data(
                     self._write_ids[write_var],
-                    self._vertex_ids[self._controller_mesh],
-                    write_data[write_var],
+                    self._vertex_ids[interface],
+                    write_data[f"{write_var}-{interface}"],
                 )
             else:
                 raise Exception(f"Invalid variable type: {write_var}")
+
+    def _read(self) -> dict:
+        """Read boundary field values (obtained from mapping the controller action) to preCICE buffer.
+
+        Args:
+            write_data (List[str]): list of variable names that their values need to be communicated with the physics simulation engine via preCICE.
+        """
+        assert self._interface is not None, "Set preCICE interface!"
+        assert self._vertex_ids is not None, "Set vertex-ids of coupling interfaces!"
+        assert self._read_var_list is not None, "Set list of variables to be written!"
+        assert self._read_ids is not None, "Set ids of variables to be written!"
+
+        read_data = {}
+        for interface, read_var in self._controller_config["read_from"].items():
+            if read_var in self._vector_variables:
+                read_data[
+                    f"{read_var}-{interface}"
+                ] = self._interface.read_block_vector_data(
+                    self._read_ids[read_var],
+                    self._vertex_ids[interface],
+                )
+            elif read_var in self._scalar_variables:
+                read_data[
+                    f"{read_var}-{interface}"
+                ] = self._interface.read_block_scalar_data(
+                    self._read_ids[read_var],
+                    self._vertex_ids[interface],
+                )
+            else:
+                raise Exception(f"Invalid variable type: {read_var}")
+
+        return read_data
 
     def _launch_subprocess(self, cmd: str):
         r"""Pre-run, reset, or run the physics simulation engine as a subprocess.
@@ -505,20 +588,24 @@ class Adapter(ABC, gym.Env):
                 raise err
 
     @abstractmethod
-    def _get_action(self, action: ActType, write_var_list: List) -> dict:
+    def _get_action(
+        self, action: ActType = None, write_var_list: List[str] = None
+    ) -> dict:
         """Map actions received from the controller into appropriate boundary fields to be communicated with the physics simulation engine.
 
         Args:
             action (ActType): an action provided by the controller to update the environment state.
-            write_var_list (List): list of boundary field names to be communicated with the physics simulation engine via preCICE.
+            write_var_list (List): list of variables to be written to physics simulation engine via preCICE.
 
         Returns:
-            dict: a dictionary containing boundary fields with their appropriate mapped values.
+            dict: a dictionary containing to be written variables  with their appropriate mapped values.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def _get_observation(self) -> ObsType:
+    def _get_observation(
+        self, read_data: dict = None, read_var_list: List[str] = None
+    ) -> ObsType:
         r"""Receive partial observation information from the the physics simulation engine to be fed into the controller.
 
         Returns:

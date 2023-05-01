@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gymprecice"
-version = "0.0.1"
+version = "0.1.0"
 authors = [{ name = "Mosayeb Shams (lead developer)", email = "m.shams@hw.ac.uk" }, { name = "Ahmed H. Elsheikh (co-developer and supervisor)", email = "a.elsheikh@hw.ac.uk" }]
 description = "A preCICE adapter that provides a Gymnasium-like API to couple reinforcement learning and physics-based solvers for active control."
 readme = "README.md"
@@ -39,7 +39,7 @@ testing = [
     "pytest-mock==3.10.0",
 ]
 tutorial = [
-    "torch==1.12.1",
+    "torch==1.13.1",
     "matplotlib >=3.0",
     "scipy>=1.7.3",
 ]
@@ -54,7 +54,7 @@ all = [
     "pytest-mock==3.10.0",
     # tutorial
     "matplotlib >=3.0",
-    "torch==1.12.1",
+    "torch==1.13.1",
     "scipy>=1.7.3",
 ]
 
