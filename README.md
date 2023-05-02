@@ -2,24 +2,27 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![pre-Commit Check](https://github.com/gymprecice/gymprecice/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/gymprecice/gymprecice/actions/workflows/pre-commit.yml)
 [![Build and Test](https://github.com/gymprecice/gymprecice/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/gymprecice/gymprecice/actions/workflows/build-and-test.yml)
+
+
 ## Gym-preCICE
 
-Gym-preCICE is a Python [preCICE](https://github.com/precice/precice) adapter fully compliant with the
-[Gymnasium API](https://github.com/Farama-Foundation/Gymnasium), aka [OpenAI Gym](https://github.com/openai/gym),
-to facilitate employing and developing reinforcement learning algorithms for single- and multi-physics active control applications.
-In a Reinforcement Learning-interaction cycle, Gym-preCICE takes advantage of coupling tool preCICE, an open-source library for multi-physics coupling, to handle information exchange between a Reinforcement Learning agent ("controller") and external mesh-based solvers ("physics-simulation-engine"). The primary use of Gym-preCICE adapter is for closed- and open-loop active control of physics simulations.
+Gym-preCICE is a Python [preCICE](https://precice.org/) adapter fully compliant with [Gymnasium](https://gymnasium.farama.org/) (also known as [OpenAI Gym](https://www.gymlibrary.dev/)) API to facilitate designing and developing Reinforcement Learning (RL) environments for single- and multi-physics active flow control (AFC) applications. In an actor-environment setting, Gym-preCICE takes advantage of preCICE, an open-source coupling library for partitioned multi-physics simulations, to handle information exchange between a controller (actor) and an AFC simulation environment. The developed framework results in a seamless non-invasive integration of realistic physics-based simulation toolboxes with RL algorithms.
+
 
 ## Installation
 
 ### Main required dependencies
-**Gymnasium**:  Installed by default. Refer to [the Gymnasium](https://github.com/Farama-Foundation/Gymnasium) for more information.
+
+**Gymnasium**:  Installed by default. Refer to [the Gymnasium](https://gymnasium.farama.org/) for more information.
 
 **preCICE**: You need to install the preCICE library. Refer to [the preCICE documentation](https://precice.org/installation-overview.html) for information on building and installation.
 
 **preCICE Python bindings**: Installed by default. Refer to [the python language bindings for preCICE](https://github.com/precice/python-bindings) for information.
 
+
 ### Installing the package
-We support and test for Python versions 3.7 and higher on Linux. We recommend installing Gym-preCICE within a virtual environment using [conda](https://www.anaconda.com/products/distribution#Downloads):
+
+We support and test for Python versions 3.7 and higher on Linux. We recommend installing Gym-preCICE within a virtual environment, e.g. [conda](https://www.anaconda.com/products/distribution#Downloads):
 
 - create and activate a conda virtual environment:
 ```bash
@@ -34,51 +37,66 @@ python3 -m pip install gymprecice
 ```bash
 python3 -c "import gymprecice"
 ```
-The above installation does not include extra dependencies to run tests or tutorials. You can install these dependencies like `python3 -m pip install gymprecice[testing]`, or
+The above installation does not include extra dependencies to run tests or tutorials. You can install these dependencies like `python3 -m pip install gymprecice[test]`, or
 `python3 -m pip install gymprecice[tutorial]`, or use `python3 -m pip install gymprecice[all]` to install all extra dependencies.
 
+
 ### Testing
-We use `pytest` testing framework to write and execute unit tests for all modules in our package. You need to install
+
+We use `pytest` framework to run unit tests for all modules in our package. You need to install
 required dependencies before running any test:
 ```bash
-python3 -m pip install gymprecice[testing]
+python3 -m pip install gymprecice[test]
 ```
-- run the full test suits:
+- To run the full test suits:
 ```
 pytest ./tests
 ```
-It is also possible to test individual modules by providing the path to the respective test script to `pytest`. For instance, to test the core module (`core.py`):
+- To run a specific unit test, e.g. to test core module (`core.py`):
 ```
 pytest ./tests/test_core.py
 ```
+
+
 ### Usage
-Please refer to [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials) for the details on how to use the adapter. You can check out the [Quickstart](https://github.com/gymprecice/gymprecice-tutorials/tree/main/quickstart) in our [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials) repository to launch a control case. You need to install
-required dependencies before running any tutorial:
+
+Please refer to [tutorials](https://github.com/gymprecice/tutorials) for the details on how to use the adapter. You can check out the [Quickstart](https://github.com/gymprecice/tutorials/tree/main/quickstart) in our [tutorials](https://github.com/gymprecice/tutorials) repository to try a ready-to-run control case. You need to install some of the required dependencies before running any tutorial:
 ```bash
 python3 -m pip install gymprecice[tutorial]
 ```
 
-## Contributions
 
-Gym-preCICE is currently developed and maintained by:
+## Citing Us
 
-- Mosayeb Shams (@mosayebshams) - Lead developer
-- Ahmed H. Elsheikh(@ahmed-h-elsheikh) - Co developer and Supervisor
-
-This work was supported by the Engineering and Physical Sciences Research Council grant number EP/V048899/1.
-
-## Citation
-If you use Gym-preCICE, please consider citing its technical paper:
+If you use Gym-preCICE, please cite the following paper:
 
 ```
 @misc{,
-  Author = {Mosayeb Shams and Ahmed H. Elsheikh},
-  Title = {Gym-preCICE: Coupling Reinforcement Learning Algorithms with External Physics-Based Solvers for Active Flow Control},
+  Author = {Mosayeb Shams, Ahmed H. Elsheikh},
+  Title = {Gym-preCICE: Reinforcement Learning Environments for Active Flow Control},
   Year = {2023},
   Eprint = {arXiv:},
 }
 ```
 
+## Contributing
+
+See the contributing guidelines [CONTRIBUTING.md](https://github.com/gymprecice/gymprecice/blob/main/CONTRIBUTING.md)
+for information on submitting issues and pull requests.
+
+
+## The Team
+
+Gym-preCICE and its tutorials are primarily developed and maintained by:
+- Mosayeb Shams (@mosayebshams) - Lead Developer (Heriot-Watt University)
+- Ahmed H. Elsheikh(@ahmed-h-elsheikh) - Supervisor (Heriot-Watt University)
+
+
+## Acknowledgements
+
+This work was supported by the Engineering and Physical Sciences Research Council grant number EP/V048899/1.
+
+
 ## License
 
-gymprecice is MIT-licensed; Please refer to the [LICENSE](https://github.com/gymprecice/blob/main/LICENSE) file for more information.
+Gym-preCICE and its tutorials are [MIT licensed](https://github.com/gymprecice/gymprecice/blob/main/LICENSE).

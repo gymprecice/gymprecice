@@ -1,36 +1,109 @@
-.*
-!.gitignore
-!.pre-commit-config.yaml
-!.flake8
-!.github
+*.pyc
+*.py~
 *.log
-log.*
-*__pycache__/
-*.json
-!gymprecice-config.json
-*-info/
-output/
-precice-run/
-gymprecice-run/
-gymprecice.egg*/
-*.foam
-*.OpenFOAM
-[0-9]*/
-[0-9]*.[0-9]*/
-!0.335/
-!0.org/
-!0.orig/
-!0/
-linux*/
-lnInclude/
-dynamicCode/
-rl_gym_run*/
-*.png
-nohup*
-env_*
-wandb/
-*.pickle
-*.csv
-*.ipynb
-RL_*/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+env/
+venv/
+build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+wheels/
+pip-wheel-metadata/
+*.egg-info/
+.installed.cfg
+*.egg
+/dist
+/wheelhouse
+logs/
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# PyCharm project files
+.idea
+vizdoom.ini
+
+# VS-Code project files
+.vscode
+.pylintrc
+.flake8
+
+# Type checking
+.pyright/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# dotenv
+.env
+
+# virtualenv
+.venv
+venv/
+ENV/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# PyInstaller
+*.manifest
+*.spec
+
+# vim
+*.swp
+
+# Ignore macOS stuff
+# General
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Data files that might be downloaded
+**/*.tar.gz
+**/*.txt

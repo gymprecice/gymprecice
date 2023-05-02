@@ -1,48 +1,55 @@
 # Gym-preCICE Contribution Guidelines
 
-The following forms of contributions are welcome:
+## Development installation
 
+To get the development installation with all the necessary dependencies, please run the following:
+```bash
+git clone https://github.com/gymprecice/gymprecice.git
+cd gymprecice
+pip install -e .
+pip install -e .[dev]
+pre-commit install
+```
+
+
+## Development Process
+
+### Features and Issues
+
+We use GitHub issues to track public bugs. Please ensure your description is
+clear and has sufficient instructions to reproduce the issue.
+
+Please avoid using the issue tracker for questions or debugging personal forks. Instead, please use our [Gym-preCICE discussions forum ](https://github.com/gymprecice/gymprecice/discussions)
+
+Please note that if you have any contributions concerning the design and development of current/new active flow control (AFC) `environments`, it should be submitted to our [tutorials](https://github.com/gymprecice/tutorials) repository.
+
+We accept the following types of contributions:
 - Bug reports
+- Feature requests
 - Pull requests for bug fixes
 - Documentation improvements
-- Features
-
-Please note that if you have any contributions related to `environments`, they must be submitted to our [gymprecice-tutorials](https://github.com/gymprecice/gymprecice-tutorials) epository.
+- Performance improvements/issues
 
 
-# Development
+### Testing
 
-This section contains technical guidelines and tips intended for contributors.
-
-## Type checking
-
-The project uses `pyright` to check types.
-To type check locally, install `pyright` per official [instructions](https://github.com/microsoft/pyright#command-line).
-It's configuration lives within `pyproject.toml`. It includes list of included and excluded files currently supporting type checks.
-To run `pyright` for the project, run the pre-commit process (`pre-commit run --all-files`) or `pyright --project=pyproject.toml`
+For pull requests, the project runs a number of tests for the whole project using `pytest`.
+- To check all test units locally, run:
+```
+pytest ./tests
+```
 
 
-## Git hooks
+### Formatting, Linting, and Type Checking
 
-The CI will run several checks on the new code pushed to the Gymnasium repository. These checks can also be run locally without waiting for the CI by following the steps below:
+Gym-preCICE uses [pre-commit](https://pre-commit.com) to run several checks at every new commit. This enforces a common code style across the repository.
+We use [black](https://black.readthedocs.io) for code formatting, [flake8](https://flake8.pycqa.org/en/latest/) for linting, [pyright](https://microsoft.github.io/pyright) for type checking, and Pydocstyle to check if all new functions/classes/modules follow the [google docstring style](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html).
 
-1. [install `pre-commit`](https://pre-commit.com/#install),
-2. Install the Git hooks by running `pre-commit install`.
+Please follow the [development installation instructions](#development-installation) to install the necessary dependencies.
 
-Once those two steps are done, the Git hooks will be run automatically at every new commit.
-The Git hooks can also be run manually with `pre-commit run --all-files`, and if needed they can be skipped (not recommended) with `git commit --no-verify`.
-**Note:** you may have to run `pre-commit run --all-files` manually a couple of times to make it pass when you commit, as each formatting tool will first format the code and fail the first time but should pass the second time.
+**Note:** You might have to run `pre-commit run --all-files` a few times since formatting tool formats the code initially and fails the first time.
 
-Additionally, for pull requests, the project runs a number of tests for the whole project using [pytest](https://docs.pytest.org/en/latest/getting-started.html#install-pytest).
-These tests can be run locally with `pytest` in the root folder.
 
-## Docstrings
+## License
 
-Pydocstyle has been added to the pre-commit process such that all new functions follow the [google docstring style](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html).
-All new functions require either a short docstring, a single line explaining the purpose of a function
-or a multiline docstring that documents each argument and the return type (if there is one) of the function.
-In addition, new file and class require top docstrings that should outline the purpose of the file/class.
-For classes, code block examples can be provided in the top docstring and not the constructor arguments.
-
-To check your docstrings are correct, run `pre-commit run --all-files` or `pydocstyle --source --explain --convention=google`.
-If all docstrings that fail, the source and reason for the failure is provided.
+By contributing to Gym-preCICE and its tutorials, you agree that your contributions will be licensed under the [Gym-preCICE LICENSE](https://github.com/gymprecice/gymprecice/blob/main/LICENSE).

@@ -30,6 +30,6 @@ setup(
     license="MIT",
     url="https://github.com/gymprecice/gymprecice/",
     description="Gym-preCICE is a preCICE adapter that provides a Gymnasium-like API to couple reinforcement learning and physics-based solvers for active control",
-    author="Mosayeb Shams (lead-developer), Ahmed. H. Elsheikh (co-developer and supervisor)",
+    author="Mosayeb Shams (lead-developer), Ahmed. H. Elsheikh (supervisor)",
     author_email="m.shams@hw.ac.uk, a.elsheikh@hw.ac.uk",
 )

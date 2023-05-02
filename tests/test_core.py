@@ -66,15 +66,15 @@ def mock_precice(class_mocker):
     Interface.write_scalar_data = class_mocker.MagicMock(return_value=None)
 
 
-dummy_environment_config = {
-    "environment": {"name": "dummy"},
-    "solvers": {
-        "name": ["dummy"],
-        "reset_script": "dummy.sh",
-        "run_script": "dummy.sh",
+dummy_gymprecice_config = {
+    "environment": {"name": "dummy_env"},
+    "physics_simulation_engine": {
+        "solvers": ["dummy_solver"],
+        "reset_script": "dummy_reset.sh",
+        "run_script": "dummy_run.sh",
     },
-    "actuators": {"name": ["dummy"]},
-    "precice": {"config_file": "dummy.xml"},
+    "controller": {"read_from": {}, "write_to": {}},
+    "precice": {"config_file": "dummy_precice_config.xml"},
 }
 
 
@@ -85,7 +85,7 @@ class TestAdapter:
         from gymprecice.core import Adapter
 
         class DummyEnv(Adapter):
-            def __init__(self, options=dummy_environment_config, idx=0):
+            def __init__(self, options=dummy_gymprecice_config, idx=0):
                 super().__init__(options, idx)
                 self.observation_space = gym.spaces.Box(
                     low=-np.inf, high=np.inf, shape=(151, 3), dtype=np.float32
@@ -94,11 +94,12 @@ class TestAdapter:
                     low=-1.0, high=1.0, shape=(1,), dtype=np.float32
                 )
                 self.dummy_obs = self.observation_space.sample()
+                self._set_precice_vectices({})
 
             def _get_action(self, *args):
                 pass
 
-            def _get_observation(self):
+            def _get_observation(self, *args):
                 return self.dummy_obs
 
             def _get_reward(self):

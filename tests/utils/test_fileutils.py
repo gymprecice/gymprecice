@@ -67,14 +67,24 @@ def test_valid_make_result_dir(testdir):
         "environment": {
             "name": "dummy_env"
         },
-        "solvers": {"name": ["fluid-openfoam", "solid-fenics"],
-            "reset_script": "clean.sh",
+
+        "physics_simulation_engine": {
+            "solvers": ["fluid-openfoam", "solid-fenics"],
+            "reset_script": "reset.sh",
             "run_script": "run.sh"
         },
-        "actuators": {
-            "name": ["actuator1", "actuator2"]
+
+        "controller": {
+            "read_from": {
+                "dummy_obs_interface": "dummy_obs_var"
+            },
+            "write_to": {
+                "actuator1": "dummy_action1_variable",
+                "actuator2": "dummy_action2_variable"
+            }
         }
     }"""
+
     with open("physics-simulation-engine/gymprecice-config.json", "w") as file:
         file.write(valid_environment_config)
 
