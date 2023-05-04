@@ -52,4 +52,4 @@ Please follow the [development installation instructions](#development-installat
 
 ## License
 
-By contributing to Gym-preCICE and its tutorials, you agree that your contributions will be licensed under the [Gym-preCICE LICENSE](https://github.com/gymprecice/gymprecice/blob/main/LICENSE).
+By contributing to Gym-preCICE and its tutorials, you agree that your contributions will be licensed under [the LICENSE file](https://github.com/gymprecice/gymprecice/blob/main/LICENSE) in the root directory of this source tree.

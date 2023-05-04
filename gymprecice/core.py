@@ -309,7 +309,6 @@ class Adapter(ABC, gym.Env):
             key,
             value,
         ) in self._vertex_coords_np.items():
-            # for boundary in self._actuator_list:
             vertex_ids = self._interface.set_mesh_vertices(mesh_id, value)
             self._vertex_ids[key] = vertex_ids
             self._vertex_coords[key] = value

@@ -71,11 +71,12 @@ python3 -m pip install gymprecice[tutorial]
 If you use Gym-preCICE, please cite the following paper:
 
 ```
-@misc{,
-  Author = {Mosayeb Shams, Ahmed H. Elsheikh},
-  Title = {Gym-preCICE: Reinforcement Learning Environments for Active Flow Control},
-  Year = {2023},
-  Eprint = {arXiv:},
+@misc{shams2023gymprecice,
+      title={Gym-preCICE: Reinforcement Learning Environments for Active Flow Control},
+      author={Mosayeb Shams and Ahmed H. Elsheikh},
+      year={2023},
+      eprint={2305.02033},
+      archivePrefix={arXiv}
 }
 ```
 
