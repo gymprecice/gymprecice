@@ -30,7 +30,11 @@ We support and test for Python versions 3.7 and higher on Linux. We recommend in
  conda create -n gymprecice python=3.8
  conda activate gymprecice
 ```
+
+
+#### PIP version
 - install the adapter:
+
 ```bash
 python3 -m pip install gymprecice
 ```
@@ -38,14 +42,23 @@ python3 -m pip install gymprecice
 ```bash
 python3 -c "import gymprecice"
 ```
-The above installation does not include extra dependencies to run tests or tutorials. You can install these dependencies like `python3 -m pip install gymprecice[test]`, or
+
+The default installation does not include extra dependencies to run tests or tutorials. You can install these dependencies like `python3 -m pip install gymprecice[test]`, or
 `python3 -m pip install gymprecice[tutorial]`, or use `python3 -m pip install gymprecice[all]` to install all extra dependencies.
 
+#### Development version
+- if you are contributing a pull request, it is best to install from the source:
+```bash
+git clone https://github.com/gymprecice/gymprecice.git
+cd gymprecice
+pip install -e .
+pip install -e .[dev]
+pre-commit install
+```
 
 ### Testing
 
-We use `pytest` framework to run unit tests for all modules in our package. You need to install
-required dependencies before running any test:
+We use `pytest` framework to run unit tests for all modules in our package. You need to install required dependencies before running any test:
 ```bash
 python3 -m pip install gymprecice[test]
 ```
