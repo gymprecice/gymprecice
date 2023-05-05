@@ -104,7 +104,7 @@ for information on submitting issues and pull requests.
 
 Gym-preCICE and its tutorials are primarily developed and maintained by:
 - Mosayeb Shams (@mosayebshams) - Lead Developer (Heriot-Watt University)
-- Ahmed H. Elsheikh(@ahmed-h-elsheikh) - Supervisor (Heriot-Watt University)
+- Ahmed H. Elsheikh(@ahmed-h-elsheikh) - Co-developer and Supervisor (Heriot-Watt University)
 
 
 ## Acknowledgements
