@@ -16,7 +16,7 @@ Gym-preCICE is a Python [preCICE](https://precice.org/) adapter fully compliant 
 
 **Gymnasium**:  Installed by default. Refer to [the Gymnasium](https://gymnasium.farama.org/) for more information.
 
-**preCICE**: You need to install the preCICE library. Refer to [the preCICE documentation](https://precice.org/installation-overview.html) for information on building and installation.
+**preCICE**: You need to install the preCICE library. Refer to [the preCICE documentation](https://precice.org/installation-overview.html) for information on building and installation (tested on preCICE release v2.5.0).
 
 **preCICE Python bindings**: Installed by default. Refer to [the python language bindings for preCICE](https://github.com/precice/python-bindings) for information.
 
@@ -71,7 +71,6 @@ pytest ./tests
 pytest ./tests/test_core.py
 ```
 
-
 ### Usage
 
 Please refer to [tutorials](https://github.com/gymprecice/tutorials) for the details on how to use the adapter. You can check out the [Quickstart](https://github.com/gymprecice/tutorials/tree/main/quickstart) in our [tutorials](https://github.com/gymprecice/tutorials) repository to try a ready-to-run control case. You need to install some of the required dependencies before running any tutorial:
@@ -79,18 +78,20 @@ Please refer to [tutorials](https://github.com/gymprecice/tutorials) for the det
 python3 -m pip install gymprecice[tutorial]
 ```
 
-
 ## Citing Us
 
 If you use Gym-preCICE, please cite the following paper:
 
 ```
 @misc{shams2023gymprecice,
-      title={Gym-preCICE: Reinforcement Learning Environments for Active Flow Control},
-      author={Mosayeb Shams and Ahmed H. Elsheikh},
-      year={2023},
-      eprint={2305.02033},
-      archivePrefix={arXiv}
+      title = {Gym-preCICE: Reinforcement learning environments for active flow control},
+      journal = {SoftwareX},
+      volume = {23},
+      pages = {101446},
+      year = {2023},
+      issn = {2352-7110},
+      doi = {https://doi.org/10.1016/j.softx.2023.101446},
+      eprint = {https://arxiv.org/abs/2305.02033},
 }
 ```
 
@@ -109,7 +110,7 @@ Gym-preCICE and its tutorials are primarily developed and maintained by:
 
 ## Acknowledgements
 
-This work was supported by the Engineering and Physical Sciences Research Council grant number EP/V048899/1.
+This work was supported by the Engineering and Physical Sciences Research Council grants number EP/V048899/1 and EP/Y006143/1.
 
 
 ## License
