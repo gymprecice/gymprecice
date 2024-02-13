@@ -85,7 +85,7 @@ If you use Gym-preCICE, please cite the following paper:
 ```
 @misc{shams2023gymprecice,
       title = {Gym-preCICE: Reinforcement learning environments for active flow control},
-      author={Shams, Mosayeb and Elsheikh, Ahmed H},
+      author = {Shams, Mosayeb and Elsheikh, Ahmed H},
       journal = {SoftwareX},
       volume = {23},
       pages = {101446},
