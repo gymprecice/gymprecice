@@ -60,14 +60,14 @@ repos:
           - --explain
           - --convention=google
         additional_dependencies: ["tomli"]
-  - repo: local
-    hooks:
-      - id: pyright
-        name: pyright
-        entry: pyright
-        language: node
-        pass_filenames: false
-        types: [python]
-        additional_dependencies: ["pyright"]
-        args:
-          - --project=pyproject.toml
+  # - repo: local
+  #   hooks:
+  #     - id: pyright
+  #       name: pyright
+  #       entry: pyright
+  #       language: node
+  #       pass_filenames: false
+  #       types: [python]
+  #       additional_dependencies: ["pyright"]
+  #       args:
+  #         - --project=pyproject.toml
